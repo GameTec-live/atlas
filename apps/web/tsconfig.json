@@ -1,0 +1,10 @@
+{
+    "extends": "@repo/typescript-config/web.json",
+    "include": ["**/*.ts", "**/*.tsx"],
+    "compilerOptions": {
+        "paths": {
+            "#/*": ["./src/*"],
+            "@/*": ["./src/*"]
+        }
+    }
+}

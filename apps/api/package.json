@@ -1,0 +1,23 @@
+{
+    "name": "api",
+    "version": "1.0.50",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "dev": "bun run --watch src/index.ts",
+        "format": "biome format --write .",
+        "lint": "biome lint",
+        "check": "biome check",
+        "check-types": "tsc --noEmit",
+        "build": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile dist/server src/index.ts"
+    },
+    "dependencies": {
+        "elysia": "latest"
+    },
+    "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "@repo/biome": "workspace:*",
+        "@biomejs/biome": "2.5.3",
+        "bun-types": "latest"
+    },
+    "module": "src/index.js"
+}

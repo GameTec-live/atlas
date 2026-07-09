@@ -1,0 +1,25 @@
+{
+	"folders": [
+		{
+			"name": "api",
+			"path": "apps/api"
+		},
+		{
+			"name": "web",
+			"path": "apps/web"
+		},
+		{
+			"name": "biome",
+			"path": "packages/biome"
+		},
+		{
+			"name": "typescript-config",
+			"path": "packages/typescript-config"
+		},
+		{
+			"name": "atlas",
+			"path": "."
+		}
+	],
+	"settings": {}
+}
