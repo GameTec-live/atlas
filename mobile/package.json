@@ -1,0 +1,14 @@
+{
+    "name": "mobile",
+    "scripts": {
+        "build": "./gradlew build",
+        "prebuild": "bun run signkey.ts",
+        "lint": "./gradlew lint",
+        "check": "./gradlew check",
+        "test": "./gradlew test"
+    },
+    "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "bun-types": "latest"
+    }
+}

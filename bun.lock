@@ -56,6 +56,13 @@
         "vitest": "^4.1.5",
       },
     },
+    "mobile": {
+      "name": "@repo/mobile",
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "bun-types": "latest",
+      },
+    },
     "packages/biome": {
       "name": "@repo/biome",
       "version": "0.0.0",
@@ -205,6 +212,8 @@
     "@oxc-project/types": ["@oxc-project/types@0.120.0", "", {}, "sha512-k1YNu55DuvAip/MGE1FTsIuU3FUCn6v/ujG9V7Nq5Df/kX2CWb13hhwD0lmJGMGqE+bE1MXvv9SZVnMzEXlWcg=="],
 
     "@repo/biome": ["@repo/biome@workspace:packages/biome"],
+
+    "@repo/mobile": ["@repo/mobile@workspace:mobile"],
 
     "@repo/typescript-config": ["@repo/typescript-config@workspace:packages/typescript-config"],
 
