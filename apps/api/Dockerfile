@@ -34,4 +34,4 @@ EXPOSE 3000
 
 USER 65532:65532
 
-ENTRYPOINT ["/server"]
+ENTRYPOINT ["/app/server"]
