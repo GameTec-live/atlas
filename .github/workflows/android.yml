@@ -21,7 +21,6 @@ concurrency:
 jobs:
   lint:
     name: Lint
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,7 +46,6 @@ jobs:
 
   test:
     name: Test
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     defaults:
       run:

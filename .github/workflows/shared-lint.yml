@@ -12,6 +12,10 @@ on:
       - "turbo.json"
       - ".github/workflows/shared-lint.yml"
 
+  push:
+    branches:
+      - main
+
 permissions:
   contents: read
 
