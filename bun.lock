@@ -14,10 +14,11 @@
       "name": "api",
       "version": "1.0.50",
       "dependencies": {
-        "@better-auth/drizzle-adapter": "1.7.0-rc.1",
+        "@better-auth/drizzle-adapter": "^1.7.0-rc.1",
+        "@elysia/openapi": "^1.4.15",
         "@sinclair/typebox": "0.34.52",
         "@t3-oss/env-core": "^0.13.11",
-        "better-auth": "1.7.0-rc.1",
+        "better-auth": "^1.7.0-rc.1",
         "drizzle-orm": "^1.0.0-rc.4",
         "elysia": "latest",
         "pg": "^8.22.0",
@@ -28,7 +29,7 @@
         "@repo/biome": "workspace:*",
         "@repo/typescript-config": "workspace:*",
         "@types/pg": "^8.20.0",
-        "bun-types": "latest",
+        "bun-types": "^1.3.14",
         "drizzle-kit": "^1.0.0-rc.4",
       },
     },
@@ -177,6 +178,8 @@
     "@csstools/css-tokenizer": ["@csstools/css-tokenizer@4.0.0", "", {}, "sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA=="],
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.11.0", "", {}, "sha512-hD3pekGiPg0WPCCGAZmusBBJsDqGUR66Y452YgQsZOnkdQ7ViEPKuyP4huUGEZQefp8g34RRodXYmJ2TbCH+tg=="],
+
+    "@elysia/openapi": ["@elysia/openapi@1.4.15", "", { "peerDependencies": { "elysia": ">= 1.4.0" } }, "sha512-MrVGCPo5hnRF4/yWGOyH5ddjt4DlSIbeC5rrkupQtHY8TEQe+XdJa2YM9aUOrtgtRcy4UNGyiVlLl/jllPkPQA=="],
 
     "@emnapi/core": ["@emnapi/core@1.11.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "^2.4.0" } }, "sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ=="],
 

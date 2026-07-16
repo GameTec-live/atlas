@@ -24,6 +24,7 @@
     },
     "dependencies": {
         "@better-auth/drizzle-adapter": "^1.7.0-rc.1",
+        "@elysia/openapi": "^1.4.15",
         "@sinclair/typebox": "0.34.52",
         "@t3-oss/env-core": "^0.13.11",
         "better-auth": "^1.7.0-rc.1",
@@ -37,7 +38,7 @@
         "@repo/biome": "workspace:*",
         "@repo/typescript-config": "workspace:*",
         "@types/pg": "^8.20.0",
-        "bun-types": "latest",
+        "bun-types": "^1.3.14",
         "drizzle-kit": "^1.0.0-rc.4"
     },
     "module": "src/index.js"
