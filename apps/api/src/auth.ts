@@ -1,16 +1,31 @@
 import type { ElysiaOpenAPIConfig } from "@elysia/openapi";
-import { betterAuth } from "better-auth";
+import { type Auth, type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { openAPI } from "better-auth/plugins";
+import {
+    type AdminOptions,
+    admin,
+    type OpenAPIOptions,
+    openAPI,
+    username,
+} from "better-auth/plugins";
 import { db } from "./db";
 import * as schema from "./db/schema";
 
-export const auth = betterAuth({
+type AtlasAuthOptions = Omit<BetterAuthOptions, "plugins"> & {
+    // fixes error TS2883: The inferred type of 'auth' cannot be named without a reference to '$strip'
+    plugins: [
+        ReturnType<typeof openAPI<OpenAPIOptions>>,
+        ReturnType<typeof username>,
+        ReturnType<typeof admin<AdminOptions>>,
+    ];
+};
+
+export const auth: Auth<AtlasAuthOptions> = betterAuth<AtlasAuthOptions>({
     database: drizzleAdapter(db, {
         provider: "pg",
         schema,
     }),
-    plugins: [openAPI()],
+    plugins: [openAPI(), username(), admin()],
     emailAndPassword: {
         enabled: true,
     },
