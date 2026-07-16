@@ -138,9 +138,9 @@ export const job = pgTable(
         assignedDriverId: text("assigned_driver_id").references(() => user.id, {
             onDelete: "set null",
         }),
-        vehicleId: uuid("vehicle_id")
-            .notNull()
-            .references(() => vehicle.id, { onDelete: "set null" }),
+        vehicleId: uuid("vehicle_id").references(() => vehicle.id, {
+            onDelete: "set null",
+        }),
         from: point("from").notNull(),
         to: point("to"),
         dueDate: timestamp("due_date").defaultNow().notNull(),
@@ -166,9 +166,9 @@ export const logbook = pgTable(
         vehicleId: uuid("vehicle_id")
             .notNull()
             .references(() => vehicle.id, { onDelete: "cascade" }),
-        driverId: text("driver_id")
-            .notNull()
-            .references(() => user.id, { onDelete: "set null" }),
+        driverId: text("driver_id").references(() => user.id, {
+            onDelete: "set null",
+        }),
         startOdometer: bigint("start_odometer", { mode: "number" }).notNull(),
         endOdometer: bigint("end_odometer", { mode: "number" }),
         startedAt: timestamp("started_at").defaultNow().notNull(),
