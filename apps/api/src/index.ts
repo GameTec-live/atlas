@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { fromTypes, openapi } from "@elysia/openapi";
 import { Elysia } from "elysia";
 import { OpenAPI } from "./auth";
@@ -7,7 +8,7 @@ export const app = new Elysia()
     .use(
         openapi({
             references: fromTypes("src/index.ts", {
-                tmpRoot: "./.cache/elysia-openapi",
+                tmpRoot: resolve(".cache/elysia-openapi"),
             }),
             documentation: {
                 components: await OpenAPI.components,
