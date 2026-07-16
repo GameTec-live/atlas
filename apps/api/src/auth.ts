@@ -33,8 +33,127 @@ export const auth: Auth<AtlasAuthOptions> = betterAuth<AtlasAuthOptions>({
 
 // ----------------- OpenAPI black magic -----------------
 
-let _schema: ReturnType<typeof auth.api.generateOpenAPISchema>;
-const getSchema = async () => (_schema ??= auth.api.generateOpenAPISchema());
+type AuthField = {
+    type: string;
+    required?: boolean;
+    input?: boolean;
+    returned?: boolean;
+    defaultValue?: unknown;
+};
+
+type JSONSchema = {
+    type?: string | string[];
+    format?: string;
+    default?: unknown;
+    properties?: Record<string, JSONSchema> & {
+        user?: JSONSchema;
+    };
+    required?: string[];
+};
+
+type MutableOpenAPISchema = {
+    paths?: Record<
+        string,
+        {
+            post?: {
+                requestBody?: {
+                    content?: Record<string, { schema?: JSONSchema }>;
+                };
+                responses?: Record<
+                    string,
+                    {
+                        content?: Record<string, { schema?: JSONSchema }>;
+                    }
+                >;
+            };
+        }
+    >;
+};
+
+type AuthSchemaSource = {
+    schema?: {
+        user?: {
+            fields?: Record<string, AuthField>;
+        };
+    };
+};
+
+const getAdditionalUserFields = (): Record<string, AuthField> => {
+    const options = auth.options as {
+        user?: {
+            additionalFields?: Record<string, AuthField>;
+        };
+        plugins: AuthSchemaSource[];
+    };
+    const fields = {
+        ...options.user?.additionalFields,
+    };
+
+    for (const plugin of options.plugins) {
+        Object.assign(fields, plugin.schema?.user?.fields);
+    }
+
+    return fields;
+};
+
+const getFieldSchema = (field: AuthField): JSONSchema => ({
+    type: field.type === "date" ? "string" : field.type,
+    ...(field.type === "date" ? { format: "date-time" } : {}),
+    ...(field.defaultValue !== undefined &&
+    typeof field.defaultValue !== "function"
+        ? { default: field.defaultValue }
+        : {}),
+});
+
+const addAdditionalUserFields = (
+    schema: JSONSchema | undefined,
+    mode: "input" | "output",
+) => {
+    if (schema?.type !== "object") return;
+
+    schema.properties ??= {};
+    const required = new Set(schema.required);
+
+    for (const [name, field] of Object.entries(getAdditionalUserFields())) {
+        if (mode === "input" && field.input === false) continue;
+        if (mode === "output" && field.returned === false) continue;
+
+        schema.properties[name] ??= getFieldSchema(field);
+        if (
+            field.required &&
+            (mode === "output" || field.defaultValue === undefined)
+        ) {
+            required.add(name);
+        }
+    }
+
+    if (required.size > 0) schema.required = [...required];
+};
+
+const patchPluginFields = (document: unknown) => {
+    const schema = document as MutableOpenAPISchema;
+    const operation = schema.paths?.["/sign-up/email"]?.post;
+
+    addAdditionalUserFields(
+        operation?.requestBody?.content?.["application/json"]?.schema,
+        "input",
+    );
+    addAdditionalUserFields(
+        operation?.responses?.["200"]?.content?.["application/json"]?.schema
+            ?.properties?.user,
+        "output",
+    );
+};
+
+let schemaPromise:
+    | ReturnType<typeof auth.api.generateOpenAPISchema>
+    | undefined;
+const getSchema = async () => {
+    schemaPromise ??= auth.api.generateOpenAPISchema();
+    const schema = await schemaPromise;
+    patchPluginFields(schema);
+    return schema;
+};
 
 type OpenAPIDocumentation = NonNullable<ElysiaOpenAPIConfig["documentation"]>;
 type OpenAPIComponents = NonNullable<OpenAPIDocumentation["components"]>;
