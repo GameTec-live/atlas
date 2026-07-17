@@ -10,7 +10,7 @@
         "check": "biome check",
         "check-types": "tsc --noEmit",
         "generate-types": "tsc --declaration --emitDeclarationOnly --outDir .cache/types && bun -e \"await Bun.write('dist/index.d.ts', Bun.file('.cache/types/src/index.d.ts'))\"",
-        "build": "bun run generate-types && bun build --compile --minify --target bun --outfile dist/server src/index.ts",
+        "build": "bun run generate-types && bun build --define 'process.env.NODE_ENV=\"production\"' --define BUILD_VERSION=\"\"$(git describe --tags --always)\"\" --define BUILD_TIME=\"\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"\" --define GIT_COMMIT=\"\"$(git rev-parse HEAD)\"\" --compile --minify --target bun --outfile dist/server src/index.ts",
         "build:linux-x64": "bun run generate-types && bun build --compile --target=bun-linux-x64 --minify --outfile dist/server-linux-x64 src/index.ts",
         "build:linux-x64-baseline": "bun run generate-types && bun build --compile --target=bun-linux-x64-baseline --minify --outfile dist/server-linux-x64-baseline src/index.ts",
         "build:linux-x64-modern": "bun run generate-types && bun build --compile --target=bun-linux-x64-modern --minify --outfile dist/server-linux-x64-modern src/index.ts",

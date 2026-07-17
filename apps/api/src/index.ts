@@ -4,6 +4,7 @@ import { declarationToJSONSchema } from "@elysia/openapi/gen";
 import { Elysia } from "elysia";
 import { OpenAPI } from "./auth";
 import { authHandler } from "./authHandler";
+import { BUILD_INFO } from "./constants";
 import { authed } from "./protected";
 
 const typeFile = Bun.embeddedFiles.length
@@ -61,7 +62,7 @@ export const app = new Elysia()
                         name: "AGPLV3",
                         url: "https://www.gnu.org/licenses/agpl-3.0.txt",
                     },
-                    version: "0.0.0",
+                    version: BUILD_INFO.version,
                 },
             },
             // Scalar supports agent but elysia doesnt pass it through
@@ -72,7 +73,17 @@ export const app = new Elysia()
     )
     .use(authHandler)
     .use(authed)
-    .get("/", () => "Atlas API")
+    .get("/", () => {
+        return {
+            message:
+                "Welcome to the Atlas API! Visit /openapi for the OpenAPI spec.",
+            build: {
+                version: BUILD_INFO.version,
+                time: BUILD_INFO.time,
+                commit: BUILD_INFO.commit,
+            },
+        };
+    })
     .listen(3000);
 
 const banner = `
