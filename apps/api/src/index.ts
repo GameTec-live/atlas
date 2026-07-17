@@ -1,9 +1,28 @@
 import { resolve } from "node:path";
 import { type ElysiaOpenAPIConfig, fromTypes, openapi } from "@elysia/openapi";
+import { declarationToJSONSchema } from "@elysia/openapi/gen";
 import { Elysia } from "elysia";
 import { OpenAPI } from "./auth";
 import { authHandler } from "./authHandler";
 import { authed } from "./protected";
+
+const typeFile = Bun.embeddedFiles.length
+    ? ((
+          await import(
+              // @ts-expect-error Bun resolves this declaration as an embedded file asset.
+              "../dist/index.d.ts",
+              {
+                  with: { type: "file" },
+              }
+          )
+      ).default as unknown as string)
+    : undefined;
+
+const references = typeFile
+    ? declarationToJSONSchema(await Bun.file(typeFile).text())
+    : fromTypes("src/index.ts", {
+          tmpRoot: resolve(".cache/elysia-openapi"),
+      });
 
 type ScalarConfiguration = Partial<
     NonNullable<ElysiaOpenAPIConfig["scalar"]>
@@ -31,9 +50,7 @@ const scalar = {
 export const app = new Elysia()
     .use(
         openapi({
-            references: fromTypes("src/index.ts", {
-                tmpRoot: resolve(".cache/elysia-openapi"),
-            }),
+            references,
             documentation: {
                 components: await OpenAPI.components,
                 paths: await OpenAPI.getPaths(),
