@@ -7,23 +7,24 @@ import { authHandler } from "./authHandler";
 import { BUILD_INFO } from "./constants";
 import { authed } from "./protected";
 
-const typeFile = Bun.embeddedFiles.length
-    ? ((
-          await import(
-              // @ts-expect-error Bun resolves this declaration as an embedded file asset.
-              "../dist/index.d.ts",
-              {
-                  with: { type: "file" },
-              }
+const references =
+    process.env.NODE_ENV === "production"
+        ? declarationToJSONSchema(
+              await Bun.file(
+                  (
+                      await import(
+                          // @ts-expect-error Bun resolves this declaration as an embedded file asset.
+                          "../dist/index.d.ts",
+                          {
+                              with: { type: "file" },
+                          }
+                      )
+                  ).default as unknown as string,
+              ).text(),
           )
-      ).default as unknown as string)
-    : undefined;
-
-const references = typeFile
-    ? declarationToJSONSchema(await Bun.file(typeFile).text())
-    : fromTypes("src/index.ts", {
-          tmpRoot: resolve(".cache/elysia-openapi"),
-      });
+        : fromTypes("src/index.ts", {
+              tmpRoot: resolve(".cache/elysia-openapi"),
+          });
 
 type ScalarConfiguration = Partial<
     NonNullable<ElysiaOpenAPIConfig["scalar"]>

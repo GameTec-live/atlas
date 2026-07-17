@@ -1,5 +1,7 @@
 # Build from the monorepo root:
-# docker build --file apps/api/Dockerfile --tag atlas-api .
+# docker build --file apps/api/Dockerfile --tag atlas-api \
+#   --build-arg BUILD_VERSION=<version> --build-arg BUILD_TIME=<timestamp> \
+#   --build-arg GIT_COMMIT=<commit> .
 FROM oven/bun:1.3.14 AS build
 
 WORKDIR /workspace
@@ -19,6 +21,10 @@ COPY packages ./packages
 COPY apps/api ./apps/api
 
 ENV NODE_ENV=production
+
+ARG BUILD_VERSION=development
+ARG BUILD_TIME=unknown
+ARG GIT_COMMIT=unknown
 
 RUN bun run --cwd apps/api build
 
