@@ -10,7 +10,7 @@
         "check": "biome check",
         "check-types": "tsc --noEmit",
         "db:generate": "drizzle-kit generate",
-        "db:migrate": "drizzle-kit push",
+        "db:migrate": "drizzle-kit migrate",
         "generate-types": "tsc --declaration --emitDeclarationOnly --outDir .cache/types && bun -e \"await Bun.write('dist/index.d.ts', Bun.file('.cache/types/src/index.d.ts'))\"",
         "build:compile": "bun build --define 'process.env.NODE_ENV=\"production\"' --define \"BUILD_VERSION=$(bun -e 'process.stdout.write(JSON.stringify(process.env.BUILD_VERSION ?? Bun.spawnSync([\"git\", \"describe\", \"--tags\", \"--always\"]).stdout.toString().trim()))')\" --define \"BUILD_TIME=$(bun -e 'process.stdout.write(JSON.stringify(process.env.BUILD_TIME ?? new Date().toISOString()))')\" --define \"GIT_COMMIT=$(bun -e 'process.stdout.write(JSON.stringify(process.env.GIT_COMMIT ?? Bun.spawnSync([\"git\", \"rev-parse\", \"HEAD\"]).stdout.toString().trim()))')\" --compile --minify src/index.ts",
         "build": "bun run generate-types && bun run build:compile --target bun --outfile dist/server",
