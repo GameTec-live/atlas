@@ -41,6 +41,6 @@ export const realtime = new Elysia({
             });
         },
         auth: true,
-        body: RealtimeModel.trackMessage,
+        body: RealtimeModel.trackInputMessage,
         response: RealtimeModel.realtimeResponse,
     });

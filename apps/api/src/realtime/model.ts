@@ -16,6 +16,8 @@ const trackMessage = t.Object({
     fuelLevel: t.Optional(t.Number()),
 });
 
+const trackInputMessage = t.Omit(trackMessage, ["userId"]);
+
 const connectionChangeMessage = t.Object({
     type: t.Literal("connectionChange"),
     userId: t.String({
@@ -30,7 +32,6 @@ const connectionChangeMessage = t.Object({
 const realtimeResponse = t.Union([trackMessage, connectionChangeMessage]);
 
 export const RealtimeModel = {
-    trackMessage,
-    connectionChangeMessage,
     realtimeResponse,
+    trackInputMessage,
 } as const;

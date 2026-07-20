@@ -12,20 +12,13 @@ import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
 
 const { realtime } = await import("@/src/realtime");
 
-type RealtimeMessage =
-    | {
-          type: "update";
-          userId: string;
-          latitude: number;
-          longitude: number;
-          state: "free" | "onTheWay" | "occupied" | "away";
-          fuelLevel?: number;
-      }
-    | {
-          type: "connectionChange";
-          userId: string;
-          state: "connected" | "disconnected";
-      };
+type TrackInputMessage = {
+    type: "update";
+    latitude: number;
+    longitude: number;
+    state: "free" | "onTheWay" | "occupied" | "away";
+    fuelLevel?: number;
+};
 
 const app = new Elysia().use(realtime);
 const sockets = new Set<WebSocket>();
@@ -228,7 +221,13 @@ describe("WS /realtime/track", () => {
         });
     });
 
-    it("relays every valid tracking state to other subscribers, including optional fuel data", async () => {
+    it("relays every valid tracking state with the authenticated sender's user id", async () => {
+        const authenticatedUserId = "driver-1";
+
+        getSessionMock
+            .mockResolvedValueOnce(sessionFor(authenticatedUserId))
+            .mockResolvedValueOnce(sessionFor("receiver"));
+
         const sender = await WebSocketClient.connect();
         const receiver = await WebSocketClient.connect();
         await sender.nextMessage();
@@ -236,14 +235,12 @@ describe("WS /realtime/track", () => {
         const messages = [
             {
                 type: "update",
-                userId: "driver-1",
                 latitude: 48.2082,
                 longitude: 16.3738,
                 state: "free",
             },
             {
                 type: "update",
-                userId: "driver-1",
                 latitude: 48.21,
                 longitude: 16.38,
                 state: "onTheWay",
@@ -251,7 +248,6 @@ describe("WS /realtime/track", () => {
             },
             {
                 type: "update",
-                userId: "driver-1",
                 latitude: 48.22,
                 longitude: 16.39,
                 state: "occupied",
@@ -259,16 +255,18 @@ describe("WS /realtime/track", () => {
             },
             {
                 type: "update",
-                userId: "driver-1",
                 latitude: -33.8688,
                 longitude: 151.2093,
                 state: "away",
             },
-        ] satisfies RealtimeMessage[];
+        ] satisfies TrackInputMessage[];
 
         for (const message of messages) {
             sender.send(message);
-            expect(await receiver.nextMessage()).toEqual(message);
+            expect(await receiver.nextMessage()).toEqual({
+                ...message,
+                userId: authenticatedUserId,
+            });
         }
 
         await sender.expectNoMessage();
@@ -285,10 +283,10 @@ describe("WS /realtime/track", () => {
             },
         ],
         [
-            "an empty user id",
+            "a client-supplied user id",
             {
                 type: "update",
-                userId: "",
+                userId: "spoofed-driver",
                 latitude: 48.2,
                 longitude: 16.3,
                 state: "free",
@@ -335,6 +333,10 @@ describe("WS /realtime/track", () => {
             },
         ],
     ])("rejects %s without broadcasting it", async (_name, invalidMessage) => {
+        getSessionMock
+            .mockResolvedValueOnce(sessionFor("sender"))
+            .mockResolvedValueOnce(sessionFor("receiver"));
+
         const sender = await WebSocketClient.connect();
         const receiver = await WebSocketClient.connect();
         await sender.nextMessage();
