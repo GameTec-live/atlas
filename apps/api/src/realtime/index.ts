@@ -27,7 +27,10 @@ export const realtime = new Elysia({
             });
         },
         message(ws, message) {
-            ws.publish(BROADCAST_TRACK_TOPIC, message);
+            ws.publish(BROADCAST_TRACK_TOPIC, {
+                ...message,
+                userId: ws.data.user.id,
+            });
         },
         close(ws) {
             ws.unsubscribe(BROADCAST_TRACK_TOPIC);
