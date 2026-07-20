@@ -5,8 +5,8 @@ const trackMessage = t.Object({
     userId: t.String({
         minLength: 1,
     }),
-    latitude: t.Number(),
-    longitude: t.Number(),
+    latitude: t.Number({ minimum: -90, maximum: 90 }),
+    longitude: t.Number({ minimum: -180, maximum: 180 }),
     state: t.Enum({
         free: "free",
         onTheWay: "onTheWay",
