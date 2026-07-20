@@ -7,6 +7,7 @@ import { authHandler } from "./authHandler";
 import { BUILD_INFO } from "./constants";
 import { runMigrations } from "./db/migrate";
 import { authed } from "./protected";
+import { realtime } from "./realtime";
 import { unauthed } from "./unprotected";
 
 console.log("Applying database migrations...");
@@ -81,6 +82,7 @@ export const app = new Elysia()
     .use(authHandler)
     .use(authed)
     .use(unauthed)
+    .use(realtime)
     .get("/", () => {
         return {
             message:
