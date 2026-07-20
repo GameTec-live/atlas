@@ -2,7 +2,7 @@
     "name": "api",
     "version": "1.0.50",
     "scripts": {
-        "test": "bun test --pass-with-no-tests",
+        "test": "bun test",
         "dev": "bun run --watch src/index.ts",
         "dev-sec": "infisical run -- bun run dev",
         "format": "biome format --write .",

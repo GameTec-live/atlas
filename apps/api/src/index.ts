@@ -6,6 +6,7 @@ import { OpenAPI } from "./auth";
 import { authHandler } from "./authHandler";
 import { BUILD_INFO } from "./constants";
 import { authed } from "./protected";
+import { unauthed } from "./unprotected";
 
 const references =
     process.env.NODE_ENV === "production"
@@ -74,6 +75,7 @@ export const app = new Elysia()
     )
     .use(authHandler)
     .use(authed)
+    .use(unauthed)
     .get("/", () => {
         return {
             message:
