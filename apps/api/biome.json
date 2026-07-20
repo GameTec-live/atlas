@@ -1,5 +1,8 @@
 {
     "$schema": "https://biomejs.dev/schemas/2.5.3/schema.json",
     "root": false,
-    "extends": ["@repo/biome/base"]
+    "extends": ["@repo/biome/base"],
+    "files": {
+        "includes": ["**", "!drizzle"]
+    }
 }

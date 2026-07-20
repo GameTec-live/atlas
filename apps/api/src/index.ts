@@ -5,7 +5,12 @@ import { Elysia } from "elysia";
 import { OpenAPI } from "./auth";
 import { authHandler } from "./authHandler";
 import { BUILD_INFO } from "./constants";
+import { runMigrations } from "./db/migrate";
 import { authed } from "./protected";
+
+console.log("Applying database migrations...");
+await runMigrations();
+console.log("Database migrations complete.\n\n");
 
 const references =
     process.env.NODE_ENV === "production"

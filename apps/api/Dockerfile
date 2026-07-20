@@ -33,6 +33,7 @@ FROM gcr.io/distroless/base:nonroot AS runtime
 WORKDIR /app
 
 COPY --from=build --chown=65532:65532 /workspace/apps/api/dist/server server
+COPY --from=build --chown=65532:65532 /workspace/apps/api/drizzle drizzle
 
 ENV NODE_ENV=production
 
