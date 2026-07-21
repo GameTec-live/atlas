@@ -32,6 +32,7 @@ const sessionFor = (userId: string) => ({
     user: {
         ...session.user,
         id: userId,
+        name: `${userId} name`,
         email: `${userId}@example.com`,
     },
     session: {
@@ -195,7 +196,7 @@ describe("WS /realtime/track", () => {
         );
     });
 
-    it("broadcasts connection and disconnection events with the session user id", async () => {
+    it("broadcasts connection and disconnection events with the session user identity", async () => {
         getSessionMock
             .mockResolvedValueOnce(sessionFor("driver-1"))
             .mockResolvedValueOnce(sessionFor("driver-2"));
@@ -208,6 +209,7 @@ describe("WS /realtime/track", () => {
         expect(await firstClient.nextMessage()).toEqual({
             type: "connectionChange",
             userId: "driver-2",
+            userName: "driver-2 name",
             state: "connected",
         });
         await secondClient.expectNoMessage();
@@ -217,11 +219,12 @@ describe("WS /realtime/track", () => {
         expect(await firstClient.nextMessage()).toEqual({
             type: "connectionChange",
             userId: "driver-2",
+            userName: "driver-2 name",
             state: "disconnected",
         });
     });
 
-    it("relays every valid tracking state with the authenticated sender's user id", async () => {
+    it("relays every valid tracking state with the authenticated sender's identity", async () => {
         const authenticatedUserId = "driver-1";
 
         getSessionMock
@@ -266,6 +269,7 @@ describe("WS /realtime/track", () => {
             expect(await receiver.nextMessage()).toEqual({
                 ...message,
                 userId: authenticatedUserId,
+                userName: `${authenticatedUserId} name`,
             });
         }
 
