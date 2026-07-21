@@ -7,6 +7,7 @@ export const env = createEnv({
         BETTER_AUTH_URL: v.pipe(v.string(), v.url()),
         DATABASE_URL: v.pipe(v.string(), v.minLength(1)),
         GEOCODER_URL: v.pipe(v.string(), v.url()),
+        ROUTER_URL: v.pipe(v.string(), v.url()),
     },
     runtimeEnv: process.env,
     emptyStringAsUndefined: true,

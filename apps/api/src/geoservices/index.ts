@@ -106,4 +106,57 @@ export const geoservices = new Elysia({
             query: GeoservicesModel.resolveQuery,
             response: GeoservicesModel.geocoderResponse,
         },
+    )
+    .get(
+        "/route",
+        async ({ query }) => {
+            const routeQuery = {
+                locations: [
+                    {
+                        options: {
+                            allowUTurn: false,
+                        },
+                        latLng: {
+                            lat: query.fromlat,
+                            lng: query.fromlon,
+                        },
+                        _initHooksCalled: true,
+                        lat: query.fromlat,
+                        lon: query.fromlon,
+                    },
+                    {
+                        options: {
+                            allowUTurn: false,
+                        },
+                        latLng: {
+                            lat: query.tolat,
+                            lng: query.tolon,
+                        },
+                        _initHooksCalled: true,
+                        lat: query.tolat,
+                        lon: query.tolon,
+                    },
+                ],
+                costing: "auto",
+                directions_options: {
+                    language: query.lang || "en-US", // TODO: Make default configurable once config file is implemented
+                },
+            };
+
+            const routeResponse = await fetch(
+                `${env.ROUTER_URL}/route?json=${encodeURIComponent(JSON.stringify(routeQuery))}`,
+                {
+                    method: "GET",
+                },
+            );
+            return Value.Decode(
+                GeoservicesModel.routeResponse,
+                await routeResponse.json(),
+            );
+        },
+        {
+            auth: true,
+            query: GeoservicesModel.routeQuery,
+            response: GeoservicesModel.routeResponse,
+        },
     );
