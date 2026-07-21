@@ -218,7 +218,7 @@ const trip = t.Object({
     legs: t.Array(routeLeg),
     linear_references: t.Optional(t.Array(t.String())),
     summary: routeSummary,
-    status_message: t.Literal("Found route between points"),
+    status_message: t.String(),
     status: t.Literal(0),
     units: t.Union([t.Literal("kilometers"), t.Literal("miles")]),
     language: t.String(),
