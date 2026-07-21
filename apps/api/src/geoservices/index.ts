@@ -8,6 +8,8 @@ import { shortname } from "../db/schema";
 import { type GeocoderResponse, GeoservicesModel } from "./model";
 
 const CACHE_SIZE = 1000;
+const GEOCODER_URL = env.GEOCODER_URL.replace(/\/+$/, "");
+const ROUTER_URL = env.ROUTER_URL.replace(/\/+$/, "");
 
 interface ResolveCacheEntry {
     resolvedAddress: string;
@@ -77,7 +79,7 @@ export const geoservices = new Elysia({
 
             // Geocode
             const geocodeResponse = await fetch(
-                `${env.GEOCODER_URL}/geocode?q=${encodeURIComponent(value)}`,
+                `${GEOCODER_URL}/geocode?q=${encodeURIComponent(value)}`,
                 {
                     method: "GET",
                 },
@@ -144,7 +146,7 @@ export const geoservices = new Elysia({
             };
 
             const routeResponse = await fetch(
-                `${env.ROUTER_URL}/route?json=${encodeURIComponent(JSON.stringify(routeQuery))}`,
+                `${ROUTER_URL}/route?json=${encodeURIComponent(JSON.stringify(routeQuery))}`,
                 {
                     method: "GET",
                 },
