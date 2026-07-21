@@ -8,6 +8,7 @@ import {
 } from "../mocks/db";
 
 const GEOCODER_URL = "http://geocoder.test";
+const ROUTER_URL = "http://router.test";
 
 mock.module("@/env", () => ({
     env: {
@@ -15,6 +16,7 @@ mock.module("@/env", () => ({
         BETTER_AUTH_URL: "http://auth.test",
         DATABASE_URL: "postgresql://test:test@database.test/test",
         GEOCODER_URL,
+        ROUTER_URL,
     },
 }));
 
@@ -68,6 +70,57 @@ const errorResponse = {
     },
 };
 
+const routeSummary = {
+    has_time_restrictions: false,
+    has_toll: false,
+    has_highway: true,
+    has_ferry: false,
+    min_lat: 48.2082,
+    min_lon: 16.3738,
+    max_lat: 48.3069,
+    max_lon: 16.437,
+    time: 1_200,
+    length: 12.5,
+    cost: 1_350.5,
+};
+
+const routeSuccessResponse = {
+    trip: {
+        locations: [
+            {
+                type: "break",
+                lat: 48.2082,
+                lon: 16.3738,
+                original_index: 0,
+            },
+            {
+                type: "break",
+                lat: 48.3069,
+                lon: 16.437,
+                original_index: 1,
+            },
+        ],
+        legs: [
+            {
+                summary: routeSummary,
+                shape: "encoded-route-shape",
+            },
+        ],
+        summary: routeSummary,
+        status_message: "Found route between points",
+        status: 0,
+        units: "kilometers",
+        language: "en-US",
+    },
+};
+
+const routeErrorResponse = {
+    error_code: 171,
+    error: "No suitable edges near location",
+    status_code: 400,
+    status: "Bad Request",
+};
+
 const request = (address?: string) => {
     const url = new URL("http://localhost/geoservices/resolve");
     if (address !== undefined) url.searchParams.set("address", address);
@@ -81,6 +134,30 @@ const request = (address?: string) => {
 
 const respondWith = (body: unknown, init?: ResponseInit) => {
     fetchMock.mockResolvedValueOnce(Response.json(body, init));
+};
+
+const validRouteQuery = {
+    fromlat: 48.2082,
+    fromlon: 16.3738,
+    tolat: 48.3069,
+    tolon: 16.437,
+};
+
+const routeRequest = (
+    query: Partial<
+        Record<keyof typeof validRouteQuery | "lang", string | number>
+    >,
+) => {
+    const url = new URL("http://localhost/geoservices/route");
+    for (const [key, value] of Object.entries(query)) {
+        url.searchParams.set(key, String(value));
+    }
+
+    return app.handle(
+        new Request(url.toString(), {
+            headers: { authorization: "Bearer test-token" },
+        }),
+    );
 };
 
 describe("GET /geoservices/resolve", () => {
@@ -331,5 +408,132 @@ describe("GET /geoservices/resolve", () => {
 
         expect((await request("lru-filler-0")).status).toBe(200);
         expect(fetchMock).toHaveBeenCalledTimes(callsBeforeCacheHit + 2);
+    });
+});
+
+describe("GET /geoservices/route", () => {
+    beforeEach(() => {
+        resetAuthMocks();
+        resetDbMocks();
+        fetchMock.mockReset();
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+    });
+
+    afterAll(() => {
+        globalThis.fetch = originalFetch;
+    });
+
+    it("returns 401 without a Better Auth session", async () => {
+        const response = await routeRequest(validRouteQuery);
+
+        expect(response.status).toBe(401);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["a missing coordinate", { ...validRouteQuery, tolon: undefined }],
+        ["a non-numeric coordinate", { ...validRouteQuery, fromlat: "north" }],
+        ["an out-of-range latitude", { ...validRouteQuery, tolat: 91 }],
+        ["an invalid language", { ...validRouteQuery, lang: "english" }],
+    ])("returns 422 for %s", async (_description, query) => {
+        getSessionMock.mockResolvedValue(session);
+        const sanitizedQuery = Object.fromEntries(
+            Object.entries(query).filter(([, value]) => value !== undefined),
+        );
+
+        const response = await routeRequest(sanitizedQuery);
+
+        expect(response.status).toBe(422);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("requests an auto route with the default language", async () => {
+        getSessionMock.mockResolvedValue(session);
+        respondWith(routeSuccessResponse);
+
+        const response = await routeRequest(validRouteQuery);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(routeSuccessResponse);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock.mock.calls[0]?.[1]).toEqual({ method: "GET" });
+
+        const routerRequestUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+        expect(`${routerRequestUrl.origin}${routerRequestUrl.pathname}`).toBe(
+            `${ROUTER_URL}/route`,
+        );
+        expect(
+            JSON.parse(routerRequestUrl.searchParams.get("json") ?? ""),
+        ).toEqual({
+            locations: [
+                {
+                    options: { allowUTurn: false },
+                    latLng: { lat: 48.2082, lng: 16.3738 },
+                    _initHooksCalled: true,
+                    lat: 48.2082,
+                    lon: 16.3738,
+                },
+                {
+                    options: { allowUTurn: false },
+                    latLng: { lat: 48.3069, lng: 16.437 },
+                    _initHooksCalled: true,
+                    lat: 48.3069,
+                    lon: 16.437,
+                },
+            ],
+            costing: "auto",
+            directions_options: { language: "en-US" },
+        });
+    });
+
+    it("forwards the requested directions language", async () => {
+        getSessionMock.mockResolvedValue(session);
+        respondWith({
+            ...routeSuccessResponse,
+            trip: { ...routeSuccessResponse.trip, language: "de-AT" },
+        });
+
+        const response = await routeRequest({
+            ...validRouteQuery,
+            lang: "de-AT",
+        });
+
+        expect(response.status).toBe(200);
+        const routerRequestUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+        const routerQuery = JSON.parse(
+            routerRequestUrl.searchParams.get("json") ?? "",
+        );
+        expect(routerQuery.directions_options).toEqual({ language: "de-AT" });
+    });
+
+    it("returns a schema-valid error response from the router", async () => {
+        getSessionMock.mockResolvedValue(session);
+        respondWith(routeErrorResponse, { status: 400 });
+
+        const response = await routeRequest(validRouteQuery);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(routeErrorResponse);
+    });
+
+    it("returns 500 when the router response violates the schema", async () => {
+        getSessionMock.mockResolvedValue(session);
+        respondWith({ trip: { status: 0 } });
+
+        const response = await routeRequest(validRouteQuery);
+
+        expect(response.status).toBe(500);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 500 when the router request fails", async () => {
+        getSessionMock.mockResolvedValue(session);
+        fetchMock.mockRejectedValueOnce(new Error("router unavailable"));
+
+        const response = await routeRequest(validRouteQuery);
+
+        expect(response.status).toBe(500);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 });
