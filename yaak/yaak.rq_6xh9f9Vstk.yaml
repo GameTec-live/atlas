@@ -1,0 +1,46 @@
+type: http_request
+model: http_request
+id: rq_6xh9f9Vstk
+createdAt: 2026-07-21T07:20:50.254069400
+updatedAt: 2026-07-21T07:20:50.254069900
+workspaceId: wk_gbXsp49jy7
+folderId: fl_5KYNt82Cq2
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: |-
+    {
+      "userId": "<string>"
+    }
+bodyType: application/json
+description: Impersonate a user
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: impersonate User
+sortPriority: 54.0
+url: ${[baseUrl]}/api/auth/admin/impersonate-user
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

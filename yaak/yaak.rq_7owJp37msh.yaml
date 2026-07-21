@@ -1,0 +1,48 @@
+type: http_request
+model: http_request
+id: rq_7owJp37msh
+createdAt: 2026-07-21T07:20:50.460070500
+updatedAt: 2026-07-21T07:20:50.460070800
+workspaceId: wk_gbXsp49jy7
+folderId: fl_eBuxUCSGTi
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: |-
+    {
+      "callbackURL": "<string>",
+      "password": "<string>",
+      "token": "<string>"
+    }
+bodyType: application/json
+description: Delete the user
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: delete User
+sortPriority: 29.0
+url: ${[baseUrl]}/api/auth/delete-user
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

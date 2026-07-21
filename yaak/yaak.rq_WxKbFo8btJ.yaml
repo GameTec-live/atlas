@@ -1,0 +1,47 @@
+type: http_request
+model: http_request
+id: rq_WxKbFo8btJ
+createdAt: 2026-07-21T07:20:50.816013100
+updatedAt: 2026-07-21T07:46:59.143410100
+workspaceId: wk_gbXsp49jy7
+folderId: null
+authentication:
+  disabled: false
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: ''
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: get Geoservices Resolve
+sortPriority: 3.0
+url: ${[baseUrl]}/geoservices/resolve
+urlParameters:
+- enabled: true
+  name: address
+  value: frisi
+  id: jnxvV8qI4E
+- enabled: true
+  name: ''
+  value: ''
+  id: nx0hi7cjjc
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

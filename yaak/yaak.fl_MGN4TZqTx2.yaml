@@ -1,0 +1,28 @@
+type: folder
+model: folder
+id: fl_MGN4TZqTx2
+createdAt: 2026-07-21T07:20:50.162082
+updatedAt: 2026-07-21T07:20:50.162082400
+workspaceId: wk_gbXsp49jy7
+folderId: null
+authentication: {}
+authenticationType: null
+description: ''
+headers: []
+name: api
+sortPriority: 0.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

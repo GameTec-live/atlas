@@ -1,0 +1,49 @@
+type: http_request
+model: http_request
+id: rq_uCbiBhoYqX
+createdAt: 2026-07-21T07:20:50.703489700
+updatedAt: 2026-07-21T07:20:50.703490
+workspaceId: wk_gbXsp49jy7
+folderId: fl_Pe9scVD4yF
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: |-
+    {
+      "email": "<string>",
+      "password": "<string>",
+      "callbackURL": "<string>",
+      "rememberMe": "<boolean>"
+    }
+bodyType: application/json
+description: Sign in with email and password
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: sign In Email
+sortPriority: 8.0
+url: ${[baseUrl]}/api/auth/sign-in/email
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

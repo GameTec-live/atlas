@@ -1,0 +1,17 @@
+type: workspace
+model: workspace
+id: wk_gbXsp49jy7
+createdAt: 2025-07-04T19:43:50.382367400
+updatedAt: 2026-07-21T07:21:53.857973100
+authentication: {}
+authenticationType: null
+description: ''
+headers: []
+name: atlas
+encryptionKeyChallenge: null
+settingValidateCertificates: true
+settingFollowRedirects: true
+settingRequestTimeout: 0
+settingDnsOverrides: []
+settingSendCookies: true
+settingStoreCookies: true

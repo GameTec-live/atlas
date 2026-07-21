@@ -1,0 +1,48 @@
+type: http_request
+model: http_request
+id: rq_3LARCySwRe
+createdAt: 2026-07-21T07:20:50.493242600
+updatedAt: 2026-07-21T07:20:50.493243200
+workspaceId: wk_gbXsp49jy7
+folderId: fl_9GiEjUpTWZ
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: |-
+    {
+      "providerId": "<string>",
+      "accountId": "<string>",
+      "userId": "<string>"
+    }
+bodyType: application/json
+description: Get a valid access token, doing a refresh if needed
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: Get a valid access token, doing a refresh if needed
+sortPriority: 40.0
+url: ${[baseUrl]}/api/auth/get-access-token
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

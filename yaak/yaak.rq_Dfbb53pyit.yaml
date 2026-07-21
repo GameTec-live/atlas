@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_Dfbb53pyit
+createdAt: 2026-07-21T07:20:50.481937700
+updatedAt: 2026-07-21T07:20:50.481937900
+workspaceId: wk_gbXsp49jy7
+folderId: fl_9GiEjUpTWZ
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: Displays an error page
+headers:
+- enabled: true
+  name: Accept
+  value: text/html
+  id: null
+method: GET
+name: Displays an error page
+sortPriority: 43.0
+url: ${[baseUrl]}/api/auth/error
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

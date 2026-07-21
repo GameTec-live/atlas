@@ -1,0 +1,46 @@
+type: http_request
+model: http_request
+id: rq_BYsxKsobuP
+createdAt: 2026-07-21T07:20:50.805165300
+updatedAt: 2026-07-21T07:20:50.805165800
+workspaceId: wk_gbXsp49jy7
+folderId: fl_9GiEjUpTWZ
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: |-
+    {
+      "password": "<string>"
+    }
+bodyType: application/json
+description: Verify the current user's password
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: verify Password
+sortPriority: 21.0
+url: ${[baseUrl]}/api/auth/verify-password
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

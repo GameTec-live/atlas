@@ -1,0 +1,43 @@
+type: http_request
+model: http_request
+id: rq_U5VVtiitUu
+createdAt: 2026-07-21T07:20:50.735880600
+updatedAt: 2026-07-21T07:20:50.735880900
+workspaceId: wk_gbXsp49jy7
+folderId: fl_9GiEjUpTWZ
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: '{}'
+bodyType: application/json
+description: Sign out the current user
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: sign Out
+sortPriority: 16.0
+url: ${[baseUrl]}/api/auth/sign-out
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_3KjJyh8tnt
+createdAt: 2026-07-21T07:20:50.184751600
+updatedAt: 2026-07-21T07:20:50.184751800
+workspaceId: wk_gbXsp49jy7
+folderId: fl_9GiEjUpTWZ
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: Get the account info provided by the provider
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: Get the account info provided by the provider
+sortPriority: 41.0
+url: ${[baseUrl]}/api/auth/account-info
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

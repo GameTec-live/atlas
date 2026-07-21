@@ -1,0 +1,78 @@
+type: http_request
+model: http_request
+id: rq_9GAnxYE2dQ
+createdAt: 2026-07-21T07:20:50.278265100
+updatedAt: 2026-07-21T07:20:50.278265600
+workspaceId: wk_gbXsp49jy7
+folderId: fl_5KYNt82Cq2
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: List users
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: list Users
+sortPriority: 50.0
+url: ${[baseUrl]}/api/auth/admin/list-users
+urlParameters:
+- enabled: true
+  name: searchValue
+  value: <string>
+  id: null
+- enabled: true
+  name: searchField
+  value: <string>
+  id: null
+- enabled: true
+  name: searchOperator
+  value: <string>
+  id: null
+- enabled: true
+  name: limit
+  value: <string>
+  id: null
+- enabled: true
+  name: offset
+  value: <string>
+  id: null
+- enabled: true
+  name: sortBy
+  value: <string>
+  id: null
+- enabled: true
+  name: sortDirection
+  value: <string>
+  id: null
+- enabled: true
+  name: filterField
+  value: <string>
+  id: null
+- enabled: true
+  name: filterValue
+  value: <string>
+  id: null
+- enabled: true
+  name: filterOperator
+  value: <string>
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

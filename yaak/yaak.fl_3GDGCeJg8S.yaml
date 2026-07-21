@@ -1,0 +1,28 @@
+type: folder
+model: folder
+id: fl_3GDGCeJg8S
+createdAt: 2026-07-21T07:20:50.610419300
+updatedAt: 2026-07-21T07:20:50.610419500
+workspaceId: wk_gbXsp49jy7
+folderId: fl_9GiEjUpTWZ
+authentication: {}
+authenticationType: null
+description: ''
+headers: []
+name: reset-password
+sortPriority: 0.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
