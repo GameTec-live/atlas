@@ -1,12 +1,22 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import { Elysia } from "elysia";
-import { env } from "@/env";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
 import {
     dbClientQueryMock,
     resetDbMocks,
     setDbMockTableRows,
 } from "../mocks/db";
+
+const GEOCODER_URL = "http://geocoder.test";
+
+mock.module("@/env", () => ({
+    env: {
+        BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters",
+        BETTER_AUTH_URL: "http://auth.test",
+        DATABASE_URL: "postgresql://test:test@database.test/test",
+        GEOCODER_URL,
+    },
+}));
 
 const { geoservices } = await import("@/src/geoservices");
 const app = new Elysia().use(geoservices);
@@ -127,7 +137,7 @@ describe("GET /geoservices/resolve", () => {
         ]);
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(fetchMock).toHaveBeenCalledWith(
-            `${env.GEOCODER_URL}/geocode?q=${encodeURIComponent(address)}`,
+            `${GEOCODER_URL}/geocode?q=${encodeURIComponent(address)}`,
             { method: "GET" },
         );
     });
@@ -148,7 +158,7 @@ describe("GET /geoservices/resolve", () => {
             1,
         ]);
         expect(fetchMock).toHaveBeenCalledWith(
-            `${env.GEOCODER_URL}/geocode?q=Vienna%20Central%20Depot%20%2F%20Gate%202`,
+            `${GEOCODER_URL}/geocode?q=Vienna%20Central%20Depot%20%2F%20Gate%202`,
             { method: "GET" },
         );
     });
@@ -212,7 +222,7 @@ describe("GET /geoservices/resolve", () => {
         });
         expect(fetchMock).toHaveBeenCalledTimes(2);
         expect(fetchMock).toHaveBeenLastCalledWith(
-            `${env.GEOCODER_URL}/geocode?q=New%20address`,
+            `${GEOCODER_URL}/geocode?q=New%20address`,
             { method: "GET" },
         );
     });
