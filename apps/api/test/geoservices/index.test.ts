@@ -1,0 +1,272 @@
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import { Elysia } from "elysia";
+import { env } from "@/env";
+import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
+import {
+    dbClientQueryMock,
+    resetDbMocks,
+    setDbMockTableRows,
+} from "../mocks/db";
+
+const { geoservices } = await import("@/src/geoservices");
+const app = new Elysia().use(geoservices);
+
+const originalFetch = globalThis.fetch;
+const fetchMock = mock(
+    async (
+        _input: string | URL | Request,
+        _init?: RequestInit,
+    ): Promise<Response> => {
+        throw new Error("Unexpected geocoder request");
+    },
+);
+
+const successResponse = {
+    query: "Vienna Central Depot",
+    count: 1,
+    results: [
+        {
+            pack: "openstreetmap",
+            source: "osm",
+            source_id: "node/123",
+            kind: "place",
+            name: "Vienna Central Depot",
+            house_number: "1",
+            street: "Depot Street",
+            unit: "A",
+            postcode: "1010",
+            locality: "Vienna",
+            district: "Innere Stadt",
+            region: "Vienna",
+            country_code: "at",
+            country: "Austria",
+            lat: 48.2082,
+            lon: 16.3738,
+            importance: 0.9,
+            aliases: ["Central Depot"],
+            display_name: "Vienna Central Depot, Austria",
+            score: 0.98,
+            distance_m: 12.5,
+        },
+    ],
+};
+
+const errorResponse = {
+    error: {
+        code: "NO_RESULTS",
+        message: "No matching location was found",
+    },
+};
+
+const request = (address?: string) => {
+    const url = new URL("http://localhost/geoservices/resolve");
+    if (address !== undefined) url.searchParams.set("address", address);
+
+    return app.handle(
+        new Request(url.toString(), {
+            headers: { authorization: "Bearer test-token" },
+        }),
+    );
+};
+
+const respondWith = (body: unknown, init?: ResponseInit) => {
+    fetchMock.mockResolvedValueOnce(Response.json(body, init));
+};
+
+describe("GET /geoservices/resolve", () => {
+    beforeEach(() => {
+        resetAuthMocks();
+        resetDbMocks();
+        fetchMock.mockReset();
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+    });
+
+    afterAll(() => {
+        globalThis.fetch = originalFetch;
+    });
+
+    it("returns 401 without a Better Auth session", async () => {
+        const response = await request("unauthenticated-address");
+
+        expect(response.status).toBe(401);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["a missing address", undefined],
+        ["an empty address", ""],
+    ])("returns 422 for %s", async (_description, address) => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await request(address);
+
+        expect(response.status).toBe(422);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("geocodes the original address when no shortname matches", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("shortname", []);
+        respondWith(successResponse);
+        const address = "Landstraßer Hauptstraße 1, Wien & Umgebung";
+
+        const response = await request(address);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(successResponse);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock.mock.calls[0]?.[0]).toMatchObject({
+            text: expect.stringContaining('from "shortname"'),
+        });
+        expect(dbClientQueryMock.mock.calls[0]?.[1]).toEqual([
+            address.toLowerCase(),
+            1,
+        ]);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledWith(
+            `${env.GEOCODER_URL}/geocode?q=${encodeURIComponent(address)}`,
+            { method: "GET" },
+        );
+    });
+
+    it("resolves shortnames case-insensitively before geocoding", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("shortname", [
+            ["primary-depot", "Vienna Central Depot / Gate 2"],
+        ]);
+        respondWith(successResponse);
+
+        const response = await request("PRIMARY-DEPOT");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(successResponse);
+        expect(dbClientQueryMock.mock.calls[0]?.[1]).toEqual([
+            "primary-depot",
+            1,
+        ]);
+        expect(fetchMock).toHaveBeenCalledWith(
+            `${env.GEOCODER_URL}/geocode?q=Vienna%20Central%20Depot%20%2F%20Gate%202`,
+            { method: "GET" },
+        );
+    });
+
+    it("returns a schema-valid error response from the geocoder", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("shortname", []);
+        respondWith(errorResponse);
+
+        const response = await request("valid-upstream-error-address");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(errorResponse);
+    });
+
+    it("serves repeated exact addresses from cache", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("shortname", []);
+        respondWith(successResponse);
+
+        const firstResponse = await request("cache-hit-address");
+        const secondResponse = await request("cache-hit-address");
+
+        expect(firstResponse.status).toBe(200);
+        expect(secondResponse.status).toBe(200);
+        expect(await secondResponse.json()).toEqual(successResponse);
+        expect(getSessionMock).toHaveBeenCalledTimes(2);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses the exact address as the cache key", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("shortname", []);
+        respondWith({ ...successResponse, query: "case-sensitive-address" });
+        respondWith({ ...successResponse, query: "CASE-SENSITIVE-ADDRESS" });
+
+        const lowerCaseResponse = await request("case-sensitive-address");
+        const upperCaseResponse = await request("CASE-SENSITIVE-ADDRESS");
+
+        expect(await lowerCaseResponse.json()).toMatchObject({
+            query: "case-sensitive-address",
+        });
+        expect(await upperCaseResponse.json()).toMatchObject({
+            query: "CASE-SENSITIVE-ADDRESS",
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns 500 and does not cache a response that violates the geocoder schema", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("shortname", []);
+        const invalidResponse = {
+            query: "invalid-schema-address",
+            count: 1,
+            results: [{ display_name: "Missing required coordinates" }],
+        };
+        respondWith(invalidResponse);
+        respondWith(invalidResponse);
+
+        const firstResponse = await request("invalid-schema-address");
+        const secondResponse = await request("invalid-schema-address");
+
+        expect(firstResponse.status).toBe(500);
+        expect(secondResponse.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns 500 when the geocoder request fails", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("shortname", []);
+        fetchMock.mockRejectedValueOnce(new Error("geocoder unavailable"));
+
+        const response = await request("unavailable-geocoder-address");
+
+        expect(response.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 500 without geocoding when the shortname lookup fails", async () => {
+        getSessionMock.mockResolvedValue(session);
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database unavailable"),
+        );
+
+        const response = await request("unavailable-database-address");
+
+        expect(response.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("refreshes cache recency and evicts the least recently used entry", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("shortname", []);
+        fetchMock.mockImplementation(async (input) => {
+            const query = new URL(String(input)).searchParams.get("q") ?? "";
+            return Response.json({ ...successResponse, query });
+        });
+        const refreshedAddress = "lru-refreshed-address";
+
+        expect((await request(refreshedAddress)).status).toBe(200);
+        for (let index = 0; index < 999; index += 1) {
+            expect((await request(`lru-filler-${index}`)).status).toBe(200);
+        }
+
+        const callsBeforeCacheHit = fetchMock.mock.calls.length;
+        expect((await request(refreshedAddress)).status).toBe(200);
+        expect(fetchMock).toHaveBeenCalledTimes(callsBeforeCacheHit);
+
+        expect((await request("lru-overflow-address")).status).toBe(200);
+        expect((await request(refreshedAddress)).status).toBe(200);
+        expect(fetchMock).toHaveBeenCalledTimes(callsBeforeCacheHit + 1);
+
+        expect((await request("lru-filler-0")).status).toBe(200);
+        expect(fetchMock).toHaveBeenCalledTimes(callsBeforeCacheHit + 2);
+    });
+});
