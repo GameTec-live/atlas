@@ -507,13 +507,13 @@ describe("GET /geoservices/route", () => {
         expect(routerQuery.directions_options).toEqual({ language: "de-AT" });
     });
 
-    it("returns a schema-valid error response from the router", async () => {
+    it("preserves the status of a schema-valid error response from the router", async () => {
         getSessionMock.mockResolvedValue(session);
         respondWith(routeErrorResponse, { status: 400 });
 
         const response = await routeRequest(validRouteQuery);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(400);
         expect(await response.json()).toEqual(routeErrorResponse);
     });
 

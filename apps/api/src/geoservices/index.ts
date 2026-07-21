@@ -111,7 +111,7 @@ export const geoservices = new Elysia({
     )
     .get(
         "/route",
-        async ({ query }) => {
+        async ({ query, set }) => {
             const routeQuery = {
                 locations: [
                     {
@@ -151,10 +151,13 @@ export const geoservices = new Elysia({
                     method: "GET",
                 },
             );
-            return Value.Decode(
+            const result = Value.Decode(
                 GeoservicesModel.routeResponse,
                 await routeResponse.json(),
             );
+
+            set.status = routeResponse.status;
+            return result;
         },
         {
             auth: true,
