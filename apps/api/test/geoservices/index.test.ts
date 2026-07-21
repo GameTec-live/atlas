@@ -164,7 +164,7 @@ describe("GET /geoservices/resolve", () => {
         expect(await response.json()).toEqual(errorResponse);
     });
 
-    it("serves repeated exact addresses from cache", async () => {
+    it("serves repeated exact addresses from cache while revalidating the shortname", async () => {
         getSessionMock.mockResolvedValue(session);
         setDbMockTableRows("shortname", []);
         respondWith(successResponse);
@@ -176,7 +176,60 @@ describe("GET /geoservices/resolve", () => {
         expect(secondResponse.status).toBe(200);
         expect(await secondResponse.json()).toEqual(successResponse);
         expect(getSessionMock).toHaveBeenCalledTimes(2);
-        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("evicts a cached response when its shortname changes", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("shortname", [
+            ["changing-shortname", "Old address"],
+        ]);
+        respondWith({ ...successResponse, query: "Old address" });
+
+        const firstResponse = await request("changing-shortname");
+
+        setDbMockTableRows("shortname", [
+            ["changing-shortname", "New address"],
+        ]);
+        const cachedResponse = await request("changing-shortname");
+
+        expect(await firstResponse.json()).toMatchObject({
+            query: "Old address",
+        });
+        expect(await cachedResponse.json()).toMatchObject({
+            query: "Old address",
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        respondWith({ ...successResponse, query: "New address" });
+
+        const refreshedResponse = await request("changing-shortname");
+
+        expect(await refreshedResponse.json()).toMatchObject({
+            query: "New address",
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock).toHaveBeenLastCalledWith(
+            `${env.GEOCODER_URL}/geocode?q=New%20address`,
+            { method: "GET" },
+        );
+    });
+
+    it("keeps serving a cached response when background revalidation fails", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("shortname", []);
+        respondWith(successResponse);
+
+        expect((await request("revalidation-error-address")).status).toBe(200);
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database temporarily unavailable"),
+        );
+
+        expect((await request("revalidation-error-address")).status).toBe(200);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect((await request("revalidation-error-address")).status).toBe(200);
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 

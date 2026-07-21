@@ -8,7 +8,51 @@ import { shortname } from "../db/schema";
 import { type GeocoderResponse, GeoservicesModel } from "./model";
 
 const CACHE_SIZE = 1000;
-const resolveCache = new Map<string, GeocoderResponse>();
+
+interface ResolveCacheEntry {
+    resolvedAddress: string;
+    response: GeocoderResponse;
+}
+
+const resolveCache = new Map<string, ResolveCacheEntry>();
+const pendingRevalidations = new Map<string, Promise<void>>();
+
+const resolveShortname = async (address: string) => {
+    const result = await db
+        .select()
+        .from(shortname)
+        .where(eq(shortname.key, address.toLowerCase()))
+        .limit(1);
+
+    return result[0]?.value ?? address;
+};
+
+const revalidateCachedResult = (
+    address: string,
+    cachedEntry: ResolveCacheEntry,
+) => {
+    if (pendingRevalidations.has(address)) return;
+
+    const revalidation = resolveShortname(address)
+        .then((resolvedAddress) => {
+            if (
+                resolvedAddress !== cachedEntry.resolvedAddress &&
+                resolveCache.get(address) === cachedEntry
+            ) {
+                resolveCache.delete(address);
+            }
+        })
+        .catch(() => {
+            // temporary database error must not invalidate cache
+        })
+        .finally(() => {
+            if (pendingRevalidations.get(address) === revalidation) {
+                pendingRevalidations.delete(address);
+            }
+        });
+
+    pendingRevalidations.set(address, revalidation);
+};
 
 export const geoservices = new Elysia({
     prefix: "/geoservices",
@@ -24,17 +68,12 @@ export const geoservices = new Elysia({
             if (cachedResult !== undefined) {
                 resolveCache.delete(query.address);
                 resolveCache.set(query.address, cachedResult);
-                return cachedResult;
+                revalidateCachedResult(query.address, cachedResult);
+                return cachedResult.response;
             }
 
             // Resolve shortnames
-            const result = await db
-                .select()
-                .from(shortname)
-                .where(eq(shortname.key, query.address.toLowerCase()))
-                .limit(1);
-
-            const value = result[0]?.value ?? query.address;
+            const value = await resolveShortname(query.address);
 
             // Geocode
             const geocodeResponse = await fetch(
@@ -50,7 +89,10 @@ export const geoservices = new Elysia({
             );
 
             // Cache
-            resolveCache.set(query.address, geocoderResult);
+            resolveCache.set(query.address, {
+                resolvedAddress: value,
+                response: geocoderResult,
+            });
 
             if (resolveCache.size > CACHE_SIZE) {
                 const oldestQuery = resolveCache.keys().next().value;
