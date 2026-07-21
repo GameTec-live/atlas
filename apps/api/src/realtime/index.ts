@@ -23,6 +23,7 @@ export const realtime = new Elysia({
             ws.publish(BROADCAST_TRACK_TOPIC, {
                 type: "connectionChange",
                 userId: ws.data.user.id,
+                userName: ws.data.user.name,
                 state: "connected",
             });
         },
@@ -30,6 +31,7 @@ export const realtime = new Elysia({
             ws.publish(BROADCAST_TRACK_TOPIC, {
                 ...message,
                 userId: ws.data.user.id,
+                userName: ws.data.user.name,
             });
         },
         close(ws) {
@@ -37,6 +39,7 @@ export const realtime = new Elysia({
             ws.publish(BROADCAST_TRACK_TOPIC, {
                 type: "connectionChange",
                 userId: ws.data.user.id,
+                userName: ws.data.user.name,
                 state: "disconnected",
             });
         },
