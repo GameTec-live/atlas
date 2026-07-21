@@ -1,0 +1,43 @@
+type: http_request
+model: http_request
+id: rq_JQthxRKx8W
+createdAt: 2026-07-20T12:33:33.397876500
+updatedAt: 2026-07-21T07:24:01.814681600
+workspaceId: wk_gbXsp49jy7
+folderId: null
+authentication: {}
+authenticationType: null
+body:
+  text: |-
+    {
+      "email": "test@gametec.live",
+      "password": "12345678",
+      "rememberMe": true
+    }
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: Jy70MTf6Ad
+method: POST
+name: Sign-in
+sortPriority: -1784550752715.0
+url: ${[ baseUrl ]}/api/auth/sign-in/email
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

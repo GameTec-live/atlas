@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_8NZR3zcyy3
+createdAt: 2026-07-21T07:20:50.568367800
+updatedAt: 2026-07-21T07:20:50.568368100
+workspaceId: wk_gbXsp49jy7
+folderId: fl_9GiEjUpTWZ
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: List all active sessions for the user
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: list User Sessions
+sortPriority: 32.0
+url: ${[baseUrl]}/api/auth/list-sessions
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

@@ -1,0 +1,43 @@
+type: http_request
+model: http_request
+id: rq_F3aF964WAq
+createdAt: 2026-07-21T07:20:50.642272700
+updatedAt: 2026-07-21T07:20:50.642273
+workspaceId: wk_gbXsp49jy7
+folderId: fl_9GiEjUpTWZ
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: '{}'
+bodyType: application/json
+description: Revoke all other sessions for the user except the current one
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: Revoke all other sessions for the user except the current one
+sortPriority: 35.0
+url: ${[baseUrl]}/api/auth/revoke-other-sessions
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

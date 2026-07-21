@@ -1,0 +1,69 @@
+type: http_request
+model: http_request
+id: rq_fD67dMd9wK
+createdAt: 2026-07-21T07:20:50.546622500
+updatedAt: 2026-07-21T07:20:50.546622800
+workspaceId: wk_gbXsp49jy7
+folderId: fl_9GiEjUpTWZ
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: |-
+    {
+      "provider": "<string>",
+      "callbackURL": "<string>",
+      "idToken": {
+        "token": "<string>",
+        "nonce": "<string>",
+        "accessToken": "<string>",
+        "refreshToken": "<string>",
+        "scopes": [
+          "<string>",
+          "<string>"
+        ]
+      },
+      "requestSignUp": "<boolean>",
+      "scopes": [
+        "<string>",
+        "<string>"
+      ],
+      "errorCallbackURL": "<string>",
+      "disableRedirect": "<boolean>",
+      "additionalData": {
+        "key_0": {},
+        "key_1": {},
+        "key_2": {}
+      }
+    }
+bodyType: application/json
+description: Link a social account to the user
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: link Social Account
+sortPriority: 36.0
+url: ${[baseUrl]}/api/auth/link-social
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

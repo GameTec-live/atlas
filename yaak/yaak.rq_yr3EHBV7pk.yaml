@@ -1,0 +1,75 @@
+type: http_request
+model: http_request
+id: rq_yr3EHBV7pk
+createdAt: 2026-07-21T07:20:50.714588900
+updatedAt: 2026-07-21T07:20:50.714589400
+workspaceId: wk_gbXsp49jy7
+folderId: fl_Pe9scVD4yF
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: |-
+    {
+      "provider": "<string>",
+      "callbackURL": "<string>",
+      "newUserCallbackURL": "<string>",
+      "errorCallbackURL": "<string>",
+      "disableRedirect": "<boolean>",
+      "idToken": {
+        "token": "<string>",
+        "nonce": "<string>",
+        "accessToken": "<string>",
+        "refreshToken": "<string>",
+        "expiresAt": "<number>",
+        "user": {
+          "name": {
+            "firstName": "<string>",
+            "lastName": "<string>"
+          },
+          "email": "<string>"
+        }
+      },
+      "scopes": [
+        "<string>",
+        "<string>"
+      ],
+      "requestSignUp": "<boolean>",
+      "loginHint": "<string>",
+      "additionalData": {
+        "key_0": {},
+        "key_1": {},
+        "key_2": {}
+      }
+    }
+bodyType: application/json
+description: Sign in with a social provider
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: social Sign In
+sortPriority: 7.0
+url: ${[baseUrl]}/api/auth/sign-in/social
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

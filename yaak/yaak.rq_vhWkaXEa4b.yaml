@@ -1,0 +1,46 @@
+type: http_request
+model: http_request
+id: rq_vhWkaXEa4b
+createdAt: 2026-07-21T07:20:50.471081600
+updatedAt: 2026-07-21T07:20:50.471082
+workspaceId: wk_gbXsp49jy7
+folderId: fl_eBuxUCSGTi
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: Callback to complete user deletion with verification token
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: Callback to complete user deletion with verification token
+sortPriority: 30.0
+url: ${[baseUrl]}/api/auth/delete-user/callback
+urlParameters:
+- enabled: true
+  name: token
+  value: <string>
+  id: null
+- enabled: true
+  name: callbackURL
+  value: <string>
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

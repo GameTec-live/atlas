@@ -337,7 +337,7 @@ const getTableName = (query: unknown): TableName | undefined => {
     );
 };
 
-const queryDatabase = async (query: unknown) => {
+const queryDatabase = async (query: unknown, _values?: unknown) => {
     const operation = getDbOperation(query);
     const table = getTableName(query);
     const rows =
@@ -404,7 +404,12 @@ class TestPgClient extends Client {
             return query;
         }
 
-        const result = dbClientQueryMock(query);
+        const result = dbClientQueryMock(
+            query,
+            typeof valuesOrCallback === "function"
+                ? undefined
+                : valuesOrCallback,
+        );
         const resultCallback =
             typeof callback === "function"
                 ? callback

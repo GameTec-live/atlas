@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_YQZCt6bDR8
+createdAt: 2026-07-21T07:20:50.579278800
+updatedAt: 2026-07-21T07:20:50.579279100
+workspaceId: wk_gbXsp49jy7
+folderId: fl_9GiEjUpTWZ
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: Check if the API is working
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: Check if the API is working
+sortPriority: 42.0
+url: ${[baseUrl]}/api/auth/ok
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

@@ -6,6 +6,7 @@ import { OpenAPI } from "./auth";
 import { authHandler } from "./authHandler";
 import { BUILD_INFO } from "./constants";
 import { runMigrations } from "./db/migrate";
+import { geoservices } from "./geoservices";
 import { authed } from "./protected";
 import { realtime } from "./realtime";
 import { unauthed } from "./unprotected";
@@ -83,6 +84,7 @@ export const app = new Elysia()
     .use(authed)
     .use(unauthed)
     .use(realtime)
+    .use(geoservices)
     .get("/", () => {
         return {
             message:

@@ -1,0 +1,55 @@
+type: http_request
+model: http_request
+id: rq_hWV7ZX87HV
+createdAt: 2026-07-21T07:20:50.418465700
+updatedAt: 2026-07-21T07:20:50.418465900
+workspaceId: wk_gbXsp49jy7
+folderId: fl_xu5As7Chgb
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: |-
+    {
+      "code": "<string>",
+      "error": "<string>",
+      "device_id": "<string>",
+      "error_description": "<string>",
+      "state": "<string>",
+      "user": "<string>"
+    }
+bodyType: application/json
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/json
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: /api/auth/callback/:id
+sortPriority: 12.0
+url: ${[baseUrl]}/api/auth/callback/:id
+urlParameters:
+- enabled: true
+  name: :id
+  value: <string>
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

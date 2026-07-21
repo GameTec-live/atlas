@@ -1,0 +1,42 @@
+type: http_request
+model: http_request
+id: rq_96shDYPbQg
+createdAt: 2026-07-21T07:20:50.407510500
+updatedAt: 2026-07-21T07:20:50.407511
+workspaceId: wk_gbXsp49jy7
+folderId: fl_xu5As7Chgb
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: ''
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: /api/auth/callback/:id
+sortPriority: 11.0
+url: ${[baseUrl]}/api/auth/callback/:id
+urlParameters:
+- enabled: true
+  name: :id
+  value: <string>
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
