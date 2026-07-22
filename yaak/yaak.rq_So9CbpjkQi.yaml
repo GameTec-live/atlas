@@ -2,9 +2,9 @@ type: http_request
 model: http_request
 id: rq_So9CbpjkQi
 createdAt: 2026-07-21T07:18:20.214311200
-updatedAt: 2026-07-21T07:23:56.163320300
+updatedAt: 2026-07-22T11:33:30.229110800
 workspaceId: wk_gbXsp49jy7
-folderId: null
+folderId: fl_fAYUhVXYGY
 authentication: {}
 authenticationType: null
 body: {}
@@ -13,8 +13,8 @@ description: ''
 headers: []
 method: GET
 name: /geoservices/resolve
-sortPriority: -1784550752715.0
-url: http://${[ baseUrl ]}/geoservices/resolve
+sortPriority: 1.6666666666666667
+url: ${[ baseUrl ]}/geoservices/resolve
 urlParameters: []
 settingSendCookies:
   enabled: false

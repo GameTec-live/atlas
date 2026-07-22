@@ -1,8 +1,8 @@
 type: websocket_request
 model: websocket_request
-id: wr_zYprGNH9he
-createdAt: 2026-07-20T12:32:32.717579600
-updatedAt: 2026-07-22T11:33:47.427232100
+id: wr_49RVjLuTBw
+createdAt: 2026-07-22T11:33:59.695891100
+updatedAt: 2026-07-22T11:34:19.325945300
 workspaceId: wk_gbXsp49jy7
 folderId: null
 authentication: {}
@@ -11,15 +11,10 @@ description: ''
 headers: []
 message: |-
   {
-      "type": "update",
-      "latitude": 80,
-      "longitude": 55,
-      "state": "free",
-      "fuelLevel": 44
   }
-name: /realtime/track
-sortPriority: -1784550752715.0
-url: ws://localhost:3000/realtime/track
+name: /realtime/notify
+sortPriority: -1784550752714.998
+url: ws://localhost:3000/realtime/notify
 urlParameters: []
 settingSendCookies:
   enabled: false
