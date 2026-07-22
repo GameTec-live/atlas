@@ -1,0 +1,28 @@
+type: folder
+model: folder
+id: fl_fAYUhVXYGY
+createdAt: 2026-07-21T11:01:05.986670700
+updatedAt: 2026-07-21T11:01:05.986671200
+workspaceId: wk_gbXsp49jy7
+folderId: null
+authentication: {}
+authenticationType: null
+description: ''
+headers: []
+name: geoservices
+sortPriority: 0.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
