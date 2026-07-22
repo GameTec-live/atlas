@@ -3,6 +3,7 @@ import {
     bigint,
     boolean,
     check,
+    date,
     index,
     integer,
     pgEnum,
@@ -228,7 +229,7 @@ export const role = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
         role: roleEnum("role").notNull(),
-        date: timestamp("date").notNull().defaultNow(),
+        date: date("date").notNull().defaultNow(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at")
             .defaultNow()
