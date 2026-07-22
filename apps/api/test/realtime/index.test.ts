@@ -362,10 +362,14 @@ describe("WS /realtime/track", () => {
 describe("notify", () => {
     it("returns zero without attempting to publish when no server is available", () => {
         expect(
-            notify(null, {
-                jobId: "0303a3f7-6ed5-4a89-84f0-bb2f33b892b7",
-                from: "Vienna",
-            }),
+            notify(
+                null,
+                {
+                    jobId: "0303a3f7-6ed5-4a89-84f0-bb2f33b892b7",
+                    from: "Vienna",
+                },
+                "user-1",
+            ),
         ).toBe(0);
     });
 
@@ -381,10 +385,10 @@ describe("notify", () => {
             note: "Passenger is waiting at gate 3",
         };
 
-        expect(notify(server, notification)).toBe(42);
+        expect(notify(server, notification, "user-1")).toBe(42);
         expect(publish).toHaveBeenCalledTimes(1);
         expect(publish).toHaveBeenCalledWith(
-            "api:ws:notify",
+            "api:ws:notify:user-1",
             JSON.stringify(notification),
         );
     });
@@ -414,7 +418,7 @@ describe("WS /realtime/notify", () => {
         );
     });
 
-    it("delivers notifications with required and optional fields to every subscriber", async () => {
+    it("delivers notifications with required and optional fields to every subscriber for the user", async () => {
         const firstClient = await WebSocketClient.connect("/notify");
         const secondClient = await WebSocketClient.connect("/notify");
         const notifications = [
@@ -434,11 +438,29 @@ describe("WS /realtime/notify", () => {
         await secondClient.expectNoMessage();
 
         for (const notification of notifications) {
-            notify(app.server, notification);
+            notify(app.server, notification, session.user.id);
 
             expect(await firstClient.nextMessage()).toEqual(notification);
             expect(await secondClient.nextMessage()).toEqual(notification);
         }
+    });
+
+    it("only delivers notifications to subscribers for the targeted user", async () => {
+        getSessionMock
+            .mockResolvedValueOnce(sessionFor("target-user"))
+            .mockResolvedValueOnce(sessionFor("other-user"));
+
+        const targetClient = await WebSocketClient.connect("/notify");
+        const otherClient = await WebSocketClient.connect("/notify");
+        const notification = {
+            jobId: "ec51bff0-6c6d-47f7-a767-3f7ba49571dc",
+            from: "Vienna Airport",
+        };
+
+        notify(app.server, notification, "target-user");
+
+        expect(await targetClient.nextMessage()).toEqual(notification);
+        await otherClient.expectNoMessage();
     });
 
     it("keeps notification broadcasts isolated from tracking subscribers", async () => {
@@ -450,7 +472,7 @@ describe("WS /realtime/notify", () => {
             note: "New assignment",
         };
 
-        notify(app.server, notification);
+        notify(app.server, notification, session.user.id);
 
         expect(await notifyClient.nextMessage()).toEqual(notification);
         await trackingClient.expectNoMessage();
@@ -481,7 +503,7 @@ describe("WS /realtime/notify", () => {
         };
 
         await disconnectedClient.close();
-        notify(app.server, notification);
+        notify(app.server, notification, session.user.id);
 
         expect(await activeClient.nextMessage()).toEqual(notification);
         expect(disconnectedClient.socket.readyState).toBe(WebSocket.CLOSED);
