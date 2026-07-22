@@ -39,16 +39,21 @@ CREATE TABLE "logbook" (
 	"ended_at" timestamp,
 	"revenue" real,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "logbook_endOdometer_check" CHECK ("end_odometer" IS NULL OR "end_odometer" >= "start_odometer"),
+	CONSTRAINT "logbook_revenue_check" CHECK ("revenue" IS NULL OR "revenue" >= 0),
+	CONSTRAINT "logbook_endedAt_check" CHECK ("ended_at" IS NULL OR "ended_at" >= "started_at")
 );
 --> statement-breakpoint
 CREATE TABLE "maintenance" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"vehicle_id" uuid NOT NULL,
-	"note" text NOT NULL,
+	"note" text,
+	"odometer" bigint,
 	"mechanic" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "maintenance_odometer_check" CHECK ("odometer" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "role" (
@@ -97,15 +102,18 @@ CREATE TABLE "vehicle" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"brand" text NOT NULL,
 	"model" text NOT NULL,
-	"year" date NOT NULL,
+	"year" timestamp NOT NULL,
 	"license_plate" text NOT NULL,
 	"odometer" bigint,
 	"fuel_level" real,
 	"maintenance_every" integer NOT NULL,
-	"assessment_month" date NOT NULL,
+	"assessment_month" timestamp NOT NULL,
 	"smart_support" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "vehicle_maintenanceEvery_check" CHECK ("maintenance_every" >= 0),
+	CONSTRAINT "vehicle_fuelLevel_check" CHECK ("fuel_level" >= 0 AND "fuel_level" <= 100),
+	CONSTRAINT "vehicle_odometer_check" CHECK ("odometer" >= 0)
 );
 --> statement-breakpoint
 CREATE TABLE "verification" (
@@ -123,6 +131,7 @@ CREATE INDEX "job_dueDate_idx" ON "job" ("due_date");--> statement-breakpoint
 CREATE INDEX "logbook_vehicleId_idx" ON "logbook" ("vehicle_id");--> statement-breakpoint
 CREATE INDEX "logbook_driverId_idx" ON "logbook" ("driver_id");--> statement-breakpoint
 CREATE INDEX "maintenance_vehicleId_idx" ON "maintenance" ("vehicle_id");--> statement-breakpoint
+CREATE INDEX "maintenance_createdAt_idx" ON "maintenance" ("created_at");--> statement-breakpoint
 CREATE INDEX "role_date_idx" ON "role" ("date");--> statement-breakpoint
 CREATE INDEX "role_role_idx" ON "role" ("role");--> statement-breakpoint
 CREATE INDEX "session_userId_idx" ON "session" ("user_id");--> statement-breakpoint
