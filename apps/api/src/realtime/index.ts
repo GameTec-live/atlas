@@ -3,15 +3,19 @@ import { authHandler } from "../authHandler";
 import { type NotifyResponse, RealtimeModel } from "./model";
 
 const BROADCAST_TRACK_TOPIC = "api:ws:track";
-const BROADCAST_NOTIFY_TOPIC = "api:ws:notify";
+const BROADCAST_NOTIFY_TOPIC = "api:ws:notify:";
 
 export function notify(
     server: Bun.Server<unknown> | null,
     notification: NotifyResponse,
+    userId: string,
 ) {
     if (!server) return 0;
 
-    return server.publish(BROADCAST_NOTIFY_TOPIC, JSON.stringify(notification));
+    return server.publish(
+        BROADCAST_NOTIFY_TOPIC + userId,
+        JSON.stringify(notification),
+    );
 }
 
 export const realtime = new Elysia({
@@ -59,10 +63,10 @@ export const realtime = new Elysia({
     })
     .ws("/notify", {
         open(ws) {
-            ws.subscribe(BROADCAST_NOTIFY_TOPIC);
+            ws.subscribe(BROADCAST_NOTIFY_TOPIC + ws.data.user.id);
         },
         close(ws) {
-            ws.unsubscribe(BROADCAST_NOTIFY_TOPIC);
+            ws.unsubscribe(BROADCAST_NOTIFY_TOPIC + ws.data.user.id);
         },
         response: RealtimeModel.notifyResponse,
         auth: true,

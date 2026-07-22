@@ -2,7 +2,7 @@ type: websocket_request
 model: websocket_request
 id: wr_49RVjLuTBw
 createdAt: 2026-07-22T11:33:59.695891100
-updatedAt: 2026-07-22T11:34:19.325945300
+updatedAt: 2026-07-22T12:20:26.580336600
 workspaceId: wk_gbXsp49jy7
 folderId: null
 authentication: {}
@@ -14,7 +14,7 @@ message: |-
   }
 name: /realtime/notify
 sortPriority: -1784550752714.998
-url: ws://localhost:3000/realtime/notify
+url: ws://${[ wsBase ]}/realtime/notify
 urlParameters: []
 settingSendCookies:
   enabled: false

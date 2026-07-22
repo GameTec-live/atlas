@@ -2,7 +2,7 @@ type: websocket_request
 model: websocket_request
 id: wr_zYprGNH9he
 createdAt: 2026-07-20T12:32:32.717579600
-updatedAt: 2026-07-22T11:33:47.427232100
+updatedAt: 2026-07-22T12:20:15.059364300
 workspaceId: wk_gbXsp49jy7
 folderId: null
 authentication: {}
@@ -19,7 +19,7 @@ message: |-
   }
 name: /realtime/track
 sortPriority: -1784550752715.0
-url: ws://localhost:3000/realtime/track
+url: ws://${[ wsBase ]}/realtime/track
 urlParameters: []
 settingSendCookies:
   enabled: false
