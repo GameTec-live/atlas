@@ -155,7 +155,7 @@ export const exampleData = {
         {
             driverId: userId,
             role: "driver",
-            date: new Date("2026-07-20T00:00:00.000Z"),
+            date: "2026-07-20",
             createdAt,
             updatedAt,
         },
@@ -287,7 +287,7 @@ const defaultTableRows: Record<TableName, unknown[][]> = {
     role: exampleData.role.map((row) => [
         row.driverId,
         row.role,
-        toTimestamp(row.date),
+        row.date,
         toTimestamp(row.createdAt),
         toTimestamp(row.updatedAt),
     ]),
