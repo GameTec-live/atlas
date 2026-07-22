@@ -1,8 +1,8 @@
-import { defineRelationsPart } from "drizzle-orm";
+import { defineRelationsPart, sql } from "drizzle-orm";
 import {
     bigint,
     boolean,
-    date,
+    check,
     index,
     integer,
     pgEnum,
@@ -100,12 +100,12 @@ export const vehicle = pgTable(
         id: uuid("id").primaryKey().defaultRandom(),
         brand: text("brand").notNull(),
         model: text("model").notNull(),
-        year: date("year").notNull(),
+        year: timestamp("year").notNull(),
         licensePlate: text("license_plate").notNull(),
         odometer: bigint("odometer", { mode: "number" }),
         fuelLevel: real("fuel_level"),
         maintenanceEvery: integer("maintenance_every").notNull(),
-        assessmentMonth: date("assessment_month").notNull(),
+        assessmentMonth: timestamp("assessment_month").notNull(),
         smartSupport: boolean("smart_support").default(true).notNull(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at")
@@ -117,6 +117,15 @@ export const vehicle = pgTable(
         index("vehicle_licensePlate_idx").on(table.licensePlate),
         index("vehicle_brand_idx").on(table.brand),
         index("vehicle_model_idx").on(table.model),
+        check(
+            "vehicle_maintenanceEvery_check",
+            sql`${table.maintenanceEvery} >= 0`,
+        ),
+        check(
+            "vehicle_fuelLevel_check",
+            sql`${table.fuelLevel} >= 0 AND ${table.fuelLevel} <= 100`,
+        ),
+        check("vehicle_odometer_check", sql`${table.odometer} >= 0`),
     ],
 );
 
@@ -127,7 +136,8 @@ export const maintenance = pgTable(
         vehicleId: uuid("vehicle_id")
             .notNull()
             .references(() => vehicle.id, { onDelete: "cascade" }),
-        note: text("note").notNull(),
+        note: text("note"),
+        odometer: bigint("odometer", { mode: "number" }),
         mechanic: text("mechanic"),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at")
@@ -135,7 +145,11 @@ export const maintenance = pgTable(
             .$onUpdate(() => /* @__PURE__ */ new Date())
             .notNull(),
     },
-    (table) => [index("maintenance_vehicleId_idx").on(table.vehicleId)],
+    (table) => [
+        index("maintenance_vehicleId_idx").on(table.vehicleId),
+        index("maintenance_createdAt_idx").on(table.createdAt),
+        check("maintenance_odometer_check", sql`${table.odometer} >= 0`),
+    ],
 );
 
 export const job = pgTable(
@@ -190,6 +204,18 @@ export const logbook = pgTable(
     (table) => [
         index("logbook_vehicleId_idx").on(table.vehicleId),
         index("logbook_driverId_idx").on(table.driverId),
+        check(
+            "logbook_endOdometer_check",
+            sql`${table.endOdometer} IS NULL OR ${table.endOdometer} >= ${table.startOdometer}`,
+        ),
+        check(
+            "logbook_revenue_check",
+            sql`${table.revenue} IS NULL OR ${table.revenue} >= 0`,
+        ),
+        check(
+            "logbook_endedAt_check",
+            sql`${table.endedAt} IS NULL OR ${table.endedAt} >= ${table.startedAt}`,
+        ),
     ],
 );
 
@@ -202,7 +228,7 @@ export const role = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
         role: roleEnum("role").notNull(),
-        date: date("date").notNull().defaultNow(),
+        date: timestamp("date").notNull().defaultNow(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at")
             .defaultNow()
