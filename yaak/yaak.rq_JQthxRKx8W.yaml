@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_JQthxRKx8W
 createdAt: 2026-07-20T12:33:33.397876500
-updatedAt: 2026-07-21T07:24:01.814681600
+updatedAt: 2026-07-22T12:20:34.073574
 workspaceId: wk_gbXsp49jy7
 folderId: null
 authentication: {}
@@ -21,6 +21,14 @@ headers:
   name: Content-Type
   value: application/json
   id: Jy70MTf6Ad
+- enabled: true
+  name: Origin
+  value: ${[ baseUrl ]}
+  id: QDtRz2TVjR
+- enabled: true
+  name: ''
+  value: ''
+  id: 726rPUg9Ak
 method: POST
 name: Sign-in
 sortPriority: -1784550752715.0

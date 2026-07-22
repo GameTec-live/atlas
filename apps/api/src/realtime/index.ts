@@ -1,8 +1,22 @@
 import { Elysia } from "elysia";
 import { authHandler } from "../authHandler";
-import { RealtimeModel } from "./model";
+import { type NotifyResponse, RealtimeModel } from "./model";
 
 const BROADCAST_TRACK_TOPIC = "api:ws:track";
+const BROADCAST_NOTIFY_TOPIC = "api:ws:notify:";
+
+export function notify(
+    server: Bun.Server<unknown> | null,
+    notification: NotifyResponse,
+    userId: string,
+) {
+    if (!server) return 0;
+
+    return server.publish(
+        BROADCAST_NOTIFY_TOPIC + userId,
+        JSON.stringify(notification),
+    );
+}
 
 export const realtime = new Elysia({
     prefix: "/realtime",
@@ -14,7 +28,7 @@ export const realtime = new Elysia({
     .use(authHandler)
     .get("/", () => {
         return {
-            message: "Realtime endpoints: /track",
+            message: "Realtime endpoints: /track, /notify",
         };
     })
     .ws("/track", {
@@ -46,4 +60,14 @@ export const realtime = new Elysia({
         auth: true,
         body: RealtimeModel.trackInputMessage,
         response: RealtimeModel.realtimeResponse,
+    })
+    .ws("/notify", {
+        open(ws) {
+            ws.subscribe(BROADCAST_NOTIFY_TOPIC + ws.data.user.id);
+        },
+        close(ws) {
+            ws.unsubscribe(BROADCAST_NOTIFY_TOPIC + ws.data.user.id);
+        },
+        response: RealtimeModel.notifyResponse,
+        auth: true,
     });

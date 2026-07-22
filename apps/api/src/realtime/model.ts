@@ -1,3 +1,4 @@
+import type { Static } from "@sinclair/typebox";
 import { t } from "elysia";
 
 const trackMessage = t.Object({
@@ -40,4 +41,12 @@ const realtimeResponse = t.Union([trackMessage, connectionChangeMessage]);
 export const RealtimeModel = {
     realtimeResponse,
     trackInputMessage,
+    notifyResponse: t.Object({
+        jobId: t.String({ format: "uuid" }),
+        from: t.String(),
+        to: t.Optional(t.String()),
+        note: t.Optional(t.String()),
+    }),
 } as const;
+
+export type NotifyResponse = Static<typeof RealtimeModel.notifyResponse>;

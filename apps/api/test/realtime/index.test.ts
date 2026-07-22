@@ -6,11 +6,12 @@ import {
     describe,
     expect,
     it,
+    mock,
 } from "bun:test";
 import { Elysia } from "elysia";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
 
-const { realtime } = await import("@/src/realtime");
+const { notify, realtime } = await import("@/src/realtime");
 
 type TrackInputMessage = {
     type: "update";
@@ -23,7 +24,7 @@ type TrackInputMessage = {
 const app = new Elysia().use(realtime);
 const sockets = new Set<WebSocket>();
 
-let websocketUrl: string;
+let websocketBaseUrl: string;
 
 const getSessionCalls = () =>
     getSessionMock.mock.calls as unknown as Array<[{ headers: Headers }]>;
@@ -80,9 +81,9 @@ class WebSocketClient {
         });
     }
 
-    static connect(authorization = "Bearer test-token") {
+    static connect(path = "/track", authorization = "Bearer test-token") {
         return new Promise<WebSocketClient>((resolve, reject) => {
-            const socket = new WebSocket(websocketUrl, {
+            const socket = new WebSocket(`${websocketBaseUrl}${path}`, {
                 headers: { authorization },
             });
             const client = new WebSocketClient(socket);
@@ -159,7 +160,7 @@ beforeAll(() => {
 
     if (!port) throw new Error("Realtime test server did not start");
 
-    websocketUrl = `ws://127.0.0.1:${port}/realtime/track`;
+    websocketBaseUrl = `ws://127.0.0.1:${port}/realtime`;
 });
 
 beforeEach(() => {
@@ -187,7 +188,10 @@ describe("WS /realtime/track", () => {
     });
 
     it("authenticates the WebSocket upgrade using its request headers", async () => {
-        const client = await WebSocketClient.connect("Bearer socket-token");
+        const client = await WebSocketClient.connect(
+            "/track",
+            "Bearer socket-token",
+        );
 
         expect(client.socket.readyState).toBe(WebSocket.OPEN);
         expect(getSessionMock).toHaveBeenCalledTimes(1);
@@ -352,5 +356,156 @@ describe("WS /realtime/track", () => {
             on: "message",
         });
         await receiver.expectNoMessage();
+    });
+});
+
+describe("notify", () => {
+    it("returns zero without attempting to publish when no server is available", () => {
+        expect(
+            notify(
+                null,
+                {
+                    jobId: "0303a3f7-6ed5-4a89-84f0-bb2f33b892b7",
+                    from: "Vienna",
+                },
+                "user-1",
+            ),
+        ).toBe(0);
+    });
+
+    it("publishes a JSON-encoded notification to the notify topic and returns the server result", () => {
+        const publish = mock(() => 42);
+        const server = { publish } as unknown as NonNullable<
+            Parameters<typeof notify>[0]
+        >;
+        const notification = {
+            jobId: "9e36962f-b60c-4870-bd39-a8dad8a4025e",
+            from: "Vienna Airport",
+            to: "Wien Hauptbahnhof",
+            note: "Passenger is waiting at gate 3",
+        };
+
+        expect(notify(server, notification, "user-1")).toBe(42);
+        expect(publish).toHaveBeenCalledTimes(1);
+        expect(publish).toHaveBeenCalledWith(
+            "api:ws:notify:user-1",
+            JSON.stringify(notification),
+        );
+    });
+});
+
+describe("WS /realtime/notify", () => {
+    it("rejects a connection without an authenticated session", async () => {
+        getSessionMock.mockResolvedValue(null);
+
+        await expect(WebSocketClient.connect("/notify")).rejects.toThrow(
+            "WebSocket connection failed",
+        );
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(getSessionCalls()[0]?.[0].headers).toBeInstanceOf(Headers);
+    });
+
+    it("authenticates the WebSocket upgrade using its request headers", async () => {
+        const client = await WebSocketClient.connect(
+            "/notify",
+            "Bearer notify-token",
+        );
+
+        expect(client.socket.readyState).toBe(WebSocket.OPEN);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(getSessionCalls()[0]?.[0].headers.get("authorization")).toBe(
+            "Bearer notify-token",
+        );
+    });
+
+    it("delivers notifications with required and optional fields to every subscriber for the user", async () => {
+        const firstClient = await WebSocketClient.connect("/notify");
+        const secondClient = await WebSocketClient.connect("/notify");
+        const notifications = [
+            {
+                jobId: "fc719807-1ab6-4441-8bd6-1f5f480175aa",
+                from: "Vienna Airport",
+            },
+            {
+                jobId: "f9fbd240-5625-4fc7-a552-755672ecdb5b",
+                from: "Wien Hauptbahnhof",
+                to: "Schwechat",
+                note: "Meet at platform 8 🚕",
+            },
+        ];
+
+        await firstClient.expectNoMessage();
+        await secondClient.expectNoMessage();
+
+        for (const notification of notifications) {
+            notify(app.server, notification, session.user.id);
+
+            expect(await firstClient.nextMessage()).toEqual(notification);
+            expect(await secondClient.nextMessage()).toEqual(notification);
+        }
+    });
+
+    it("only delivers notifications to subscribers for the targeted user", async () => {
+        getSessionMock
+            .mockResolvedValueOnce(sessionFor("target-user"))
+            .mockResolvedValueOnce(sessionFor("other-user"));
+
+        const targetClient = await WebSocketClient.connect("/notify");
+        const otherClient = await WebSocketClient.connect("/notify");
+        const notification = {
+            jobId: "ec51bff0-6c6d-47f7-a767-3f7ba49571dc",
+            from: "Vienna Airport",
+        };
+
+        notify(app.server, notification, "target-user");
+
+        expect(await targetClient.nextMessage()).toEqual(notification);
+        await otherClient.expectNoMessage();
+    });
+
+    it("keeps notification broadcasts isolated from tracking subscribers", async () => {
+        const trackingClient = await WebSocketClient.connect("/track");
+        const notifyClient = await WebSocketClient.connect("/notify");
+        const notification = {
+            jobId: "da420672-0497-434c-9e39-219de58a0bed",
+            from: "Dispatch center",
+            note: "New assignment",
+        };
+
+        notify(app.server, notification, session.user.id);
+
+        expect(await notifyClient.nextMessage()).toEqual(notification);
+        await trackingClient.expectNoMessage();
+    });
+
+    it("does not let clients broadcast notifications to other subscribers", async () => {
+        const sender = await WebSocketClient.connect("/notify");
+        const receiver = await WebSocketClient.connect("/notify");
+
+        sender.send({
+            jobId: "08fc1da8-28a5-4388-a116-4bc7e90b2dd1",
+            from: "Untrusted client",
+        });
+
+        await sender.expectNoMessage();
+        await receiver.expectNoMessage();
+        expect(sender.socket.readyState).toBe(WebSocket.OPEN);
+        expect(receiver.socket.readyState).toBe(WebSocket.OPEN);
+    });
+
+    it("continues notifying active subscribers after another subscriber disconnects", async () => {
+        const disconnectedClient = await WebSocketClient.connect("/notify");
+        const activeClient = await WebSocketClient.connect("/notify");
+        const notification = {
+            jobId: "084600b9-9f5b-49a6-a1da-e00ca900291f",
+            from: "Vienna",
+            to: "Graz",
+        };
+
+        await disconnectedClient.close();
+        notify(app.server, notification, session.user.id);
+
+        expect(await activeClient.nextMessage()).toEqual(notification);
+        expect(disconnectedClient.socket.readyState).toBe(WebSocket.CLOSED);
     });
 });
