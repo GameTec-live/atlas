@@ -6,10 +6,9 @@ import { OpenAPI } from "./auth";
 import { authHandler } from "./authHandler";
 import { BUILD_INFO } from "./constants";
 import { runMigrations } from "./db/migrate";
+import { fleet } from "./fleet";
 import { geoservices } from "./geoservices";
-import { authed } from "./protected";
 import { realtime } from "./realtime";
-import { unauthed } from "./unprotected";
 
 console.log("Applying database migrations...");
 await runMigrations();
@@ -81,10 +80,9 @@ export const app = new Elysia()
         }),
     )
     .use(authHandler)
-    .use(authed)
-    .use(unauthed)
     .use(realtime)
     .use(geoservices)
+    .use(fleet)
     .get("/", () => {
         return {
             message:

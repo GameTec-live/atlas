@@ -100,12 +100,12 @@ export const exampleData = {
             id: vehicleId,
             brand: "Volkswagen",
             model: "Transporter",
-            year: "2024-01-01",
+            year: new Date("2024-01-01T00:00:00.000Z"),
             licensePlate: "ATLAS-1",
             odometer: 12_500,
-            fuelLevel: 0.75,
+            fuelLevel: 75,
             maintenanceEvery: 15_000,
-            assessmentMonth: "2026-07-01",
+            assessmentMonth: new Date("2026-07-01T00:00:00.000Z"),
             smartSupport: true,
             createdAt,
             updatedAt,
@@ -116,6 +116,7 @@ export const exampleData = {
             id: "d6503952-72f5-4b73-a826-e1ab44e0ba72",
             vehicleId,
             note: "Replace engine oil and filter",
+            odometer: 12_000,
             mechanic: "Atlas Workshop",
             createdAt,
             updatedAt,
@@ -180,7 +181,7 @@ const tableNames = [
     "shortname",
 ] as const;
 
-type TableName = (typeof tableNames)[number];
+export type TableName = (typeof tableNames)[number];
 
 const toTimestamp = (value: Date | null) =>
     value ? value.toISOString().slice(0, -1) : null;
@@ -239,12 +240,12 @@ const defaultTableRows: Record<TableName, unknown[][]> = {
         row.id,
         row.brand,
         row.model,
-        row.year,
+        toTimestamp(row.year),
         row.licensePlate,
         row.odometer,
         row.fuelLevel,
         row.maintenanceEvery,
-        row.assessmentMonth,
+        toTimestamp(row.assessmentMonth),
         row.smartSupport,
         toTimestamp(row.createdAt),
         toTimestamp(row.updatedAt),
@@ -253,6 +254,7 @@ const defaultTableRows: Record<TableName, unknown[][]> = {
         row.id,
         row.vehicleId,
         row.note,
+        row.odometer,
         row.mechanic,
         toTimestamp(row.createdAt),
         toTimestamp(row.updatedAt),
@@ -304,6 +306,7 @@ const defaultDbRows: Record<DbOperation, unknown[][] | undefined> = {
 };
 
 const dbRows = { ...defaultDbRows };
+const dbRowCounts: Partial<Record<DbOperation, number>> = {};
 
 const getSql = (query: unknown) => {
     if (typeof query === "string") return query;
@@ -350,7 +353,7 @@ const queryDatabase = async (query: unknown, _values?: unknown) => {
 
     return {
         command: operation.toUpperCase(),
-        rowCount: rows.length,
+        rowCount: dbRowCounts[operation] ?? rows.length,
         oid: 0,
         fields: [],
         rows,
@@ -441,9 +444,19 @@ export const setDbMockTableRows = (table: TableName, rows: unknown[][]) => {
     tableRows[table] = rows;
 };
 
+export const getDbMockTableRows = (table: TableName) =>
+    tableRows[table].map((row) => [...row]);
+
+export const setDbMockRowCount = (operation: DbOperation, rowCount: number) => {
+    dbRowCounts[operation] = rowCount;
+};
+
 export const resetDbMocks = () => {
     Object.assign(dbRows, defaultDbRows);
     Object.assign(tableRows, defaultTableRows);
+    for (const operation of Object.keys(dbRowCounts) as DbOperation[]) {
+        delete dbRowCounts[operation];
+    }
     dbClientQueryMock.mockReset();
     dbClientQueryMock.mockImplementation(queryDatabase);
 };
