@@ -21,7 +21,7 @@ export const fleet = new Elysia({
             return vehicles;
         },
         {
-            auth: true,
+            admin: true,
         },
     )
     .get(
@@ -46,7 +46,7 @@ export const fleet = new Elysia({
             params: t.Object({
                 id: t.String({ format: "uuid" }),
             }),
-            auth: true,
+            admin: true,
         },
     )
     .post(
@@ -57,7 +57,7 @@ export const fleet = new Elysia({
         },
         {
             body: FleetModel.vehicleInsertModel,
-            auth: true,
+            admin: true,
         },
     )
     .put(
@@ -80,7 +80,7 @@ export const fleet = new Elysia({
                 id: t.String({ format: "uuid" }),
             }),
             body: FleetModel.vehicleUpdateModel,
-            auth: true,
+            admin: true,
         },
     )
     .delete(
@@ -101,6 +101,6 @@ export const fleet = new Elysia({
             params: t.Object({
                 id: t.String({ format: "uuid" }),
             }),
-            auth: true,
+            admin: true,
         },
     );

@@ -13,6 +13,14 @@ import {
 const { fleet } = await import("@/src/fleet");
 const app = new Elysia().use(fleet);
 
+const adminSession = {
+    ...session,
+    user: {
+        ...session.user,
+        role: "admin",
+    },
+};
+
 const first = <T>(items: readonly T[], label: string): T => {
     const item = items[0];
     if (item === undefined) {
@@ -125,11 +133,34 @@ describe("fleet authentication", () => {
         expect(getSessionMock).toHaveBeenCalledTimes(1);
         expect(dbClientQueryMock).not.toHaveBeenCalled();
     });
+
+    it.each([
+        ["GET", "/vehicles", undefined],
+        ["GET", `/vehicles/${vehicleId}`, undefined],
+        ["POST", "/vehicles", vehicleBody],
+        ["PUT", `/vehicles/${vehicleId}`, { model: "Crafter" }],
+        ["DELETE", `/vehicles/${vehicleId}`, undefined],
+    ])("returns 403 for an authenticated non-admin %s %s", async (method, path, body) => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await request(path, {
+            method,
+            headers:
+                body === undefined
+                    ? undefined
+                    : { "content-type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body),
+        });
+
+        expect(response.status).toBe(403);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
 });
 
 describe("GET /fleet/vehicles", () => {
     it("returns every vehicle with its latest maintenance record", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
         useJoinedVehicleRow();
 
         const response = await request("/vehicles");
@@ -155,7 +186,7 @@ describe("GET /fleet/vehicles", () => {
     });
 
     it("returns an empty list when there are no vehicles", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
         setDbMockRows("select", []);
 
         const response = await request("/vehicles");
@@ -168,7 +199,7 @@ describe("GET /fleet/vehicles", () => {
 
 describe("GET /fleet/vehicles/:id", () => {
     it("returns the vehicle and its latest maintenance record", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
         useJoinedVehicleRow();
 
         const response = await request(`/vehicles/${vehicleId}`);
@@ -187,7 +218,7 @@ describe("GET /fleet/vehicles/:id", () => {
     });
 
     it("returns null maintenance when the vehicle has no maintenance records", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
         const vehicleRow = first(getDbMockTableRows("vehicle"), "vehicle row");
         setDbMockRows("select", [[...vehicleRow, ...Array(7).fill(null)]]);
 
@@ -201,7 +232,7 @@ describe("GET /fleet/vehicles/:id", () => {
     });
 
     it("returns 404 when the vehicle does not exist", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
         setDbMockRows("select", []);
 
         const response = await request(`/vehicles/${vehicleId}`);
@@ -212,7 +243,7 @@ describe("GET /fleet/vehicles/:id", () => {
     });
 
     it("returns 422 for a non-UUID id without querying the database", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
 
         const response = await request("/vehicles/not-a-uuid");
 
@@ -223,7 +254,7 @@ describe("GET /fleet/vehicles/:id", () => {
 
 describe("POST /fleet/vehicles", () => {
     it("creates a vehicle using every supported field", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
 
         const response = await jsonRequest("/vehicles", "POST", vehicleBody);
 
@@ -249,7 +280,7 @@ describe("POST /fleet/vehicles", () => {
     });
 
     it("creates a vehicle when optional fields are omitted", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
         const { odometer, fuelLevel, smartSupport, ...requiredBody } =
             vehicleBody;
 
@@ -277,7 +308,7 @@ describe("POST /fleet/vehicles", () => {
             { ...vehicleBody, assessmentMonth: "not-a-date" },
         ],
     ])("returns 422 for %s", async (_description, body) => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
 
         const response = await jsonRequest("/vehicles", "POST", body);
 
@@ -288,7 +319,7 @@ describe("POST /fleet/vehicles", () => {
 
 describe("PUT /fleet/vehicles/:id", () => {
     it("updates the supplied vehicle fields and automatic timestamp", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
         setDbMockRowCount("update", 1);
 
         const response = await jsonRequest(`/vehicles/${vehicleId}`, "PUT", {
@@ -315,7 +346,7 @@ describe("PUT /fleet/vehicles/:id", () => {
     });
 
     it("returns 404 when the vehicle does not exist", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
 
         const response = await jsonRequest(`/vehicles/${vehicleId}`, "PUT", {
             fuelLevel: 50,
@@ -344,7 +375,7 @@ describe("PUT /fleet/vehicles/:id", () => {
             { assessmentMonth: "not-a-date" },
         ],
     ])("returns 422 for %s", async (_description, path, body) => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
 
         const response = await jsonRequest(path, "PUT", body);
 
@@ -355,7 +386,7 @@ describe("PUT /fleet/vehicles/:id", () => {
 
 describe("DELETE /fleet/vehicles/:id", () => {
     it("deletes an existing vehicle", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
         setDbMockRowCount("delete", 1);
 
         const response = await request(`/vehicles/${vehicleId}`, {
@@ -376,7 +407,7 @@ describe("DELETE /fleet/vehicles/:id", () => {
     });
 
     it("returns 404 when the vehicle does not exist", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
 
         const response = await request(`/vehicles/${vehicleId}`, {
             method: "DELETE",
@@ -388,7 +419,7 @@ describe("DELETE /fleet/vehicles/:id", () => {
     });
 
     it("returns 422 for a non-UUID id without querying the database", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
 
         const response = await request("/vehicles/not-a-uuid", {
             method: "DELETE",

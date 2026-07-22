@@ -12,6 +12,9 @@ const betterAuthView = (context: Context) => {
     }
 };
 
+const isAdmin = (role: string | null | undefined) =>
+    role?.split(",").some((value) => value.trim() === "admin") ?? false;
+
 export const authHandler = new Elysia()
     .all("/api/auth/*", betterAuthView, {
         detail: {
@@ -25,6 +28,22 @@ export const authHandler = new Elysia()
                     headers,
                 });
                 if (!session) return status(401);
+                return {
+                    user: session.user,
+                    session: session.session,
+                };
+            },
+            detail: {
+                security: [{ bearerAuth: [] }],
+            },
+        },
+        admin: {
+            async resolve({ status, request: { headers } }) {
+                const session = await auth.api.getSession({
+                    headers,
+                });
+                if (!session) return status(401);
+                if (!isAdmin(session.user.role)) return status(403);
                 return {
                     user: session.user,
                     session: session.session,
