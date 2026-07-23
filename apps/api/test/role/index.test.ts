@@ -48,6 +48,14 @@ const queryAt = (index: number) => {
     return { sql: query.text, values: call[1] as unknown[] };
 };
 
+const queryResult = (rows: unknown[][] = []) => ({
+    command: "SELECT",
+    rowCount: rows.length,
+    oid: 0,
+    fields: [],
+    rows,
+});
+
 const postgresError = (code: string) => {
     const error = new DatabaseError("test database error", 0, "error");
     error.code = code;
@@ -186,9 +194,14 @@ describe("POST /roles/", () => {
         expect(await response.json()).toEqual({
             message: "Role claimed successfully",
         });
-        expect(dbClientQueryMock).toHaveBeenCalledTimes(2);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(5);
 
-        const capacityQuery = queryAt(0);
+        expect(queryAt(0).sql).toBe("begin");
+
+        const lockQuery = queryAt(1);
+        expect(lockQuery.sql).toContain("pg_advisory_xact_lock");
+
+        const capacityQuery = queryAt(2);
         expect(capacityQuery.sql).toContain('select count(*) from "role"');
         expect(capacityQuery.sql).toContain('"role"."role" = $1');
         expect(capacityQuery.sql).toContain('"role"."date" = $2');
@@ -198,9 +211,16 @@ describe("POST /roles/", () => {
             /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
         );
 
-        const insertQuery = queryAt(1);
+        const insertQuery = queryAt(3);
         expect(insertQuery.sql).toContain('insert into "role"');
-        expect(insertQuery.values).toEqual([driverId, "dispatcher"]);
+        expect(insertQuery.values.slice(0, 2)).toEqual([
+            driverId,
+            "dispatcher",
+        ]);
+        expect(insertQuery.values[2]).toMatch(
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+        );
+        expect(queryAt(4).sql).toBe("commit");
     });
 
     it("returns 418 and does not insert when dispatcher capacity is full", async () => {
@@ -216,8 +236,87 @@ describe("POST /roles/", () => {
         expect(await response.json()).toEqual({
             error: "Max number of dispatchers reached",
         });
-        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
-        expect(queryAt(0).sql).toContain("select count(*)");
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(4);
+        expect(queryAt(0).sql).toBe("begin");
+        expect(queryAt(1).sql).toContain("pg_advisory_xact_lock");
+        expect(queryAt(2).sql).toContain("select count(*)");
+        expect(queryAt(3).sql).toBe("commit");
+        expect(
+            dbClientQueryMock.mock.calls.some(([query]) => {
+                if (
+                    typeof query !== "object" ||
+                    query === null ||
+                    !("text" in query)
+                ) {
+                    return false;
+                }
+                return String(query.text).startsWith("insert");
+            }),
+        ).toBe(false);
+    });
+
+    it("allows only one of two concurrent claims for the final dispatcher slot", async () => {
+        getSessionMock.mockResolvedValue(session);
+
+        let dispatcherCount = Math.max(0, config.dispatchers.max - 1);
+        let locked = false;
+        const lockWaiters: Array<() => void> = [];
+
+        const acquireLock = () =>
+            new Promise<void>((resolve) => {
+                if (!locked) {
+                    locked = true;
+                    resolve();
+                    return;
+                }
+                lockWaiters.push(() => {
+                    locked = true;
+                    resolve();
+                });
+            });
+
+        const releaseLock = () => {
+            locked = false;
+            lockWaiters.shift()?.();
+        };
+
+        dbClientQueryMock.mockImplementation(async (query) => {
+            const sql =
+                typeof query === "object" &&
+                query !== null &&
+                "text" in query &&
+                typeof query.text === "string"
+                    ? query.text.toLowerCase()
+                    : "";
+
+            if (sql.includes("pg_advisory_xact_lock")) {
+                await acquireLock();
+            } else if (sql.startsWith("select count(")) {
+                return queryResult([[dispatcherCount]]);
+            } else if (sql.startsWith('insert into "role"')) {
+                dispatcherCount++;
+            } else if (sql === "commit" || sql === "rollback") {
+                releaseLock();
+            }
+
+            return queryResult();
+        });
+
+        const responses = await Promise.all([
+            request("POST", {
+                driverId,
+                role: "dispatcher",
+            }),
+            request("POST", {
+                driverId: secondDriverId,
+                role: "dispatcher",
+            }),
+        ]);
+
+        expect(responses.map(({ status }) => status).sort()).toEqual([
+            200, 418,
+        ]);
+        expect(dispatcherCount).toBe(config.dispatchers.max);
     });
 
     it("accepts an explicit assignment date", async () => {
@@ -283,9 +382,10 @@ describe("POST /roles/", () => {
 
     it("returns 500 when the dispatcher capacity query fails", async () => {
         getSessionMock.mockResolvedValue(session);
-        dbClientQueryMock.mockRejectedValueOnce(
-            new Error("database unavailable"),
-        );
+        dbClientQueryMock
+            .mockResolvedValueOnce(queryResult())
+            .mockResolvedValueOnce(queryResult())
+            .mockRejectedValueOnce(new Error("database unavailable"));
 
         const response = await request("POST", {
             driverId,
@@ -293,6 +393,7 @@ describe("POST /roles/", () => {
         });
 
         expect(response.status).toBe(500);
-        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(4);
+        expect(queryAt(3).sql).toBe("rollback");
     });
 });

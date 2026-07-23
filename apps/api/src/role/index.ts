@@ -1,4 +1,4 @@
-import { and, count, DrizzleQueryError, eq } from "drizzle-orm";
+import { and, count, DrizzleQueryError, eq, sql } from "drizzle-orm";
 import { Elysia, status } from "elysia";
 import { DatabaseError } from "pg";
 import { authHandler } from "../authHandler";
@@ -6,6 +6,8 @@ import { config } from "../config";
 import { db } from "../db";
 import { role } from "../db/schema";
 import { RoleModel } from "./model";
+
+const dispatcherLockNamespace = 0x524f4c45; // ASCII "ROLE"
 
 export const roles = new Elysia({
     prefix: "/roles",
@@ -43,30 +45,49 @@ export const roles = new Elysia({
     .post(
         "/",
         async ({ body }) => {
-            // Check num of dispatchers
-            if (body.role === "dispatcher") {
-                const numOfDispatchers = await db
-                    .select({
-                        count: count(),
-                    })
-                    .from(role)
-                    .where(
-                        and(
-                            eq(role.role, "dispatcher"),
-                            eq(role.date, body.date ?? new Date()),
-                        ),
-                    );
-                if (
-                    numOfDispatchers[0]?.count &&
-                    numOfDispatchers[0].count >= config.dispatchers.max
-                ) {
+            try {
+                if (body.role === "dispatcher") {
+                    const assignmentDate = body.date ?? new Date();
+                    const claimed = await db.transaction(async (tx) => {
+                        await tx.execute(
+                            sql`select pg_advisory_xact_lock(
+                                ${dispatcherLockNamespace},
+                                ${assignmentDate}::date - date '2000-01-01'
+                            )`,
+                        );
+
+                        const [numOfDispatchers] = await tx
+                            .select({
+                                count: count(),
+                            })
+                            .from(role)
+                            .where(
+                                and(
+                                    eq(role.role, "dispatcher"),
+                                    eq(role.date, assignmentDate),
+                                ),
+                            );
+
+                        if (
+                            (numOfDispatchers?.count ?? 0) >=
+                            config.dispatchers.max
+                        ) {
+                            return false;
+                        }
+
+                        await tx.insert(role).values(body);
+                        return true;
+                    });
+
+                    if (claimed) {
+                        return { message: "Role claimed successfully" };
+                    }
+
                     return status(418, {
                         error: "Max number of dispatchers reached",
                     });
                 }
-            }
 
-            try {
                 await db.insert(role).values(body);
             } catch (e) {
                 if (e instanceof DrizzleQueryError) {
