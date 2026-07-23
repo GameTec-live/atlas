@@ -229,7 +229,7 @@ export const role = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: "cascade" }),
         role: roleEnum("role").notNull(),
-        date: date("date").notNull().defaultNow(),
+        date: date("date", { mode: "date" }).notNull().defaultNow(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at")
             .defaultNow()
