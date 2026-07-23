@@ -200,13 +200,16 @@ describe("POST /roles/", () => {
 
         const lockQuery = queryAt(1);
         expect(lockQuery.sql).toContain("pg_advisory_xact_lock");
-        expect(lockQuery.sql).toContain("current_date::date");
 
         const capacityQuery = queryAt(2);
         expect(capacityQuery.sql).toContain('select count(*) from "role"');
         expect(capacityQuery.sql).toContain('"role"."role" = $1');
-        expect(capacityQuery.sql).toContain('"role"."date" = current_date');
-        expect(capacityQuery.values).toEqual(["dispatcher"]);
+        expect(capacityQuery.sql).toContain('"role"."date" = $2');
+        expect(capacityQuery.values).toHaveLength(2);
+        expect(capacityQuery.values[0]).toBe("dispatcher");
+        expect(capacityQuery.values[1]).toMatch(
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+        );
 
         const insertQuery = queryAt(3);
         expect(insertQuery.sql).toContain('insert into "role"');
