@@ -32,6 +32,12 @@ export const configSchema = v.object({
         }),
         { defaultLanguage: "en-US" },
     ),
+    dispatchers: v.optional(
+        v.object({
+            max: v.optional(v.number(), 1),
+        }),
+        { max: 1 },
+    ),
 });
 
 export const config = await createConfig({
