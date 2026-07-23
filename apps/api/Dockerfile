@@ -35,7 +35,11 @@ WORKDIR /app
 COPY --from=build --chown=65532:65532 /workspace/apps/api/dist/server server
 COPY --from=build --chown=65532:65532 /workspace/apps/api/drizzle drizzle
 
+RUN mkdir -p /data
+RUN chown -R 65532:65532 /data
+
 ENV NODE_ENV=production
+ENV CONFIG_FILE=/data/config.toml
 
 EXPOSE 3000
 

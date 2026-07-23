@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import * as v from "valibot";
+import { env } from "../../env";
 import { authHandler } from "../authHandler";
 import { createConfig } from "./provider";
 
@@ -12,7 +13,8 @@ export {
 } from "./provider";
 
 /**
- * Application configuration loaded from `./config.toml`.
+ * Application configuration loaded from `CONFIG_FILE`, or `./config.toml`
+ * when the environment variable is not set.
  *
  * @example
  * ```toml
@@ -32,7 +34,10 @@ export const configSchema = v.object({
     ),
 });
 
-export const config = createConfig({ schema: configSchema });
+export const config = await createConfig({
+    schema: configSchema,
+    configFile: env.CONFIG_FILE,
+});
 
 export const configApp = new Elysia({
     prefix: "/config",
@@ -45,8 +50,8 @@ export const configApp = new Elysia({
     })
     .put(
         "/",
-        ({ body }) => {
-            config.$set(body, { write: true });
+        async ({ body }) => {
+            await config.$set(body, { write: true });
             return config.$snapshot();
         },
         {

@@ -35,8 +35,8 @@ describe("createConfig", () => {
         rmSync(testDirectory, { recursive: true, force: true });
     });
 
-    it("uses schema defaults when config.toml is absent", () => {
-        const config = createConfig({ schema, configFile });
+    it("uses schema defaults when config.toml is absent", async () => {
+        const config = await createConfig({ schema, configFile });
 
         expect(config.server).toEqual({
             host: "localhost",
@@ -47,7 +47,7 @@ describe("createConfig", () => {
         expect(existsSync(configFile)).toBe(false);
     });
 
-    it("loads and validates an existing TOML file", () => {
+    it("loads and validates an existing TOML file", async () => {
         writeFileSync(
             configFile,
             [
@@ -60,46 +60,48 @@ describe("createConfig", () => {
             ].join("\n"),
         );
 
-        const config = createConfig({ schema, configFile });
+        const config = await createConfig({ schema, configFile });
 
         expect(config.server.host).toBe("api.internal");
         expect(config.server.port).toBe(8080);
         expect(config.featureEnabled).toBe(true);
     });
 
-    it("rejects invalid file values with the Valibot issues", () => {
+    it("rejects invalid file values with the Valibot issues", async () => {
         writeFileSync(configFile, "[server]\nport = 8080.5\n");
 
-        expect(() => createConfig({ schema, configFile })).toThrow(v.ValiError);
+        await expect(
+            createConfig({ schema, configFile }),
+        ).rejects.toBeInstanceOf(v.ValiError);
     });
 
-    it("validates updates atomically", () => {
-        const config = createConfig({ schema, configFile });
+    it("validates updates atomically", async () => {
+        const config = await createConfig({ schema, configFile });
 
-        config.$set("featureEnabled", true);
+        await config.$set("featureEnabled", true);
         expect(config.featureEnabled).toBe(true);
 
-        expect(() =>
+        await expect(
             config.$set("server", {
                 host: "api.internal",
                 port: 8080.5,
             }),
-        ).toThrow(v.ValiError);
+        ).rejects.toBeInstanceOf(v.ValiError);
         expect(config.server).toEqual({
             host: "localhost",
             port: 3000,
         });
     });
 
-    it("writes only validated values and can reload external changes", () => {
-        const config = createConfig({ schema, configFile });
-        config.$set({
+    it("writes only validated values and can reload external changes", async () => {
+        const config = await createConfig({ schema, configFile });
+        await config.$set({
             featureEnabled: true,
             server: { host: "api.internal", port: 8080 },
         });
 
         expect(existsSync(configFile)).toBe(false);
-        config.$write();
+        await config.$write();
         expect(readFileSync(configFile, "utf8")).toContain(
             'host = "api.internal"',
         );
@@ -108,19 +110,19 @@ describe("createConfig", () => {
             configFile,
             'featureEnabled = false\n\n[server]\nhost = "new.host"\nport = 9000\n',
         );
-        config.$reload();
+        await config.$reload();
 
         expect(config.featureEnabled).toBe(false);
         expect(config.server).toEqual({ host: "new.host", port: 9000 });
 
-        config.$set("featureEnabled", true, { write: true });
+        await config.$set("featureEnabled", true, { write: true });
         expect(readFileSync(configFile, "utf8")).toContain(
             "featureEnabled = true",
         );
     });
 
-    it("prevents direct and nested mutation", () => {
-        const config = createConfig({ schema, configFile });
+    it("prevents direct and nested mutation", async () => {
+        const config = await createConfig({ schema, configFile });
 
         expect(() => {
             // @ts-expect-error Direct writes intentionally bypass the API.
@@ -136,8 +138,8 @@ describe("createConfig", () => {
         });
     });
 
-    it("exposes only config values during enumeration", () => {
-        const config = createConfig({ schema, configFile });
+    it("exposes only config values during enumeration", async () => {
+        const config = await createConfig({ schema, configFile });
 
         expect(Object.keys(config)).toEqual(["server", "featureEnabled"]);
         expect(Object.entries(config)).toEqual([

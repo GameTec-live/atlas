@@ -17,21 +17,21 @@ const adminSession = {
 describe("config API", () => {
     let originalConfig: string | undefined;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         resetAuthMocks();
         originalConfig = existsSync(config.$path)
             ? readFileSync(config.$path, "utf8")
             : undefined;
-        config.$reload();
+        await config.$reload();
     });
 
-    afterEach(() => {
+    afterEach(async () => {
         if (originalConfig === undefined) {
             rmSync(config.$path, { force: true });
         } else {
             writeFileSync(config.$path, originalConfig, "utf8");
         }
-        config.$reload();
+        await config.$reload();
     });
 
     const request = (method = "GET", body?: unknown) =>

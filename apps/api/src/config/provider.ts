@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import * as v from "valibot";
 
@@ -54,19 +53,19 @@ export interface ConfigControls<TSchema extends ConfigSchema> {
         key: TKey,
         value: ConfigInput<TSchema>[TKey],
         options?: ConfigSetOptions,
-    ): void;
+    ): Promise<void>;
 
     /** Set multiple top-level values after validating them as one update. */
     $set(
         values: Partial<ConfigInput<TSchema>>,
         options?: ConfigSetOptions,
-    ): void;
+    ): Promise<void>;
 
     /** Write the current, validated configuration to the TOML file. */
-    $write(): void;
+    $write(): Promise<void>;
 
     /** Reload and validate the TOML file, or schema defaults if it is absent. */
-    $reload(): void;
+    $reload(): Promise<void>;
 
     /** Return the current deeply read-only configuration values. */
     $snapshot(): DeepReadonly<ConfigOutput<TSchema>>;
@@ -105,10 +104,11 @@ const deepFreeze = <TValue>(value: TValue): DeepReadonly<TValue> => {
     return Object.freeze(value) as DeepReadonly<TValue>;
 };
 
-const readToml = (configFile: string): ConfigRecord => {
-    if (!existsSync(configFile)) return {};
+const readToml = async (configFile: string): Promise<ConfigRecord> => {
+    const file = Bun.file(configFile);
+    if (!(await file.exists())) return {};
 
-    const parsed = parseToml(readFileSync(configFile, "utf8"));
+    const parsed = parseToml(await file.text());
     if (!isRecord(parsed)) {
         throw new TypeError(
             `Config file must contain a TOML table: ${configFile}`,
@@ -124,9 +124,9 @@ const readToml = (configFile: string): ConfigRecord => {
  * Configuration values are available directly on the returned object. Direct
  * assignment is blocked; use `$set` so every update is validated.
  */
-export const createConfig = <const TSchema extends ConfigSchema>(
+export const createConfig = async <const TSchema extends ConfigSchema>(
     options: CreateConfigOptions<TSchema>,
-): Config<TSchema> => {
+): Promise<Config<TSchema>> => {
     type Output = ConfigOutput<TSchema>;
 
     const configFile = resolve(options.configFile ?? "./config.toml");
@@ -150,9 +150,9 @@ export const createConfig = <const TSchema extends ConfigSchema>(
         output: validate(input) as Output,
     });
 
-    let state = createState(readToml(configFile));
+    let state = createState(await readToml(configFile));
 
-    const persist = (output: Output): ConfigState<Output> => {
+    const persist = async (output: Output): Promise<ConfigState<Output>> => {
         let serialized = stringifyToml(output);
         if (!serialized.endsWith("\n")) serialized += "\n";
 
@@ -166,16 +166,15 @@ export const createConfig = <const TSchema extends ConfigSchema>(
         }
         const nextState = createState(persistedInput);
 
-        mkdirSync(dirname(configFile), { recursive: true });
-        writeFileSync(configFile, serialized, "utf8");
+        await Bun.write(configFile, serialized);
         return nextState;
     };
 
-    const write = () => {
-        state = persist(state.output);
+    const write = async () => {
+        state = await persist(state.output);
     };
 
-    function set(
+    async function set(
         keyOrValues: ConfigKey<TSchema> | Partial<ConfigInput<TSchema>>,
         valueOrOptions?:
             | ConfigInput<TSchema>[ConfigKey<TSchema>]
@@ -191,15 +190,15 @@ export const createConfig = <const TSchema extends ConfigSchema>(
             : (valueOrOptions as ConfigSetOptions | undefined);
         const nextState = createState({ ...state.input, ...values });
 
-        state = setOptions?.write ? persist(nextState.output) : nextState;
+        state = setOptions?.write ? await persist(nextState.output) : nextState;
     }
 
     const controls: ConfigControls<TSchema> = {
         $path: configFile,
         $set: set as ConfigControls<TSchema>["$set"],
         $write: write,
-        $reload: () => {
-            state = createState(readToml(configFile));
+        $reload: async () => {
+            state = createState(await readToml(configFile));
         },
         $snapshot: () => state.output as DeepReadonly<Output>,
     };
