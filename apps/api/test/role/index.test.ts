@@ -1,8 +1,14 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { Elysia } from "elysia";
 import { DatabaseError } from "pg";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
 import { dbClientQueryMock, resetDbMocks, setDbMockRows } from "../mocks/db";
+
+mock.module("@/env", () => ({
+    env: {
+        CONFIG_FILE: undefined,
+    },
+}));
 
 const { config } = await import("@/src/config");
 const { roles } = await import("@/src/role");
