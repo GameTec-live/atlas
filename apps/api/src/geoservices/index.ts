@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { Elysia } from "elysia";
 import { env } from "@/env";
 import { authHandler } from "../authHandler";
+import { config } from "../config";
 import { db } from "../db";
 import { shortname } from "../db/schema";
 import { type GeocoderResponse, GeoservicesModel } from "./model";
@@ -141,7 +142,7 @@ export const geoservices = new Elysia({
                 ],
                 costing: "auto",
                 directions_options: {
-                    language: query.lang || "en-US", // TODO: Make default configurable once config file is implemented
+                    language: query.lang || config.routing.defaultLanguage,
                 },
             };
 

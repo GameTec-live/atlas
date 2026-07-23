@@ -1,9 +1,11 @@
 import { resolve } from "node:path";
 import { type ElysiaOpenAPIConfig, fromTypes, openapi } from "@elysia/openapi";
 import { declarationToJSONSchema } from "@elysia/openapi/gen";
+import { toJsonSchema } from "@valibot/to-json-schema";
 import { Elysia } from "elysia";
 import { OpenAPI } from "./auth";
 import { authHandler } from "./authHandler";
+import { configApp } from "./config";
 import { BUILD_INFO } from "./constants";
 import { runMigrations } from "./db/migrate";
 import { fleet } from "./fleet";
@@ -77,9 +79,13 @@ export const app = new Elysia()
             scalar: scalar as unknown as NonNullable<
                 ElysiaOpenAPIConfig["scalar"]
             >,
+            mapJsonSchema: {
+                valibot: toJsonSchema,
+            },
         }),
     )
     .use(authHandler)
+    .use(configApp)
     .use(realtime)
     .use(geoservices)
     .use(fleet)
