@@ -53,7 +53,7 @@ export const roles = new Elysia({
                     .where(
                         and(
                             eq(role.role, "dispatcher"),
-                            eq(role.date, new Date()),
+                            eq(role.date, body.date ?? new Date()),
                         ),
                     );
                 if (
