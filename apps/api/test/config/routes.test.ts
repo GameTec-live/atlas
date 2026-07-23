@@ -1,7 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { Elysia } from "elysia";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
+
+mock.module("@/env", () => ({
+    env: {
+        CONFIG_FILE: undefined,
+    },
+}));
 
 const { config, configApp } = await import("@/src/config");
 const app = new Elysia().use(configApp);

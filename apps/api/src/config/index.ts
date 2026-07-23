@@ -1,6 +1,6 @@
 import { Elysia } from "elysia";
 import * as v from "valibot";
-import { env } from "../../env";
+import { env } from "@/env";
 import { authHandler } from "../authHandler";
 import { createConfig } from "./provider";
 
