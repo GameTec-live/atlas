@@ -30,10 +30,12 @@
         "@elysia/openapi": "^1.4.15",
         "@sinclair/typebox": "0.34.52",
         "@t3-oss/env-core": "^0.13.11",
+        "@valibot/to-json-schema": "^1.7.1",
         "better-auth": "^1.6.23",
         "drizzle-orm": "^1.0.0-rc.4",
         "elysia": "latest",
         "pg": "^8.22.0",
+        "smol-toml": "^1.7.0",
         "valibot": "^1.4.2"
     },
     "devDependencies": {

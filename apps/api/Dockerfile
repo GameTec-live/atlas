@@ -28,14 +28,19 @@ ARG GIT_COMMIT=unknown
 
 RUN bun run --cwd apps/api build
 
+# Prepare writable runtime directories
+RUN mkdir -p /runtime-data
+
 FROM gcr.io/distroless/base:nonroot AS runtime
 
 WORKDIR /app
 
 COPY --from=build --chown=65532:65532 /workspace/apps/api/dist/server server
 COPY --from=build --chown=65532:65532 /workspace/apps/api/drizzle drizzle
+COPY --from=build --chown=65532:65532 /runtime-data /data
 
 ENV NODE_ENV=production
+ENV CONFIG_FILE=/data/config.toml
 
 EXPOSE 3000
 

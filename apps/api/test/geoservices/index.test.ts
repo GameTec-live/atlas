@@ -20,6 +20,7 @@ mock.module("@/env", () => ({
     },
 }));
 
+const { config } = await import("@/src/config");
 const { geoservices } = await import("@/src/geoservices");
 const app = new Elysia().use(geoservices);
 
@@ -483,7 +484,9 @@ describe("GET /geoservices/route", () => {
                 },
             ],
             costing: "auto",
-            directions_options: { language: "en-US" },
+            directions_options: {
+                language: config.routing.defaultLanguage,
+            },
         });
     });
 
