@@ -121,6 +121,28 @@ describe("createConfig", () => {
         );
     });
 
+    it("serializes concurrent updates without losing acknowledged changes", async () => {
+        const config = await createConfig({ schema, configFile });
+
+        await Promise.all([
+            config.$set("featureEnabled", true, { write: true }),
+            config.$set(
+                "server",
+                { host: "api.internal", port: 8080 },
+                { write: true },
+            ),
+        ]);
+
+        const expected = {
+            server: { host: "api.internal", port: 8080 },
+            featureEnabled: true,
+        };
+        expect(config.$snapshot()).toEqual(expected);
+        expect(Bun.TOML.parse(readFileSync(configFile, "utf8"))).toEqual(
+            expected,
+        );
+    });
+
     it("prevents direct and nested mutation", async () => {
         const config = await createConfig({ schema, configFile });
 

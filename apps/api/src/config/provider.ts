@@ -151,6 +151,18 @@ export const createConfig = async <const TSchema extends ConfigSchema>(
     });
 
     let state = createState(await readToml(configFile));
+    let operationQueue = Promise.resolve();
+
+    const enqueue = <TResult>(
+        operation: () => Promise<TResult> | TResult,
+    ): Promise<TResult> => {
+        const result = operationQueue.then(operation, operation);
+        operationQueue = result.then(
+            () => undefined,
+            () => undefined,
+        );
+        return result;
+    };
 
     const persist = async (output: Output): Promise<ConfigState<Output>> => {
         let serialized = stringifyToml(output);
@@ -170,9 +182,10 @@ export const createConfig = async <const TSchema extends ConfigSchema>(
         return nextState;
     };
 
-    const write = async () => {
-        state = await persist(state.output);
-    };
+    const write = () =>
+        enqueue(async () => {
+            state = await persist(state.output);
+        });
 
     async function set(
         keyOrValues: ConfigKey<TSchema> | Partial<ConfigInput<TSchema>>,
@@ -188,18 +201,22 @@ export const createConfig = async <const TSchema extends ConfigSchema>(
         const setOptions = isKeyUpdate
             ? maybeOptions
             : (valueOrOptions as ConfigSetOptions | undefined);
-        const nextState = createState({ ...state.input, ...values });
-
-        state = setOptions?.write ? await persist(nextState.output) : nextState;
+        await enqueue(async () => {
+            const nextState = createState({ ...state.input, ...values });
+            state = setOptions?.write
+                ? await persist(nextState.output)
+                : nextState;
+        });
     }
 
     const controls: ConfigControls<TSchema> = {
         $path: configFile,
         $set: set as ConfigControls<TSchema>["$set"],
         $write: write,
-        $reload: async () => {
-            state = createState(await readToml(configFile));
-        },
+        $reload: () =>
+            enqueue(async () => {
+                state = createState(await readToml(configFile));
+            }),
         $snapshot: () => state.output as DeepReadonly<Output>,
     };
 
