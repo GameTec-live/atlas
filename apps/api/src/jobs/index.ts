@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { Elysia } from "elysia";
 import { authHandler } from "../authHandler";
 import { db } from "../db";
@@ -15,7 +15,8 @@ export const jobs = new Elysia({
             const jobs = await db
                 .select()
                 .from(job)
-                .where(eq(job.assignedDriverId, user.id));
+                .where(eq(job.assignedDriverId, user.id))
+                .orderBy(asc(job.dueDate));
             return jobs;
         },
         {
