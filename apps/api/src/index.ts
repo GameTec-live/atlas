@@ -10,6 +10,7 @@ import { BUILD_INFO } from "./constants";
 import { runMigrations } from "./db/migrate";
 import { fleet } from "./fleet";
 import { geoservices } from "./geoservices";
+import { jobs } from "./jobs";
 import { realtime } from "./realtime";
 import { roles } from "./role";
 
@@ -91,6 +92,7 @@ export const app = new Elysia()
     .use(geoservices)
     .use(fleet)
     .use(roles)
+    .use(jobs)
     .get("/", () => {
         return {
             message:
