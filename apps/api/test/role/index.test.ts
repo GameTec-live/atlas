@@ -70,7 +70,7 @@ beforeEach(() => {
 describe("roles authentication", () => {
     it.each([
         ["GET", undefined],
-        ["POST", { driverId, role: "driver" }],
+        ["POST", { role: "driver" }],
     ])("returns 401 for an unauthenticated %s", async (method, body) => {
         const response = await request(method, body, false);
 
@@ -81,7 +81,7 @@ describe("roles authentication", () => {
 
     it.each([
         ["GET", undefined],
-        ["POST", { driverId, role: "driver" }],
+        ["POST", { role: "driver" }],
     ])("allows an authenticated non-admin to use %s", async (method, body) => {
         getSessionMock.mockResolvedValue(session);
 
@@ -161,11 +161,10 @@ describe("GET /roles/", () => {
 });
 
 describe("POST /roles/", () => {
-    it("claims a driver role without querying dispatcher capacity", async () => {
+    it("claims a driver role for the authenticated user without querying dispatcher capacity", async () => {
         getSessionMock.mockResolvedValue(session);
 
         const response = await request("POST", {
-            driverId,
             role: "driver",
         });
 
@@ -186,7 +185,6 @@ describe("POST /roles/", () => {
         setDbMockRows("count", [[Math.max(0, config.dispatchers.max - 1)]]);
 
         const response = await request("POST", {
-            driverId,
             role: "dispatcher",
         });
 
@@ -222,7 +220,6 @@ describe("POST /roles/", () => {
         setDbMockRows("count", [[config.dispatchers.max]]);
 
         const response = await request("POST", {
-            driverId,
             role: "dispatcher",
         });
 
@@ -298,11 +295,9 @@ describe("POST /roles/", () => {
 
         const responses = await Promise.all([
             request("POST", {
-                driverId,
                 role: "dispatcher",
             }),
             request("POST", {
-                driverId: secondDriverId,
                 role: "dispatcher",
             }),
         ]);
@@ -318,7 +313,6 @@ describe("POST /roles/", () => {
         const date = "2026-07-24T00:00:00.000Z";
 
         const response = await request("POST", {
-            driverId,
             role: "driver",
             date,
         });
@@ -330,11 +324,22 @@ describe("POST /roles/", () => {
         expect(values).toEqual([driverId, "driver", date]);
     });
 
+    it("does not allow the request body to assign a role to another driver", async () => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await request("POST", {
+            driverId: secondDriverId,
+            role: "driver",
+        });
+
+        expect(response.status).toBe(200);
+        expect(queryAt(0).values).toEqual([driverId, "driver"]);
+    });
+
     it.each([
-        ["a missing driver id", { role: "driver" }],
-        ["a missing role", { driverId }],
-        ["an unsupported role", { driverId, role: "admin" }],
-        ["an invalid date", { driverId, role: "driver", date: "not-a-date" }],
+        ["a missing role", {}],
+        ["an unsupported role", { role: "admin" }],
+        ["an invalid date", { role: "driver", date: "not-a-date" }],
     ])("returns 422 for %s without querying the database", async (_label, body) => {
         getSessionMock.mockResolvedValue(session);
 
@@ -352,7 +357,6 @@ describe("POST /roles/", () => {
         dbClientQueryMock.mockRejectedValueOnce(postgresError(code));
 
         const response = await request("POST", {
-            driverId,
             role: "driver",
         });
 
@@ -366,7 +370,6 @@ describe("POST /roles/", () => {
         dbClientQueryMock.mockRejectedValueOnce(postgresError("08006"));
 
         const response = await request("POST", {
-            driverId,
             role: "driver",
         });
 
@@ -382,7 +385,6 @@ describe("POST /roles/", () => {
             .mockRejectedValueOnce(new Error("database unavailable"));
 
         const response = await request("POST", {
-            driverId,
             role: "dispatcher",
         });
 
