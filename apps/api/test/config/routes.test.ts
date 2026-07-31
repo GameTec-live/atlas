@@ -78,9 +78,11 @@ describe("config API", () => {
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual({
             routing: { defaultLanguage: "de-AT" },
+            dispatchers: { max: 1 },
         });
         expect(Bun.TOML.parse(readFileSync(config.$path, "utf8"))).toEqual({
             routing: { defaultLanguage: "de-AT" },
+            dispatchers: { max: 1 },
         });
     });
 

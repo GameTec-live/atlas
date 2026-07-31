@@ -11,6 +11,7 @@ import { runMigrations } from "./db/migrate";
 import { fleet } from "./fleet";
 import { geoservices } from "./geoservices";
 import { realtime } from "./realtime";
+import { roles } from "./role";
 
 console.log("Applying database migrations...");
 await runMigrations();
@@ -89,6 +90,7 @@ export const app = new Elysia()
     .use(realtime)
     .use(geoservices)
     .use(fleet)
+    .use(roles)
     .get("/", () => {
         return {
             message:
