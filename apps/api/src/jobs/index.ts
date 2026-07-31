@@ -1,5 +1,5 @@
 import { asc, eq } from "drizzle-orm";
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { authHandler } from "../authHandler";
 import { db } from "../db";
 import { job } from "../db/schema";
@@ -32,6 +32,26 @@ export const jobs = new Elysia({
         },
         {
             body: JobModel.jobInsertModel,
+            auth: true,
+        },
+    )
+    .post(
+        "/:id/assign",
+        async ({ params, body, user }) => {
+            console.log(
+                "Assigning job",
+                params.id,
+                "to driver",
+                user.id,
+                "with body",
+                body,
+            );
+        },
+        {
+            params: t.Object({
+                id: t.String({ format: "uuid" }),
+            }),
+            body: JobModel.jobAssignModel,
             auth: true,
         },
     );
