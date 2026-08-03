@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { Elysia } from "elysia";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
 import {
@@ -8,6 +8,12 @@ import {
     resetDbMocks,
     setDbMockRows,
 } from "../mocks/db";
+
+const envMock: { JOBTOKEN?: string } = {};
+
+mock.module("@/env", () => ({
+    env: envMock,
+}));
 
 const { jobs } = await import("@/src/jobs");
 const app = new Elysia().use(jobs);
@@ -27,6 +33,26 @@ const request = (authenticated = true) => {
 
     return app.handle(
         new Request("http://localhost/jobs/assigned", { headers }),
+    );
+};
+
+const unassignedRequest = (authenticated = true) => {
+    const headers = new Headers();
+    if (authenticated) headers.set("authorization", "Bearer test-token");
+
+    return app.handle(
+        new Request("http://localhost/jobs/unassigned", { headers }),
+    );
+};
+
+const unassignedReducedRequest = (token?: string) => {
+    const headers = new Headers();
+    if (token !== undefined) {
+        headers.set("authorization", token);
+    }
+
+    return app.handle(
+        new Request("http://localhost/jobs/unassigned-reduced", { headers }),
     );
 };
 
@@ -97,6 +123,7 @@ const serializedJob = {
 };
 
 beforeEach(() => {
+    envMock.JOBTOKEN = undefined;
     resetAuthMocks();
     resetDbMocks();
 });
@@ -163,6 +190,161 @@ describe("GET /jobs/assigned", () => {
         );
 
         const response = await request();
+
+        expect(response.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("GET /jobs/unassigned", () => {
+    it("returns 401 without a session and does not query the database", async () => {
+        const response = await unassignedRequest(false);
+
+        expect(response.status).toBe(401);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("returns complete unassigned jobs ordered by due date", async () => {
+        getSessionMock.mockResolvedValue(session);
+        const [unassignedJobRow] = getDbMockTableRows("job");
+        if (!unassignedJobRow) throw new Error("Expected job fixture data");
+        unassignedJobRow[1] = null;
+        setDbMockRows("select", [unassignedJobRow]);
+
+        const response = await unassignedRequest();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([
+            { ...serializedJob, assignedDriverId: null },
+        ]);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain(
+            'from "job" where ("job"."assigned_driver_id" is null)',
+        );
+        expect(sql).toContain('order by "job"."due_date" asc');
+        expect(values).toEqual([]);
+    });
+
+    it("returns an empty list when there are no unassigned jobs", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockRows("select", []);
+
+        const response = await unassignedRequest();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 500 when the unassigned job lookup fails", async () => {
+        getSessionMock.mockResolvedValue(session);
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database unavailable"),
+        );
+
+        const response = await unassignedRequest();
+
+        expect(response.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("GET /jobs/unassigned-reduced", () => {
+    it("allows access without a token when JOBTOKEN is not configured", async () => {
+        const response = await unassignedReducedRequest();
+
+        expect(response.status).toBe(200);
+        expect(getSessionMock).not.toHaveBeenCalled();
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns only the public job fields ordered by due date", async () => {
+        const [unassignedJobRow] = getDbMockTableRows("job");
+        if (!unassignedJobRow) throw new Error("Expected job fixture data");
+        unassignedJobRow[1] = null;
+        setDbMockRows("select", [
+            [
+                unassignedJobRow[0],
+                unassignedJobRow[3],
+                unassignedJobRow[4],
+                unassignedJobRow[5],
+                unassignedJobRow[6],
+            ],
+        ]);
+
+        const response = await unassignedReducedRequest();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([
+            {
+                id: serializedJob.id,
+                from: serializedJob.from,
+                to: serializedJob.to,
+                dueDate: serializedJob.dueDate,
+                note: serializedJob.note,
+            },
+        ]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain(
+            'select "id", "from"::text, "to"::text, "due_date", "note" from "job"',
+        );
+        expect(sql).toContain('where ("job"."assigned_driver_id" is null)');
+        expect(sql).toContain('order by "job"."due_date" asc');
+        const selectClause = sql.split(' from "job"')[0];
+        expect(selectClause).not.toContain('"assigned_driver_id"');
+        expect(selectClause).not.toContain('"vehicle_id"');
+        expect(selectClause).not.toContain('"created_at"');
+        expect(selectClause).not.toContain('"updated_at"');
+        expect(values).toEqual([]);
+    });
+
+    it("allows access when the authorization header token matches JOBTOKEN", async () => {
+        envMock.JOBTOKEN = "reduced-jobs-secret";
+
+        const response = await unassignedReducedRequest("reduced-jobs-secret");
+
+        expect(response.status).toBe(200);
+        expect(getSessionMock).not.toHaveBeenCalled();
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        ["missing", undefined],
+        ["incorrect", "wrong-secret"],
+        ["empty", ""],
+    ])("returns 401 for a %s authorization header token when JOBTOKEN is configured", async (_description, token) => {
+        envMock.JOBTOKEN = "reduced-jobs-secret";
+
+        const response = await unassignedReducedRequest(token);
+
+        expect(response.status).toBe(401);
+        expect(await response.json()).toEqual({ error: "Unauthorized" });
+        expect(getSessionMock).not.toHaveBeenCalled();
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("returns an empty list when there are no unassigned jobs", async () => {
+        setDbMockRows("select", []);
+
+        const response = await unassignedReducedRequest();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 500 when the reduced job lookup fails", async () => {
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database unavailable"),
+        );
+
+        const response = await unassignedReducedRequest();
 
         expect(response.status).toBe(500);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
