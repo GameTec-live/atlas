@@ -60,14 +60,17 @@ const scalar = {
     showDeveloperTools: "never",
 } satisfies ScalarConfiguration;
 
+const openAPIComponents = await OpenAPI.components;
+
 export const app = new Elysia()
     .use(
         openapi({
             references,
             documentation: {
                 components: {
-                    ...(await OpenAPI.components),
+                    ...openAPIComponents,
                     securitySchemes: {
+                        ...openAPIComponents.securitySchemes,
                         APIKeyAuth: {
                             type: "apiKey",
                             in: "header",
