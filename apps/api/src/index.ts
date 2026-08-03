@@ -65,7 +65,16 @@ export const app = new Elysia()
         openapi({
             references,
             documentation: {
-                components: await OpenAPI.components,
+                components: {
+                    ...(await OpenAPI.components),
+                    securitySchemes: {
+                        APIKeyAuth: {
+                            type: "apiKey",
+                            in: "header",
+                            name: "Authorization",
+                        },
+                    },
+                },
                 paths: await OpenAPI.getPaths(),
                 info: {
                     title: "Atlas API",
