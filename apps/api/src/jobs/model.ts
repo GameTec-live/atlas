@@ -4,7 +4,6 @@ import { dbModel } from "../db/model";
 const jobInsertModel = t.Object({
     ...t.Omit(t.Object(dbModel.insert.job), ["id", "createdAt", "updatedAt"])
         .properties,
-    assignedDriverId: t.Optional(t.String({ format: "uuid" })),
     to: t.Optional(
         t.Tuple([
             t.Number({ minimum: -90, maximum: 90 }),
