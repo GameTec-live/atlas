@@ -5,4 +5,9 @@
     <string name="password">Password</string>
     <string name="login">Login</string>
     <string name="change_server">Change server address</string>
+    <string name="login_alert_dialog_label">Server address</string>
+    <string name="buttom_save">Save</string>
+    <string name="button_cancel">Cancel</string>
+    <string name="login_successful">Login successful</string>
+    <string name="login_set_serveraddress">Set server address</string>
 </resources>

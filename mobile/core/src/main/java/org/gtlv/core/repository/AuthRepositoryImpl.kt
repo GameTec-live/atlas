@@ -49,6 +49,7 @@ class AuthRepositoryImpl(
 
         val request = Request.Builder()
             .url(loginUrl)
+            .header("Origin", serverAddress)
             .post(requestBody)
             .build()
 
@@ -100,6 +101,7 @@ class AuthRepositoryImpl(
 
             val request = Request.Builder()
                 .url("$serverAddress/api/auth/get-session")
+                .header("Origin", serverAddress)
                 .get()
                 .build()
 

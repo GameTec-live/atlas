@@ -172,7 +172,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Login successful",
+                    text = stringResource(R.string.login_successful),
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -185,7 +185,7 @@ fun LoginScreen(
             ) {
                 Text(
                     text = state.serverAddress.ifBlank {
-                        "Set server address"
+                        stringResource(R.string.login_set_serveraddress)
                     }
                 )
 
@@ -201,17 +201,17 @@ fun LoginScreen(
         AlertDialog(
             onDismissRequest = onDismissServerDialog,
             title = {
-                Text("Set server address")
+                Text(stringResource(R.string.login_set_serveraddress))
             },
             text = {
                 OutlinedTextField(
                     value = state.serverAddressInput,
                     onValueChange = onServerAddressChanged,
                     label = {
-                        Text("Server address")
+                        Text(stringResource(R.string.login_alert_dialog_label))
                     },
                     placeholder = {
-                        Text("http://192.168.1.200:1030")
+                        Text("https://example.com")
                     },
                     singleLine = true,
                     isError = state.serverAddressError != null,
@@ -226,14 +226,14 @@ fun LoginScreen(
                 TextButton(
                     onClick = onSaveServerAddress
                 ) {
-                    Text("Save")
+                    Text(stringResource(R.string.buttom_save))
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = onDismissServerDialog
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.button_cancel))
                 }
             }
         )

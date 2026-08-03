@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.map
 private const val DATASTORE_NAME = "atlas_settings"
 
 private const val DEFAULT_SERVER_ADDRESS =
-    "http://192.168.1.200:1030"
+    "https://example.com"
 
 private val Context.atlasDataStore by preferencesDataStore(
     name = DATASTORE_NAME
