@@ -41,8 +41,11 @@ export const jobs = new Elysia({
     )
     .get(
         "/unassigned-reduced",
-        async ({ query }) => {
-            if (!env.JOBTOKEN || env.JOBTOKEN === query.token) {
+        async ({ headers }) => {
+            if (
+                !env.JOBTOKEN ||
+                env.JOBTOKEN === headers.authorization?.split(" ")[1]
+            ) {
                 const jobs = await db
                     .select({
                         id: job.id,
@@ -60,9 +63,12 @@ export const jobs = new Elysia({
             return status(401, { error: "Unauthorized" });
         },
         {
-            query: t.Object({
-                token: t.Optional(t.String()),
+            headers: t.Object({
+                authorization: t.Optional(t.String()),
             }),
+            detail: {
+                security: [{ basicAuth: [] }],
+            },
         },
     )
     .post(

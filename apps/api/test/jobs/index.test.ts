@@ -46,10 +46,14 @@ const unassignedRequest = (authenticated = true) => {
 };
 
 const unassignedReducedRequest = (token?: string) => {
-    const url = new URL("http://localhost/jobs/unassigned-reduced");
-    if (token !== undefined) url.searchParams.set("token", token);
+    const headers = new Headers();
+    if (token !== undefined) {
+        headers.set("authorization", `Basic ${token}`);
+    }
 
-    return app.handle(new Request(url.toString()));
+    return app.handle(
+        new Request("http://localhost/jobs/unassigned-reduced", { headers }),
+    );
 };
 
 const createRequest = (
@@ -300,7 +304,7 @@ describe("GET /jobs/unassigned-reduced", () => {
         expect(values).toEqual([]);
     });
 
-    it("allows access when the supplied token matches JOBTOKEN", async () => {
+    it("allows access when the authorization header token matches JOBTOKEN", async () => {
         envMock.JOBTOKEN = "reduced-jobs-secret";
 
         const response = await unassignedReducedRequest("reduced-jobs-secret");
@@ -314,7 +318,7 @@ describe("GET /jobs/unassigned-reduced", () => {
         ["missing", undefined],
         ["incorrect", "wrong-secret"],
         ["empty", ""],
-    ])("returns 401 for a %s token when JOBTOKEN is configured", async (_description, token) => {
+    ])("returns 401 for a %s authorization header token when JOBTOKEN is configured", async (_description, token) => {
         envMock.JOBTOKEN = "reduced-jobs-secret";
 
         const response = await unassignedReducedRequest(token);
