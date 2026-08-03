@@ -1,3 +1,8 @@
 <resources>
-    <string name="app_name">atlas</string>
+    <string name="app_name">Atlas</string>
+    <string name="app_subtitle">Taxi fleet management</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="login">Login</string>
+    <string name="change_server">Change server address</string>
 </resources>

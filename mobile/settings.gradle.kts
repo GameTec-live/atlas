@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "atlas"
 include(":app")
+include(":core")
