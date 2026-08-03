@@ -26,4 +26,7 @@ export const JobModel = {
             "to",
         ]),
     ),
+    jobStartModel: t.Optional(
+        t.Pick(t.Partial(jobInsertModel), ["to", "vehicleId"]),
+    ),
 } as const;
