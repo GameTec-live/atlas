@@ -180,18 +180,36 @@ describe("POST /jobs/create", () => {
 
     it("creates a job using every supported field", async () => {
         getSessionMock.mockResolvedValue(session);
+        const [createdJobRow] = getDbMockTableRows("job");
+        if (!createdJobRow) throw new Error("Expected job fixture data");
+        createdJobRow[1] = jobBody.assignedDriverId;
+        createdJobRow[2] = jobBody.vehicleId;
+        createdJobRow[3] = `(${jobBody.from.join(",")})`;
+        createdJobRow[4] = `(${jobBody.to.join(",")})`;
+        createdJobRow[5] = jobBody.dueDate.slice(0, -1);
+        createdJobRow[6] = jobBody.note;
+        setDbMockRows("insert", [createdJobRow]);
 
         const response = await createRequest(jobBody);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual({
-            message: "Job created successfully",
-        });
+        expect(await response.json()).toEqual([
+            {
+                ...serializedJob,
+                assignedDriverId: jobBody.assignedDriverId,
+                vehicleId: jobBody.vehicleId,
+                from: jobBody.from,
+                to: jobBody.to,
+                dueDate: jobBody.dueDate,
+                note: jobBody.note,
+            },
+        ]);
         expect(getSessionMock).toHaveBeenCalledTimes(1);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
         const { sql, values } = getFirstQuery();
         expect(sql).toContain('insert into "job"');
+        expect(sql).toContain("returning");
         expect(sql).toContain(
             "values (default, $1, $2, $3, $4, $5, $6, default, default, default, default)",
         );
@@ -207,13 +225,28 @@ describe("POST /jobs/create", () => {
 
     it("creates a job with only the required origin", async () => {
         getSessionMock.mockResolvedValue(session);
+        const [createdJobRow] = getDbMockTableRows("job");
+        if (!createdJobRow) throw new Error("Expected job fixture data");
+        createdJobRow[1] = null;
+        createdJobRow[2] = null;
+        createdJobRow[3] = "(0,0)";
+        createdJobRow[4] = null;
+        createdJobRow[6] = null;
+        setDbMockRows("insert", [createdJobRow]);
 
         const response = await createRequest({ from: [0, 0] });
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual({
-            message: "Job created successfully",
-        });
+        expect(await response.json()).toEqual([
+            {
+                ...serializedJob,
+                assignedDriverId: null,
+                vehicleId: null,
+                from: [0, 0],
+                to: null,
+                note: null,
+            },
+        ]);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
         const { sql, values } = getFirstQuery();

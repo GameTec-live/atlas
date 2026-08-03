@@ -27,7 +27,7 @@ export const jobs = new Elysia({
     .post(
         "/create",
         async ({ body }) => {
-            const [newJob] = await db.insert(job).values(body).returning();
+            const newJob = await db.insert(job).values(body).returning();
             return newJob;
         },
         {
