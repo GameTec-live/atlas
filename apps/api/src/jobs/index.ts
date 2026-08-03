@@ -3,7 +3,6 @@ import { Elysia, status, t } from "elysia";
 import { env } from "@/env";
 import { authHandler } from "../authHandler";
 import { db } from "../db";
-import { dbModel } from "../db/model";
 import { job } from "../db/schema";
 import { JobModel } from "./model";
 
@@ -72,7 +71,12 @@ export const jobs = new Elysia({
     .post(
         "/create",
         async ({ body }) => {
-            const newJob = await db.insert(job).values(body).returning();
+            const [newJob] = await db.insert(job).values(body).returning();
+
+            if (!newJob) {
+                return status(500, { error: "Failed to create job" });
+            }
+
             return newJob;
         },
         {
@@ -83,7 +87,7 @@ export const jobs = new Elysia({
     .post(
         "/:id/assign",
         async ({ params, body, user }) => {
-            const updatedJobs = await db
+            const [updatedJob] = await db
                 .update(job)
                 .set({
                     assignedDriverId: body
@@ -98,7 +102,12 @@ export const jobs = new Elysia({
                 })
                 .where(eq(job.id, params.id))
                 .returning();
-            return updatedJobs;
+
+            if (!updatedJob) {
+                return status(404, { error: "Job not found" });
+            }
+
+            return updatedJob;
         },
         {
             params: t.Object({
@@ -210,17 +219,17 @@ export const jobs = new Elysia({
     .get(
         "/:id",
         async ({ params }) => {
-            const jobs = await db
+            const [foundJob] = await db
                 .select()
                 .from(job)
                 .where(eq(job.id, params.id))
                 .limit(1);
 
-            if (jobs.length === 0) {
+            if (!foundJob) {
                 return status(404, { error: "Job not found" });
             }
 
-            return jobs[0];
+            return foundJob;
         },
         {
             params: t.Object({

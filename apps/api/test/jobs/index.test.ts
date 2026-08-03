@@ -352,6 +352,10 @@ describe("GET /jobs/unassigned-reduced", () => {
 });
 
 describe("POST /jobs/create", () => {
+    beforeEach(() => {
+        setDbMockRows("insert", getDbMockTableRows("job"));
+    });
+
     it("returns 401 without a session and does not create a job", async () => {
         const response = await createRequest(jobBody, false);
 
@@ -375,17 +379,15 @@ describe("POST /jobs/create", () => {
         const response = await createRequest(jobBody);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([
-            {
-                ...serializedJob,
-                assignedDriverId: jobBody.assignedDriverId,
-                vehicleId: jobBody.vehicleId,
-                from: jobBody.from,
-                to: jobBody.to,
-                dueDate: jobBody.dueDate,
-                note: jobBody.note,
-            },
-        ]);
+        expect(await response.json()).toEqual({
+            ...serializedJob,
+            assignedDriverId: jobBody.assignedDriverId,
+            vehicleId: jobBody.vehicleId,
+            from: jobBody.from,
+            to: jobBody.to,
+            dueDate: jobBody.dueDate,
+            note: jobBody.note,
+        });
         expect(getSessionMock).toHaveBeenCalledTimes(1);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
@@ -419,16 +421,14 @@ describe("POST /jobs/create", () => {
         const response = await createRequest({ from: [0, 0] });
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([
-            {
-                ...serializedJob,
-                assignedDriverId: null,
-                vehicleId: null,
-                from: [0, 0],
-                to: null,
-                note: null,
-            },
-        ]);
+        expect(await response.json()).toEqual({
+            ...serializedJob,
+            assignedDriverId: null,
+            vehicleId: null,
+            from: [0, 0],
+            to: null,
+            note: null,
+        });
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
         const { sql, values } = getFirstQuery();
@@ -436,6 +436,19 @@ describe("POST /jobs/create", () => {
             "values (default, default, default, $1, default, default, default, default, default, default, default)",
         );
         expect(values).toEqual(["(0,0)"]);
+    });
+
+    it("returns 500 when the inserted job is not returned", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockRows("insert", []);
+
+        const response = await createRequest({ from: [0, 0] });
+
+        expect(response.status).toBe(500);
+        expect(await response.json()).toEqual({
+            error: "Failed to create job",
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
     });
 
     it("accepts inclusive coordinate boundaries", async () => {
@@ -568,6 +581,10 @@ describe("POST /jobs/create", () => {
 });
 
 describe("POST /jobs/:id/assign", () => {
+    beforeEach(() => {
+        setDbMockRows("update", getDbMockTableRows("job"));
+    });
+
     it("returns 401 without a session and does not update the job", async () => {
         const response = await assignRequest({}, false);
 
@@ -583,7 +600,7 @@ describe("POST /jobs/:id/assign", () => {
         const response = await assignRequest();
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([serializedJob]);
+        expect(await response.json()).toEqual(serializedJob);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
         const { sql, values } = getFirstQuery();
@@ -652,14 +669,12 @@ describe("POST /jobs/:id/assign", () => {
         const response = await assignRequest(assignment);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([
-            {
-                ...serializedJob,
-                assignedDriverId: assignment.assignedDriverId,
-                dueDate: assignment.dueDate,
-                to: assignment.to,
-            },
-        ]);
+        expect(await response.json()).toEqual({
+            ...serializedJob,
+            assignedDriverId: assignment.assignedDriverId,
+            dueDate: assignment.dueDate,
+            to: assignment.to,
+        });
         const { sql, values } = getFirstQuery();
         expect(sql).toContain('"assigned_driver_id" = $1');
         expect(sql).toContain('"to" = $2');
@@ -697,14 +712,14 @@ describe("POST /jobs/:id/assign", () => {
         expect(values.at(-1)).toBe(jobId);
     });
 
-    it("returns an empty array when the job does not exist", async () => {
+    it("returns 404 when the job does not exist", async () => {
         getSessionMock.mockResolvedValue(session);
         setDbMockRows("update", []);
 
         const response = await assignRequest({ assignedDriverId: "driver-2" });
 
-        expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([]);
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({ error: "Job not found" });
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
     });
 
