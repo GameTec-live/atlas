@@ -52,8 +52,11 @@ export const fleet = new Elysia({
     .post(
         "/vehicles",
         async ({ body }) => {
-            await db.insert(vehicle).values(body);
-            return { message: "Vehicle created successfully" };
+            const newVehicle = await db
+                .insert(vehicle)
+                .values(body)
+                .returning();
+            return newVehicle;
         },
         {
             body: FleetModel.vehicleInsertModel,

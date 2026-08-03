@@ -255,17 +255,35 @@ describe("GET /fleet/vehicles/:id", () => {
 describe("POST /fleet/vehicles", () => {
     it("creates a vehicle using every supported field", async () => {
         getSessionMock.mockResolvedValue(adminSession);
+        const createdVehicleRow = first(
+            getDbMockTableRows("vehicle"),
+            "vehicle row",
+        );
+        createdVehicleRow[1] = vehicleBody.brand;
+        createdVehicleRow[2] = vehicleBody.model;
+        createdVehicleRow[3] = vehicleBody.year.slice(0, -1);
+        createdVehicleRow[4] = vehicleBody.licensePlate;
+        createdVehicleRow[5] = vehicleBody.odometer;
+        createdVehicleRow[6] = vehicleBody.fuelLevel;
+        createdVehicleRow[7] = vehicleBody.maintenanceEvery;
+        createdVehicleRow[8] = vehicleBody.assessmentMonth.slice(0, -1);
+        createdVehicleRow[9] = vehicleBody.smartSupport;
+        setDbMockRows("insert", [createdVehicleRow]);
 
         const response = await jsonRequest("/vehicles", "POST", vehicleBody);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual({
-            message: "Vehicle created successfully",
-        });
+        expect(await response.json()).toEqual([
+            {
+                ...serializedVehicle,
+                ...vehicleBody,
+            },
+        ]);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
         const { sql, values } = getFirstQuery();
         expect(sql).toContain('insert into "vehicle"');
+        expect(sql).toContain("returning");
         expect(values).toEqual([
             vehicleBody.brand,
             vehicleBody.model,
@@ -283,13 +301,33 @@ describe("POST /fleet/vehicles", () => {
         getSessionMock.mockResolvedValue(adminSession);
         const { odometer, fuelLevel, smartSupport, ...requiredBody } =
             vehicleBody;
+        const createdVehicleRow = first(
+            getDbMockTableRows("vehicle"),
+            "vehicle row",
+        );
+        createdVehicleRow[1] = requiredBody.brand;
+        createdVehicleRow[2] = requiredBody.model;
+        createdVehicleRow[3] = requiredBody.year.slice(0, -1);
+        createdVehicleRow[4] = requiredBody.licensePlate;
+        createdVehicleRow[5] = null;
+        createdVehicleRow[6] = null;
+        createdVehicleRow[7] = requiredBody.maintenanceEvery;
+        createdVehicleRow[8] = requiredBody.assessmentMonth.slice(0, -1);
+        createdVehicleRow[9] = true;
+        setDbMockRows("insert", [createdVehicleRow]);
 
         const response = await jsonRequest("/vehicles", "POST", requiredBody);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual({
-            message: "Vehicle created successfully",
-        });
+        expect(await response.json()).toEqual([
+            {
+                ...serializedVehicle,
+                ...requiredBody,
+                odometer: null,
+                fuelLevel: null,
+                smartSupport: true,
+            },
+        ]);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
     });
 

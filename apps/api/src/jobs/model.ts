@@ -19,4 +19,11 @@ const jobInsertModel = t.Object({
 export const JobModel = {
     jobInsertModel: t.Omit(jobInsertModel, ["startedAt", "completedAt"]),
     jobUpdateModel: t.Partial(jobInsertModel),
+    jobAssignModel: t.Optional(
+        t.Pick(t.Partial(jobInsertModel), [
+            "assignedDriverId",
+            "dueDate",
+            "to",
+        ]),
+    ),
 } as const;
