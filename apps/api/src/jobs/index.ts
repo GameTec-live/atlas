@@ -1,5 +1,6 @@
-import { asc, eq } from "drizzle-orm";
-import { Elysia, t } from "elysia";
+import { asc, eq, isNull } from "drizzle-orm";
+import { Elysia, status, t } from "elysia";
+import { env } from "@/env";
 import { authHandler } from "../authHandler";
 import { db } from "../db";
 import { job } from "../db/schema";
@@ -22,6 +23,46 @@ export const jobs = new Elysia({
         },
         {
             auth: true,
+        },
+    )
+    .get(
+        "/unassigned",
+        async () => {
+            const jobs = await db
+                .select()
+                .from(job)
+                .where(isNull(job.assignedDriverId))
+                .orderBy(asc(job.dueDate));
+            return jobs;
+        },
+        {
+            auth: true,
+        },
+    )
+    .get(
+        "/unassigned-reduced",
+        async ({ query }) => {
+            if (!env.JOBTOKEN || env.JOBTOKEN === query.token) {
+                const jobs = await db
+                    .select({
+                        id: job.id,
+                        from: job.from,
+                        to: job.to,
+                        dueDate: job.dueDate,
+                        note: job.note,
+                    })
+                    .from(job)
+                    .where(isNull(job.assignedDriverId))
+                    .orderBy(asc(job.dueDate));
+                return jobs;
+            }
+
+            return status(401, { error: "Unauthorized" });
+        },
+        {
+            query: t.Object({
+                token: t.Optional(t.String()),
+            }),
         },
     )
     .post(
