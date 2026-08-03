@@ -64,7 +64,7 @@ export const jobs = new Elysia({
                 authorization: t.Optional(t.String()),
             }),
             detail: {
-                security: [{ basicAuth: [] }],
+                security: [{ APIKeyAuth: [] }],
             },
         },
     )
