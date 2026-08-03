@@ -42,10 +42,7 @@ export const jobs = new Elysia({
     .get(
         "/unassigned-reduced",
         async ({ headers }) => {
-            if (
-                !env.JOBTOKEN ||
-                env.JOBTOKEN === headers.authorization?.split(" ")[1]
-            ) {
+            if (env.JOBTOKEN === headers.authorization?.split(" ")[1]) {
                 const jobs = await db
                     .select({
                         id: job.id,
