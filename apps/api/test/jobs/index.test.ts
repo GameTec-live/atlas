@@ -48,7 +48,7 @@ const unassignedRequest = (authenticated = true) => {
 const unassignedReducedRequest = (token?: string) => {
     const headers = new Headers();
     if (token !== undefined) {
-        headers.set("authorization", `Basic ${token}`);
+        headers.set("authorization", token);
     }
 
     return app.handle(
