@@ -1,17 +1,17 @@
-import { eq } from "drizzle-orm";
 import { Elysia } from "elysia";
 import { authHandler } from "../authHandler";
-import { db } from "../db";
-import { vehicle } from "../db/schema";
 import {
-    type NotifyResponse,
-    RealtimeModel,
-    type TrackInputMessage,
-} from "./model";
+    cacheTrackMessage,
+    deleteCachedTrackMessage,
+    startTelemetryPersistence,
+    stopTelemetryPersistence,
+} from "./cache";
+import { type NotifyResponse, RealtimeModel } from "./model";
+
+export { persistVehicleTelemetry, trackCache } from "./cache";
 
 const BROADCAST_TRACK_TOPIC = "api:ws:track";
 const BROADCAST_NOTIFY_TOPIC = "api:ws:notify:";
-const TELEMETRY_PERSIST_INTERVAL_MS = 5 * 60 * 1000;
 
 export function notify(
     server: Bun.Server<unknown> | null,
@@ -24,61 +24,6 @@ export function notify(
         BROADCAST_NOTIFY_TOPIC + userId,
         JSON.stringify(notification),
     );
-}
-
-export const trackCache = new Map<string, TrackInputMessage>();
-
-export async function persistVehicleTelemetry() {
-    const updates = [...trackCache.values()].flatMap((message) => {
-        if (!message.vehicleId) return [];
-
-        const telemetry = {
-            ...(message.fuelLevel !== undefined
-                ? { fuelLevel: message.fuelLevel }
-                : {}),
-            ...(message.odometer !== undefined
-                ? { odometer: message.odometer }
-                : {}),
-        };
-
-        if (Object.keys(telemetry).length === 0) return [];
-
-        return [
-            db
-                .update(vehicle)
-                .set(telemetry)
-                .where(eq(vehicle.id, message.vehicleId)),
-        ];
-    });
-
-    const results = await Promise.all(updates);
-    return results.reduce((total, result) => total + (result.rowCount ?? 0), 0);
-}
-
-let telemetryPersistenceTimer: Timer | undefined;
-let telemetryPersistenceInProgress = false;
-
-function startTelemetryPersistence() {
-    if (telemetryPersistenceTimer) return;
-
-    telemetryPersistenceTimer = setInterval(async () => {
-        if (telemetryPersistenceInProgress) return;
-
-        telemetryPersistenceInProgress = true;
-        try {
-            await persistVehicleTelemetry();
-        } catch (error) {
-            console.error("Failed to persist vehicle telemetry:", error);
-        } finally {
-            telemetryPersistenceInProgress = false;
-        }
-    }, TELEMETRY_PERSIST_INTERVAL_MS);
-    telemetryPersistenceTimer.unref();
-}
-
-function stopTelemetryPersistence() {
-    clearInterval(telemetryPersistenceTimer);
-    telemetryPersistenceTimer = undefined;
 }
 
 export const realtime = new Elysia({
@@ -112,10 +57,11 @@ export const realtime = new Elysia({
                 userId: ws.data.user.id,
                 userName: ws.data.user.name,
             });
-            trackCache.set(ws.data.user.id, message);
+            cacheTrackMessage(ws.data.user.id, message);
         },
         close(ws) {
             ws.unsubscribe(BROADCAST_TRACK_TOPIC);
+            deleteCachedTrackMessage(ws.data.user.id);
             ws.publish(BROADCAST_TRACK_TOPIC, {
                 type: "connectionChange",
                 userId: ws.data.user.id,

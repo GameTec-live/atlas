@@ -291,6 +291,154 @@ describe("WS /realtime/track", () => {
         await sender.expectNoMessage();
     });
 
+    it("keeps stale telemetry when a later update only changes location", async () => {
+        const client = await WebSocketClient.connect();
+        const vehicleId = "7bb0de4d-bcdd-4c99-a852-a17a4bbdb3de";
+
+        client.send({
+            type: "update",
+            latitude: 48.2082,
+            longitude: 16.3738,
+            state: "occupied",
+            vehicleId,
+            fuelLevel: 64,
+            odometer: 15_200,
+        });
+        await client.expectNoMessage();
+
+        client.send({
+            type: "update",
+            latitude: 48.21,
+            longitude: 16.38,
+            state: "occupied",
+        });
+        await client.expectNoMessage();
+
+        expect(trackCache.get(session.user.id)).toEqual({
+            type: "update",
+            latitude: 48.21,
+            longitude: 16.38,
+            state: "occupied",
+            vehicleId,
+            fuelLevel: 64,
+            odometer: 15_200,
+        });
+
+        setDbMockRowCount("update", 1);
+        expect(await persistVehicleTelemetry()).toBe(1);
+        expect(trackCache.get(session.user.id)).toEqual({
+            type: "update",
+            latitude: 48.21,
+            longitude: 16.38,
+            state: "occupied",
+            vehicleId,
+            fuelLevel: 64,
+            odometer: 15_200,
+        });
+
+        resetDbMocks();
+        expect(await persistVehicleTelemetry()).toBe(0);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+
+        client.send({
+            type: "update",
+            latitude: 48.22,
+            longitude: 16.39,
+            state: "occupied",
+            fuelLevel: 60,
+        });
+        await client.expectNoMessage();
+
+        setDbMockRowCount("update", 1);
+        expect(await persistVehicleTelemetry()).toBe(1);
+        const fuelOnlyQuery = dbClientQueryMock.mock.calls[0]?.[0];
+        if (
+            typeof fuelOnlyQuery !== "object" ||
+            fuelOnlyQuery === null ||
+            !("text" in fuelOnlyQuery) ||
+            typeof fuelOnlyQuery.text !== "string"
+        ) {
+            throw new Error("Expected the database call to contain SQL text");
+        }
+        expect(fuelOnlyQuery.text).toContain('set "fuel_level" = $1');
+        expect(fuelOnlyQuery.text).not.toContain('"odometer" =');
+        expect(trackCache.get(session.user.id)).toEqual({
+            type: "update",
+            latitude: 48.22,
+            longitude: 16.39,
+            state: "occupied",
+            vehicleId,
+            fuelLevel: 60,
+            odometer: 15_200,
+        });
+    });
+
+    it("does not carry telemetry over to an explicitly different vehicle", async () => {
+        const client = await WebSocketClient.connect();
+
+        client.send({
+            type: "update",
+            latitude: 48.2082,
+            longitude: 16.3738,
+            state: "free",
+            vehicleId: "7bb0de4d-bcdd-4c99-a852-a17a4bbdb3de",
+            fuelLevel: 64,
+            odometer: 15_200,
+        });
+        await client.expectNoMessage();
+
+        client.send({
+            type: "update",
+            latitude: 48.21,
+            longitude: 16.38,
+            state: "free",
+            vehicleId: "d6503952-72f5-4b73-a826-e1ab44e0ba72",
+        });
+        await client.expectNoMessage();
+
+        expect(trackCache.get(session.user.id)).toEqual({
+            type: "update",
+            latitude: 48.21,
+            longitude: 16.38,
+            state: "free",
+            vehicleId: "d6503952-72f5-4b73-a826-e1ab44e0ba72",
+        });
+    });
+
+    it("purges the cached update when its client disconnects", async () => {
+        getSessionMock
+            .mockResolvedValueOnce(sessionFor("driver-1"))
+            .mockResolvedValueOnce(sessionFor("receiver"));
+        const client = await WebSocketClient.connect();
+        const receiver = await WebSocketClient.connect();
+        await client.nextMessage();
+
+        client.send({
+            type: "update",
+            latitude: 48.2082,
+            longitude: 16.3738,
+            state: "free",
+            vehicleId: "7bb0de4d-bcdd-4c99-a852-a17a4bbdb3de",
+            fuelLevel: 64,
+            odometer: 15_200,
+        });
+        expect(await receiver.nextMessage()).toMatchObject({
+            type: "update",
+            userId: "driver-1",
+        });
+        expect(trackCache.has("driver-1")).toBeTrue();
+
+        await client.close();
+        expect(await receiver.nextMessage()).toEqual({
+            type: "connectionChange",
+            userId: "driver-1",
+            userName: "driver-1 name",
+            state: "disconnected",
+        });
+
+        expect(trackCache.has("driver-1")).toBeFalse();
+    });
+
     it.each([
         ["non-object input", "not-json"],
         [
@@ -423,6 +571,11 @@ describe("persistVehicleTelemetry", () => {
         expect(values[0]).toBe(0);
         expect(values[1]).toBe(0);
         expect(values[3]).toBe(vehicleId);
+        expect(trackCache.has("driver-1")).toBeTrue();
+
+        resetDbMocks();
+        expect(await persistVehicleTelemetry()).toBe(0);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
     });
 
     it("writes whichever telemetry fields are available", async () => {
@@ -465,6 +618,24 @@ describe("persistVehicleTelemetry", () => {
         expect(queries[0]).not.toContain('"odometer" =');
         expect(queries[1]).toContain('set "odometer" = $1');
         expect(queries[1]).not.toContain('"fuel_level" =');
+        expect(trackCache.size).toBe(2);
+    });
+
+    it("retains telemetry when its database write fails", async () => {
+        const databaseError = new Error("Database unavailable");
+        dbClientQueryMock.mockRejectedValueOnce(databaseError);
+        trackCache.set("driver-1", {
+            type: "update",
+            latitude: 48.2082,
+            longitude: 16.3738,
+            state: "free",
+            vehicleId,
+            fuelLevel: 63.5,
+            odometer: 14_250,
+        });
+
+        await expect(persistVehicleTelemetry()).rejects.toBeInstanceOf(Error);
+        expect(trackCache.has("driver-1")).toBeTrue();
     });
 
     it("skips messages without a vehicle id or telemetry", async () => {
