@@ -1,5 +1,3 @@
-import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
 import { Elysia, file, status } from "elysia";
 import * as v from "valibot";
 import { env } from "@/env";
@@ -7,8 +5,11 @@ import { authHandler } from "../authHandler";
 import {
     findLogoFile,
     isLogoContentType,
+    LogoLockTimeoutError,
+    LogoTooLargeError,
     logoExtensions,
-    removeOtherLogoFiles,
+    readLogoBody,
+    replaceLogo,
 } from "./logo";
 import { createConfig } from "./provider";
 
@@ -107,22 +108,29 @@ export const configApp = new Elysia({
                 return status(415, "Unsupported logo image type");
             }
 
-            const logo = await request.blob();
+            let logo: Blob;
+            try {
+                logo = await readLogoBody(request, contentType);
+            } catch (error) {
+                if (error instanceof LogoTooLargeError) {
+                    return status(413, error.message);
+                }
+                throw error;
+            }
+
             if (logo.size === 0) {
                 return status(400, "Logo file is empty");
             }
 
-            await mkdir(config.storage.dataLocation, { recursive: true });
-
             const extension = logoExtensions[contentType];
-            const logoFileName = `${config.storage.logoName}.${extension}`;
-            const logoFilePath = resolve(
-                config.storage.dataLocation,
-                logoFileName,
-            );
-
-            await Bun.write(logoFilePath, logo);
-            await removeOtherLogoFiles(config.storage, logoFilePath);
+            try {
+                await replaceLogo(config.storage, extension, logo);
+            } catch (error) {
+                if (error instanceof LogoLockTimeoutError) {
+                    return status(503, error.message);
+                }
+                throw error;
+            }
 
             return;
         },

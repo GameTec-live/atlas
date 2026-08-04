@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Elysia } from "elysia";
+import { MAX_LOGO_SIZE } from "@/src/config/logo";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
 
 mock.module("@/env", () => ({
@@ -179,6 +180,7 @@ describe("logo API", () => {
     it("ignores similarly named directories and unrelated files", async () => {
         mkdirSync(join(storageDirectory, "logo.png"));
         writeFileSync(join(storageDirectory, "not-logo.png"), "not a logo");
+        writeFileSync(join(storageDirectory, "logo.png.bak"), "backup");
 
         const response = await getLogo();
 
@@ -227,6 +229,21 @@ describe("logo API", () => {
         expect(readFileSync(join(storageDirectory, "logo.webp"), "utf8")).toBe(
             "existing logo",
         );
+    });
+
+    it("rejects an oversized logo without persisting it", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await putLogo(
+            new Uint8Array(MAX_LOGO_SIZE + 1),
+            "image/png",
+        );
+
+        expect(response.status).toBe(413);
+        expect(await response.text()).toBe(
+            `Logo exceeds the ${MAX_LOGO_SIZE}-byte size limit`,
+        );
+        expect(readdirSync(storageDirectory)).toEqual([]);
     });
 
     it("creates a missing storage directory", async () => {
@@ -279,6 +296,7 @@ describe("logo API", () => {
         writeFileSync(join(storageDirectory, "logo.png"), "old png");
         writeFileSync(join(storageDirectory, "logo.webp"), "old webp");
         writeFileSync(join(storageDirectory, "logo-backup.png"), "backup");
+        writeFileSync(join(storageDirectory, "logo.png.bak"), "backup");
         mkdirSync(join(storageDirectory, "logo.assets"));
 
         const response = await putLogo(new Uint8Array([4, 5, 6]), "image/jpeg");
@@ -288,9 +306,35 @@ describe("logo API", () => {
             "logo-backup.png",
             "logo.assets",
             "logo.jpg",
+            "logo.png.bak",
         ]);
         expect(readFileSync(join(storageDirectory, "logo.jpg"))).toEqual(
             Buffer.from([4, 5, 6]),
+        );
+    });
+
+    it("serializes concurrent uploads in different formats", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        const png = new TextEncoder().encode("png logo");
+        const svg = new TextEncoder().encode("svg logo");
+
+        const [pngResponse, svgResponse] = await Promise.all([
+            putLogo(png, "image/png"),
+            putLogo(svg, "image/svg+xml"),
+        ]);
+
+        expect(pngResponse.status).toBe(200);
+        expect(svgResponse.status).toBe(200);
+
+        const storedLogos = readdirSync(storageDirectory).filter((name) =>
+            ["logo.png", "logo.svg"].includes(name),
+        );
+        expect(storedLogos).toHaveLength(1);
+
+        const downloadResponse = await getLogo();
+        expect(downloadResponse.status).toBe(200);
+        expect(["png logo", "svg logo"]).toContain(
+            await downloadResponse.text(),
         );
     });
 
