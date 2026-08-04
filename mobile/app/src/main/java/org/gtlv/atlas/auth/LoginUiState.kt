@@ -12,9 +12,6 @@ data class LoginUiState(
     val passwordError: UiText? = null,
     val loginError: UiText? = null,
 
-    val loginSuccessful: Boolean = false,
-    val isCheckingSession: Boolean = true,
-
     val serverAddress: String = "",
     val serverAddressInput: String = "",
     val serverAddressError: UiText? = null,

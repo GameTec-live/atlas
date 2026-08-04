@@ -52,18 +52,6 @@ fun LoginScreen(
     Surface(
         modifier = modifier.fillMaxSize()
     ) {
-
-        if (state.isCheckingSession) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-
-            return@Surface
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()

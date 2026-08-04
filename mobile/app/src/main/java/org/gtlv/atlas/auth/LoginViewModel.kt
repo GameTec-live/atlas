@@ -48,8 +48,6 @@ class LoginViewModel(
                 is SessionRestoreResult.Valid -> {
                     _uiState.update {
                         it.copy(
-                            isCheckingSession = false,
-                            loginSuccessful = true,
                             loginError = null
                         )
                     }
@@ -59,8 +57,6 @@ class LoginViewModel(
                 SessionRestoreResult.Expired -> {
                     _uiState.update {
                         it.copy(
-                            isCheckingSession = false,
-                            loginSuccessful = false,
                             loginError = null
                         )
                     }
@@ -69,7 +65,6 @@ class LoginViewModel(
                 SessionRestoreResult.NetworkError -> {
                     _uiState.update {
                         it.copy(
-                            isCheckingSession = false,
                             loginError = UiText.Resource(
                                 R.string.cannot_verify_session
                             )
@@ -80,7 +75,6 @@ class LoginViewModel(
                 SessionRestoreResult.InvalidResponse -> {
                     _uiState.update {
                         it.copy(
-                            isCheckingSession = false,
                             loginError = UiText.Resource(
                                 R.string.invalid_session_response
                             )
@@ -91,7 +85,6 @@ class LoginViewModel(
                 is SessionRestoreResult.ServerError -> {
                     _uiState.update {
                         it.copy(
-                            isCheckingSession = false,
                             loginError = UiText.Resource(
                                 resourceId =
                                     R.string.session_check_failed,
@@ -169,11 +162,6 @@ class LoginViewModel(
                 it.copy(
                     showServerDialog = false,
                     serverAddressError = null,
-                    loginSuccessful = if (addressChanged) {
-                        false
-                    } else {
-                        it.loginSuccessful
-                    },
                     username = if (addressChanged) {
                         ""
                     } else {
@@ -284,7 +272,6 @@ class LoginViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        loginSuccessful = true,
                         loginError = null
                     )
                 }
@@ -294,7 +281,6 @@ class LoginViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        loginSuccessful = false,
                         loginError = UiText.Resource(
                             R.string.invalid_credentials
                         )
@@ -306,7 +292,6 @@ class LoginViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        loginSuccessful = false,
                         loginError = UiText.Resource(
                             R.string.cannot_connect_to_server
                         )
@@ -318,7 +303,6 @@ class LoginViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        loginSuccessful = false,
                         loginError = UiText.Resource(
                             R.string.invalid_server_response
                         )
@@ -330,7 +314,6 @@ class LoginViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        loginSuccessful = false,
                         loginError = UiText.Resource(
                             resourceId =
                                 R.string.server_error_with_code,
