@@ -11,7 +11,7 @@ import {
     utimes,
     writeFile,
 } from "node:fs/promises";
-import { resolve } from "node:path";
+import { extname, resolve } from "node:path";
 
 export const MAX_LOGO_SIZE = 5 * 1024 * 1024;
 
@@ -68,6 +68,16 @@ class LogoLockLostError extends LogoLockError {
 export const isLogoContentType = (
     contentType: string,
 ): contentType is LogoContentType => Object.hasOwn(logoExtensions, contentType);
+
+export const getLogoContentType = (path: string) => {
+    const extension = extname(path).slice(1).toLowerCase();
+
+    return (
+        Object.entries(logoExtensions).find(
+            ([, supportedExtension]) => supportedExtension === extension,
+        )?.[0] ?? "application/octet-stream"
+    );
+};
 
 export const isFileSystemError = (
     error: unknown,

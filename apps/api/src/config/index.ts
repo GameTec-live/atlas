@@ -1,9 +1,10 @@
-import { Elysia, file, status } from "elysia";
+import { Elysia, status } from "elysia";
 import * as v from "valibot";
 import { env } from "@/env";
 import { authHandler } from "../authHandler";
 import {
     findLogoFile,
+    getLogoContentType,
     isLogoContentType,
     LogoLockError,
     LogoTooLargeError,
@@ -92,7 +93,9 @@ export const configApp = new Elysia({
         const logoFilePath = await findLogoFile(config.storage);
 
         return logoFilePath
-            ? file(logoFilePath)
+            ? new Response(Bun.file(logoFilePath), {
+                  headers: { "content-type": getLogoContentType(logoFilePath) },
+              })
             : status(404, "Logo file not found");
     })
     .put(
