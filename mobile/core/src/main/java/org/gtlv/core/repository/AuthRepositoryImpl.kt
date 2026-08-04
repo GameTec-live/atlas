@@ -2,7 +2,6 @@ package org.gtlv.core.repository
 
 
 
-import org.gtlv.core.network.AtlasServerConfig
 import org.gtlv.core.network.NetworkClient
 import org.gtlv.core.session.SecureSessionStore
 import org.gtlv.core.session.SessionRestoreResult
@@ -25,7 +24,7 @@ class AuthRepositoryImpl(
     private var accessToken: String? = null
 
     override suspend fun login(
-        email: String,
+        username: String,
         password: String
     ): AuthResult = withContext(Dispatchers.IO) {
 
@@ -35,10 +34,10 @@ class AuthRepositoryImpl(
             .removeSuffix("/")
 
         val loginUrl =
-            "$serverAddress/api/auth/sign-in/email"
+            "$serverAddress/api/auth/sign-in/username"
 
         val requestJson = JSONObject()
-            .put("email", email)
+            .put("username", username)
             .put("password", password)
             .put("rememberMe", true)
             .toString()

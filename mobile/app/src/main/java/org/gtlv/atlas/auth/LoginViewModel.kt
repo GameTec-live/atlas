@@ -2,18 +2,18 @@ package org.gtlv.atlas.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import org.gtlv.core.repository.AuthRepository
-import org.gtlv.core.repository.AuthResult
-import org.gtlv.core.session.SessionRestoreResult
-import org.gtlv.core.settings.ServerSettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-import kotlinx.coroutines.flow.update
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import org.gtlv.atlas.R
+import org.gtlv.atlas.ui.UiText
+import org.gtlv.core.repository.AuthRepository
+import org.gtlv.core.repository.AuthResult
+import org.gtlv.core.session.SessionRestoreResult
+import org.gtlv.core.settings.ServerSettingsRepository
 
 class LoginViewModel(
     private val authRepository: AuthRepository,
@@ -21,9 +21,16 @@ class LoginViewModel(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
-    val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
+
+    val uiState: StateFlow<LoginUiState> =
+        _uiState.asStateFlow()
 
     init {
+        observeServerAddress()
+        restoreSession()
+    }
+
+    private fun observeServerAddress() {
         viewModelScope.launch {
             serverSettingsRepository.serverAddress.collect { address ->
                 _uiState.update {
@@ -31,9 +38,70 @@ class LoginViewModel(
                 }
             }
         }
+    }
 
+    private fun restoreSession() {
         viewModelScope.launch {
-            restoreSession()
+            when (
+                val result = authRepository.restoreStoredSession()
+            ) {
+                is SessionRestoreResult.Valid -> {
+                    _uiState.update {
+                        it.copy(
+                            isCheckingSession = false,
+                            loginSuccessful = true,
+                            loginError = null
+                        )
+                    }
+                }
+
+                SessionRestoreResult.NoStoredSession,
+                SessionRestoreResult.Expired -> {
+                    _uiState.update {
+                        it.copy(
+                            isCheckingSession = false,
+                            loginSuccessful = false,
+                            loginError = null
+                        )
+                    }
+                }
+
+                SessionRestoreResult.NetworkError -> {
+                    _uiState.update {
+                        it.copy(
+                            isCheckingSession = false,
+                            loginError = UiText.Resource(
+                                R.string.cannot_verify_session
+                            )
+                        )
+                    }
+                }
+
+                SessionRestoreResult.InvalidResponse -> {
+                    _uiState.update {
+                        it.copy(
+                            isCheckingSession = false,
+                            loginError = UiText.Resource(
+                                R.string.invalid_session_response
+                            )
+                        )
+                    }
+                }
+
+                is SessionRestoreResult.ServerError -> {
+                    _uiState.update {
+                        it.copy(
+                            isCheckingSession = false,
+                            loginError = UiText.Resource(
+                                resourceId =
+                                    R.string.session_check_failed,
+                                arguments =
+                                    listOf(result.statusCode)
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -66,7 +134,8 @@ class LoginViewModel(
     }
 
     fun saveServerAddress() {
-        val input = _uiState.value.serverAddressInput
+        val input = _uiState.value
+            .serverAddressInput
             .trim()
             .removeSuffix("/")
 
@@ -78,30 +147,56 @@ class LoginViewModel(
         ) {
             _uiState.update {
                 it.copy(
-                    serverAddressError =
-                        "Enter a valid HTTP or HTTPS address"
+                    serverAddressError = UiText.Resource(
+                        R.string.server_address_error
+                    )
                 )
             }
+
             return
         }
 
         viewModelScope.launch {
-            serverSettingsRepository.setServerAddress(input)
+            val addressChanged =
+                input != _uiState.value.serverAddress
+
+            if (addressChanged) {
+                authRepository.logout()
+                serverSettingsRepository.setServerAddress(input)
+            }
 
             _uiState.update {
                 it.copy(
                     showServerDialog = false,
-                    serverAddressError = null
+                    serverAddressError = null,
+                    loginSuccessful = if (addressChanged) {
+                        false
+                    } else {
+                        it.loginSuccessful
+                    },
+                    username = if (addressChanged) {
+                        ""
+                    } else {
+                        it.username
+                    },
+                    password = if (addressChanged) {
+                        ""
+                    } else {
+                        it.password
+                    },
+                    usernameError = null,
+                    passwordError = null,
+                    loginError = null
                 )
             }
         }
     }
 
-    fun onEmailChanged(value: String) {
+    fun onUsernameChanged(value: String) {
         _uiState.update {
             it.copy(
-                email = value,
-                emailError = null,
+                username = value,
+                usernameError = null,
                 loginError = null
             )
         }
@@ -125,81 +220,38 @@ class LoginViewModel(
         }
     }
 
-    private suspend fun restoreSession() {
-        when (val result = authRepository.restoreStoredSession()) {
-            is SessionRestoreResult.Valid -> {
-                _uiState.update {
-                    it.copy(
-                        isCheckingSession = false,
-                        loginSuccessful = true,
-                        loginError = null
-                    )
-                }
-            }
-
-            SessionRestoreResult.NoStoredSession,
-            SessionRestoreResult.Expired -> {
-                _uiState.update {
-                    it.copy(
-                        isCheckingSession = false
-                    )
-                }
-            }
-
-            SessionRestoreResult.NetworkError -> {
-                _uiState.update {
-                    it.copy(
-                        isCheckingSession = false,
-                        loginError =
-                            "Cannot verify the saved session. Check your connection."
-                    )
-                }
-            }
-
-            SessionRestoreResult.InvalidResponse -> {
-                _uiState.update {
-                    it.copy(
-                        isCheckingSession = false,
-                        loginError =
-                            "The server returned an invalid session response"
-                    )
-                }
-            }
-
-            is SessionRestoreResult.ServerError -> {
-                _uiState.update {
-                    it.copy(
-                        isCheckingSession = false,
-                        loginError =
-                            "Session check failed (${result.statusCode})"
-                    )
-                }
-            }
-        }
-    }
-
     fun login() {
         val currentState = _uiState.value
 
-        val emailError = if (currentState.email.isBlank()) {
-            "Enter your email address"
-        } else {
-            null
-        }
+        val usernameError =
+            if (currentState.username.isBlank()) {
+                UiText.Resource(
+                    R.string.username_required
+                )
+            } else {
+                null
+            }
 
-        val passwordError = if (currentState.password.isBlank()) {
-            "Enter your password"
-        } else {
-            null
-        }
+        val passwordError =
+            if (currentState.password.isBlank()) {
+                UiText.Resource(
+                    R.string.password_required
+                )
+            } else {
+                null
+            }
 
-        if (emailError != null || passwordError != null) {
+        if (
+            usernameError != null ||
+            passwordError != null
+        ) {
             _uiState.update {
                 it.copy(
-                    emailError = emailError,
+                    usernameError = usernameError,
                     passwordError = passwordError
                 )
             }
+
             return
         }
 
@@ -215,57 +267,77 @@ class LoginViewModel(
                 )
             }
 
-            when (
-                val result = authRepository.login(
-                    email = currentState.email.trim(),
-                    password = currentState.password
-                )
-            ) {
-                is AuthResult.Success -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            loginSuccessful = true,
-                            loginError = null
-                        )
-                    }
-                }
+            val result = authRepository.login(
+                username = currentState.username.trim(),
+                password = currentState.password
+            )
 
-                AuthResult.InvalidCredentials -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            loginError = "Invalid email or password"
-                        )
-                    }
-                }
+            handleLoginResult(result)
+        }
+    }
 
-                AuthResult.NetworkError -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            loginError = "Cannot connect to the server"
-                        )
-                    }
+    private fun handleLoginResult(
+        result: AuthResult
+    ) {
+        when (result) {
+            is AuthResult.Success -> {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        loginSuccessful = true,
+                        loginError = null
+                    )
                 }
+            }
 
-                AuthResult.InvalidResponse -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            loginError = "The server returned an invalid response"
+            AuthResult.InvalidCredentials -> {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        loginSuccessful = false,
+                        loginError = UiText.Resource(
+                            R.string.invalid_credentials
                         )
-                    }
+                    )
                 }
+            }
 
-                is AuthResult.ServerError -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            loginError = result.message
-                                ?: "Server error (${result.statusCode})"
+            AuthResult.NetworkError -> {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        loginSuccessful = false,
+                        loginError = UiText.Resource(
+                            R.string.cannot_connect_to_server
                         )
-                    }
+                    )
+                }
+            }
+
+            AuthResult.InvalidResponse -> {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        loginSuccessful = false,
+                        loginError = UiText.Resource(
+                            R.string.invalid_server_response
+                        )
+                    )
+                }
+            }
+
+            is AuthResult.ServerError -> {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        loginSuccessful = false,
+                        loginError = UiText.Resource(
+                            resourceId =
+                                R.string.server_error_with_code,
+                            arguments =
+                                listOf(result.statusCode)
+                        )
+                    )
                 }
             }
         }

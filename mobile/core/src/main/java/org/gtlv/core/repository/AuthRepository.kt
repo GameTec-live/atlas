@@ -5,7 +5,7 @@ import org.gtlv.core.session.SessionRestoreResult
 interface AuthRepository {
 
     suspend fun login(
-        email: String,
+        username: String,
         password: String
     ): AuthResult
 

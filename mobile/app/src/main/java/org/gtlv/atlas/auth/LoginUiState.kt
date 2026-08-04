@@ -1,18 +1,22 @@
 package org.gtlv.atlas.auth
 
+import org.gtlv.atlas.ui.UiText
+
 data class LoginUiState(
-    val email: String = "",
+    val username: String = "",
     val password: String = "",
     val passwordVisible: Boolean = false,
     val isLoading: Boolean = false,
-    val emailError: String? = null,
-    val passwordError: String? = null,
-    val loginError: String? = null,
+
+    val usernameError: UiText? = null,
+    val passwordError: UiText? = null,
+    val loginError: UiText? = null,
+
     val loginSuccessful: Boolean = false,
     val isCheckingSession: Boolean = true,
 
     val serverAddress: String = "",
     val serverAddressInput: String = "",
-    val serverAddressError: String? = null,
+    val serverAddressError: UiText? = null,
     val showServerDialog: Boolean = false
 )

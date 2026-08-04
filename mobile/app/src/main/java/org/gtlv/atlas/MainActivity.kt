@@ -61,8 +61,8 @@ class MainActivity : ComponentActivity() {
 
                 LoginScreen(
                     state = state,
-                    onEmailChanged =
-                        loginViewModel::onEmailChanged,
+                    onUsernameChanged =
+                        loginViewModel::onUsernameChanged,
                     onPasswordChanged =
                         loginViewModel::onPasswordChanged,
                     onPasswordVisibilityChanged =

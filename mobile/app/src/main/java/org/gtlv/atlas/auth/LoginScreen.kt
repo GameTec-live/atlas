@@ -33,12 +33,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
+import org.gtlv.atlas.ui.asString
 
 
 @Composable
 fun LoginScreen(
     state: LoginUiState,
-    onEmailChanged: (String) -> Unit,
+    onUsernameChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
     onPasswordVisibilityChanged: () -> Unit,
     onLogin: () -> Unit,
@@ -84,18 +85,22 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(40.dp))
 
             OutlinedTextField(
-                value = state.email,
-                onValueChange = onEmailChanged,
+                value = state.username,
+                onValueChange = onUsernameChanged,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.email)) },
+                label = {
+                    Text(stringResource(R.string.username))
+                },
                 singleLine = true,
                 enabled = !state.isLoading,
-                isError = state.emailError != null,
-                supportingText = state.emailError?.let { message ->
-                    { Text(message) }
+                isError = state.usernameError != null,
+                supportingText = state.usernameError?.let { error ->
+                    {
+                        Text(error.asString())
+                    }
                 },
                 keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Email,
+                    keyboardType = KeyboardType.Text,
                     imeAction = ImeAction.Next
                 )
             )
@@ -111,7 +116,7 @@ fun LoginScreen(
                 enabled = !state.isLoading,
                 isError = state.passwordError != null,
                 supportingText = state.passwordError?.let { message ->
-                    { Text(message) }
+                    { Text(message.asString()) }
                 },
                 visualTransformation = if (state.passwordVisible) {
                     VisualTransformation.None
@@ -147,7 +152,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = error,
+                    text = error.asString(),
                     color = MaterialTheme.colorScheme.error
                 )
             }
@@ -217,7 +222,7 @@ fun LoginScreen(
                     isError = state.serverAddressError != null,
                     supportingText = state.serverAddressError?.let { error ->
                         {
-                            Text(error)
+                            Text(error.asString())
                         }
                     }
                 )
