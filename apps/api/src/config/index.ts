@@ -5,7 +5,7 @@ import { authHandler } from "../authHandler";
 import {
     findLogoFile,
     isLogoContentType,
-    LogoLockTimeoutError,
+    LogoLockError,
     LogoTooLargeError,
     logoExtensions,
     readLogoBody,
@@ -126,7 +126,7 @@ export const configApp = new Elysia({
             try {
                 await replaceLogo(config.storage, extension, logo);
             } catch (error) {
-                if (error instanceof LogoLockTimeoutError) {
+                if (error instanceof LogoLockError) {
                     return status(503, error.message);
                 }
                 throw error;

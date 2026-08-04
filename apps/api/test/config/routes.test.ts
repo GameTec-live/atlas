@@ -338,6 +338,33 @@ describe("logo API", () => {
         );
     });
 
+    it.each([
+        "file",
+        "directory",
+    ] as const)("recovers an abandoned logo lock %s", async (lockType) => {
+        getSessionMock.mockResolvedValue(adminSession);
+        const lockPath = join(storageDirectory, ".logo.lock");
+        const abandonedAt = new Date(0);
+
+        if (lockType === "file") {
+            writeFileSync(lockPath, "legacy lock");
+            utimesSync(lockPath, abandonedAt, abandonedAt);
+        } else {
+            mkdirSync(lockPath);
+            const ownerTokenPath = join(lockPath, "owner-abandoned");
+            writeFileSync(ownerTokenPath, "");
+            utimesSync(ownerTokenPath, abandonedAt, abandonedAt);
+        }
+
+        const response = await putLogo(
+            new TextEncoder().encode("replacement"),
+            "image/png",
+        );
+
+        expect(response.status).toBe(200);
+        expect(readdirSync(storageDirectory)).toEqual(["logo.png"]);
+    });
+
     it("uses the configured logo name for uploads and downloads", async () => {
         await config.$set("storage", {
             dataLocation: storageDirectory,
