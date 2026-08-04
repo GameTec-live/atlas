@@ -28,7 +28,7 @@ export const fleet = new Elysia({
         "/vehicles/:id",
         async ({ params }) => {
             const vehicleId = params.id;
-            const vehicleData = await db
+            const [foundVehicle] = await db
                 .select()
                 .from(vehicle)
                 .where(eq(vehicle.id, vehicleId))
@@ -36,11 +36,11 @@ export const fleet = new Elysia({
                 .orderBy(desc(maintenance.createdAt))
                 .limit(1);
 
-            if (vehicleData.length === 0) {
+            if (!foundVehicle) {
                 return status(404, { error: "Vehicle not found" });
             }
 
-            return vehicleData[0];
+            return foundVehicle;
         },
         {
             params: t.Object({
@@ -52,10 +52,15 @@ export const fleet = new Elysia({
     .post(
         "/vehicles",
         async ({ body }) => {
-            const newVehicle = await db
+            const [newVehicle] = await db
                 .insert(vehicle)
                 .values(body)
                 .returning();
+
+            if (!newVehicle) {
+                return status(500, { error: "Failed to create vehicle" });
+            }
+
             return newVehicle;
         },
         {

@@ -273,12 +273,10 @@ describe("POST /fleet/vehicles", () => {
         const response = await jsonRequest("/vehicles", "POST", vehicleBody);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([
-            {
-                ...serializedVehicle,
-                ...vehicleBody,
-            },
-        ]);
+        expect(await response.json()).toEqual({
+            ...serializedVehicle,
+            ...vehicleBody,
+        });
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
         const { sql, values } = getFirstQuery();
@@ -319,15 +317,26 @@ describe("POST /fleet/vehicles", () => {
         const response = await jsonRequest("/vehicles", "POST", requiredBody);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([
-            {
-                ...serializedVehicle,
-                ...requiredBody,
-                odometer: null,
-                fuelLevel: null,
-                smartSupport: true,
-            },
-        ]);
+        expect(await response.json()).toEqual({
+            ...serializedVehicle,
+            ...requiredBody,
+            odometer: null,
+            fuelLevel: null,
+            smartSupport: true,
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 500 when the inserted vehicle is not returned", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRows("insert", []);
+
+        const response = await jsonRequest("/vehicles", "POST", vehicleBody);
+
+        expect(response.status).toBe(500);
+        expect(await response.json()).toEqual({
+            error: "Failed to create vehicle",
+        });
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
     });
 
