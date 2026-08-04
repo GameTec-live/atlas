@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { Elysia, status, t } from "elysia";
 import { authHandler } from "../authHandler";
 import { db } from "../db";
@@ -21,7 +21,7 @@ export const fleet = new Elysia({
             return vehicles;
         },
         {
-            admin: true,
+            auth: true,
         },
     )
     .get(
@@ -46,7 +46,7 @@ export const fleet = new Elysia({
             params: t.Object({
                 id: t.String({ format: "uuid" }),
             }),
-            admin: true,
+            auth: true,
         },
     )
     .post(
@@ -110,5 +110,72 @@ export const fleet = new Elysia({
                 id: t.String({ format: "uuid" }),
             }),
             admin: true,
+        },
+    )
+    .get(
+        "/fingerprint/:fingerprint",
+        async ({ params }) => {
+            const fingerprint = params.fingerprint;
+            const [vehicleData] = await db
+                .select()
+                .from(vehicle)
+                .where(eq(vehicle.fingerprint, fingerprint));
+
+            if (!vehicleData) {
+                return status(404, { error: "Vehicle not found" });
+            }
+            return vehicleData;
+        },
+        {
+            params: t.Object({
+                fingerprint: t.String(),
+            }),
+            auth: true,
+        },
+    )
+    .get(
+        "/fingerprint/candidates",
+        async () => {
+            const candidates = await db
+                .select({
+                    id: vehicle.id,
+                    brand: vehicle.brand,
+                    model: vehicle.model,
+                    year: vehicle.year,
+                    licensePlate: vehicle.licensePlate,
+                })
+                .from(vehicle)
+                .where(isNull(vehicle.fingerprint));
+            return candidates;
+        },
+        {
+            auth: true,
+        },
+    )
+    .post(
+        "/fingerprint/pair",
+        async ({ body }) => {
+            const { vehicleId, fingerprint } = body;
+            const updateResult = await db
+                .update(vehicle)
+                .set({ fingerprint })
+                .where(
+                    and(eq(vehicle.id, vehicleId), isNull(vehicle.fingerprint)),
+                );
+
+            if (updateResult.rowCount === 0) {
+                return status(404, {
+                    error: "Vehicle not found or already paired",
+                });
+            }
+
+            return { message: "Fingerprint paired successfully" };
+        },
+        {
+            body: t.Object({
+                vehicleId: t.String({ format: "uuid" }),
+                fingerprint: t.String(),
+            }),
+            auth: true,
         },
     );
