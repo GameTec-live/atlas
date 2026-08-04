@@ -41,6 +41,7 @@ COPY --from=build --chown=65532:65532 /runtime-data /data
 
 ENV NODE_ENV=production
 ENV CONFIG_FILE=/data/config.toml
+ENV DATA_STORAGE_PATH=/data
 
 EXPOSE 3000
 
