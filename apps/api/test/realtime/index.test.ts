@@ -10,15 +10,24 @@ import {
 } from "bun:test";
 import { Elysia } from "elysia";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
+import {
+    dbClientQueryMock,
+    resetDbMocks,
+    setDbMockRowCount,
+} from "../mocks/db";
 
-const { notify, realtime } = await import("@/src/realtime");
+const { notify, persistVehicleTelemetry, realtime, trackCache } = await import(
+    "@/src/realtime"
+);
 
 type TrackInputMessage = {
     type: "update";
     latitude: number;
     longitude: number;
     state: "free" | "onTheWay" | "occupied" | "away";
+    vehicleId?: string;
     fuelLevel?: number;
+    odometer?: number;
 };
 
 const app = new Elysia().use(realtime);
@@ -165,6 +174,8 @@ beforeAll(() => {
 
 beforeEach(() => {
     resetAuthMocks();
+    resetDbMocks();
+    trackCache.clear();
     getSessionMock.mockResolvedValue(session);
 });
 
@@ -340,6 +351,26 @@ describe("WS /realtime/track", () => {
                 fuelLevel: "full",
             },
         ],
+        [
+            "an out-of-range fuel level",
+            {
+                type: "update",
+                latitude: 48.2,
+                longitude: 16.3,
+                state: "free",
+                fuelLevel: 101,
+            },
+        ],
+        [
+            "a negative odometer",
+            {
+                type: "update",
+                latitude: 48.2,
+                longitude: 16.3,
+                state: "free",
+                odometer: -1,
+            },
+        ],
     ])("rejects %s without broadcasting it", async (_name, invalidMessage) => {
         getSessionMock
             .mockResolvedValueOnce(sessionFor("sender"))
@@ -356,6 +387,104 @@ describe("WS /realtime/track", () => {
             on: "message",
         });
         await receiver.expectNoMessage();
+    });
+});
+
+describe("persistVehicleTelemetry", () => {
+    const vehicleId = "7bb0de4d-bcdd-4c99-a852-a17a4bbdb3de";
+
+    it("writes available vehicle telemetry, including zero values", async () => {
+        setDbMockRowCount("update", 1);
+        trackCache.set("driver-1", {
+            type: "update",
+            latitude: 48.2082,
+            longitude: 16.3738,
+            state: "free",
+            vehicleId,
+            fuelLevel: 0,
+            odometer: 0,
+        });
+
+        expect(await persistVehicleTelemetry()).toBe(1);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const call = dbClientQueryMock.mock.calls[0];
+        expect(call).toBeDefined();
+        const query = call?.[0];
+        expect(query).toBeObject();
+        if (typeof query !== "object" || query === null || !("text" in query)) {
+            throw new Error("Expected the database call to contain SQL text");
+        }
+
+        expect(query.text).toContain(
+            'update "vehicle" set "odometer" = $1, "fuel_level" = $2, "updated_at" = $3 where "vehicle"."id" = $4',
+        );
+        const values = call?.[1] as unknown[];
+        expect(values[0]).toBe(0);
+        expect(values[1]).toBe(0);
+        expect(values[3]).toBe(vehicleId);
+    });
+
+    it("writes whichever telemetry fields are available", async () => {
+        setDbMockRowCount("update", 1);
+        trackCache.set("driver-1", {
+            type: "update",
+            latitude: 48.2082,
+            longitude: 16.3738,
+            state: "occupied",
+            vehicleId,
+            fuelLevel: 63.5,
+        });
+        trackCache.set("driver-2", {
+            type: "update",
+            latitude: 48.21,
+            longitude: 16.38,
+            state: "onTheWay",
+            vehicleId: "d6503952-72f5-4b73-a826-e1ab44e0ba72",
+            odometer: 14_250,
+        });
+
+        expect(await persistVehicleTelemetry()).toBe(2);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(2);
+
+        const queries = dbClientQueryMock.mock.calls.map((call) => {
+            const query = call[0];
+            if (
+                typeof query !== "object" ||
+                query === null ||
+                !("text" in query) ||
+                typeof query.text !== "string"
+            ) {
+                throw new Error(
+                    "Expected the database call to contain SQL text",
+                );
+            }
+            return query.text;
+        });
+        expect(queries[0]).toContain('set "fuel_level" = $1');
+        expect(queries[0]).not.toContain('"odometer" =');
+        expect(queries[1]).toContain('set "odometer" = $1');
+        expect(queries[1]).not.toContain('"fuel_level" =');
+    });
+
+    it("skips messages without a vehicle id or telemetry", async () => {
+        trackCache.set("driver-1", {
+            type: "update",
+            latitude: 48.2082,
+            longitude: 16.3738,
+            state: "free",
+            fuelLevel: 75,
+        });
+        trackCache.set("driver-2", {
+            type: "update",
+            latitude: 48.21,
+            longitude: 16.38,
+            state: "away",
+            vehicleId,
+        });
+
+        expect(await persistVehicleTelemetry()).toBe(0);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
     });
 });
 
