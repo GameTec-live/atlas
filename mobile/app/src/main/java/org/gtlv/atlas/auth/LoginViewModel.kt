@@ -10,13 +10,13 @@ import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.gtlv.atlas.R
 import org.gtlv.atlas.ui.UiText
-import org.gtlv.core.repository.AuthRepository
 import org.gtlv.core.repository.AuthResult
+import org.gtlv.core.session.SessionManager
 import org.gtlv.core.session.SessionRestoreResult
 import org.gtlv.core.settings.ServerSettingsRepository
 
 class LoginViewModel(
-    private val authRepository: AuthRepository,
+    private val sessionManager: SessionManager,
     private val serverSettingsRepository: ServerSettingsRepository
 ) : ViewModel() {
 
@@ -43,7 +43,7 @@ class LoginViewModel(
     private fun restoreSession() {
         viewModelScope.launch {
             when (
-                val result = authRepository.restoreStoredSession()
+                val result = sessionManager.restoreSession()
             ) {
                 is SessionRestoreResult.Valid -> {
                     _uiState.update {
@@ -161,7 +161,7 @@ class LoginViewModel(
                 input != _uiState.value.serverAddress
 
             if (addressChanged) {
-                authRepository.logout()
+                sessionManager.logout()
                 serverSettingsRepository.setServerAddress(input)
             }
 
@@ -267,7 +267,7 @@ class LoginViewModel(
                 )
             }
 
-            val result = authRepository.login(
+            val result = sessionManager.login(
                 username = currentState.username.trim(),
                 password = currentState.password
             )
@@ -340,6 +340,12 @@ class LoginViewModel(
                     )
                 }
             }
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            sessionManager.logout()
         }
     }
 }

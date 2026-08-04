@@ -72,6 +72,12 @@ fun LoginScreen(
         ) {
             Spacer(modifier = Modifier.weight(0.5f))
 
+            ServerLogo(
+                serverAddress = state.serverAddress
+            )
+
+            Spacer(modifier = Modifier.weight(0.1f))
+
             Text(
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.displayMedium
@@ -171,16 +177,6 @@ fun LoginScreen(
                 }
 
 
-            }
-
-            if (state.loginSuccessful) {
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = stringResource(R.string.login_successful),
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
             }
 
             Spacer(modifier = Modifier.weight(1f))

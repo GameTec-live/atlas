@@ -3,10 +3,11 @@ package org.gtlv.atlas.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import org.gtlv.core.repository.AuthRepository
+import org.gtlv.core.session.SessionManager
 import org.gtlv.core.settings.ServerSettingsRepository
 
 class LoginViewModelFactory(
-    private val authRepository: AuthRepository,
+    private val sessionManager: SessionManager,
     private val serverSettingsRepository: ServerSettingsRepository
 ) : ViewModelProvider.Factory {
 
@@ -16,7 +17,7 @@ class LoginViewModelFactory(
     ): T {
         if (modelClass.isAssignableFrom(LoginViewModel::class.java)) {
             return LoginViewModel(
-                authRepository = authRepository,
+                sessionManager = sessionManager,
                 serverSettingsRepository = serverSettingsRepository
             ) as T
         }
