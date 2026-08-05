@@ -3,7 +3,7 @@ import { Elysia, status, t } from "elysia";
 import { env } from "@/env";
 import { authHandler } from "../authHandler";
 import { db } from "../db";
-import { job } from "../db/schema";
+import { job, user } from "../db/schema";
 import { trackCache } from "../realtime/cache";
 import {
     type CandidateTarget,
@@ -16,18 +16,25 @@ const calculateCandidates = async (target: CandidateTarget) => {
     const trackedDrivers = [...trackCache.entries()];
     if (trackedDrivers.length === 0) return [];
 
-    const unfinishedJobs = await db
-        .select()
-        .from(job)
-        .where(
-            and(
-                inArray(
-                    job.assignedDriverId,
-                    trackedDrivers.map(([driverId]) => driverId),
+    const driverIds = trackedDrivers.map(([driverId]) => driverId);
+    const [unfinishedJobs, driverUsers] = await Promise.all([
+        db
+            .select()
+            .from(job)
+            .where(
+                and(
+                    inArray(job.assignedDriverId, driverIds),
+                    isNull(job.completedAt),
                 ),
-                isNull(job.completedAt),
             ),
-        );
+        db
+            .select({ id: user.id, name: user.name })
+            .from(user)
+            .where(inArray(user.id, driverIds)),
+    ]);
+    const driverNames = new Map(
+        driverUsers.map((driverUser) => [driverUser.id, driverUser.name]),
+    );
     const jobsByDriver = new Map<string, typeof unfinishedJobs>();
     for (const unfinishedJob of unfinishedJobs) {
         if (!unfinishedJob.assignedDriverId) continue;
@@ -39,15 +46,19 @@ const calculateCandidates = async (target: CandidateTarget) => {
 
     const now = new Date();
     const candidates = await Promise.all(
-        trackedDrivers.map(([driverId, telemetry]) =>
-            calculateDriverCandidate(
+        trackedDrivers.map(([driverId, telemetry]) => {
+            const driverName = driverNames.get(driverId);
+            if (!driverName) return undefined;
+
+            return calculateDriverCandidate(
                 driverId,
+                driverName,
                 telemetry,
                 target,
                 jobsByDriver.get(driverId) ?? [],
                 now,
-            ),
-        ),
+            );
+        }),
     );
 
     return rankDriverCandidates(

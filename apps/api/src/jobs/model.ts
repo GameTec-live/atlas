@@ -32,6 +32,7 @@ export const JobModel = {
     jobCandidateRequestModel: t.Pick(jobInsertModel, ["from", "to", "dueDate"]),
     candidateModel: t.Object({
         driverId: t.String(),
+        driverName: t.String(),
         state: t.Enum({
             free: "free",
             onTheWay: "onTheWay",

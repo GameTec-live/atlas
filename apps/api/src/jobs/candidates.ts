@@ -30,6 +30,7 @@ export interface FollowingJobEstimate {
 
 export interface DriverCandidate {
     driverId: string;
+    driverName: string;
     state: TrackInputMessage["state"];
     latitude: number;
     longitude: number;
@@ -243,6 +244,7 @@ const calculateSchedule = (
 
 export async function calculateDriverCandidate(
     driverId: string,
+    driverName: string,
     telemetry: TrackInputMessage,
     target: CandidateTarget,
     unfinishedJobs: Job[],
@@ -277,6 +279,7 @@ export async function calculateDriverCandidate(
 
     return {
         driverId,
+        driverName,
         state: route.state,
         latitude: telemetry.latitude,
         longitude: telemetry.longitude,
