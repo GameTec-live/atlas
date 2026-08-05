@@ -8,6 +8,7 @@ import {
     resetDbMocks,
     setDbMockRowCount,
     setDbMockRows,
+    setDbMockTableRows,
 } from "../mocks/db";
 
 const envMock: { JOBTOKEN?: string; ROUTER_URL: string } = {
@@ -672,12 +673,28 @@ describe("POST /jobs/create", () => {
 describe("job candidate endpoints", () => {
     const currentJobId = "411ba9ee-e2aa-42c4-880f-8cda75d2e6ad";
     type CandidateResponse = {
+        driverName: string;
         state: string;
         currentJobId?: string;
         precedingJobIds: string[];
         followingJobs: unknown[];
         maximumFollowingLatenessSeconds: number;
         routeDurationSeconds: number;
+    };
+
+    const setDriverUsers = (...drivers: [id: string, name: string][]) => {
+        const [exampleUserRow] = getDbMockTableRows("user");
+        if (!exampleUserRow) throw new Error("Expected user fixture data");
+
+        setDbMockTableRows(
+            "user",
+            drivers.map(([id, name]) => {
+                const userRow = [...exampleUserRow];
+                userRow[0] = id;
+                userRow[1] = name;
+                return userRow;
+            }),
+        );
     };
 
     const setTargetAndCurrentJobRows = (
@@ -704,7 +721,7 @@ describe("job candidate endpoints", () => {
         currentRow[5] = currentDueDate;
         currentRow[7] = currentStartedAt;
 
-        setDbMockRows("select", [targetRow, currentRow]);
+        setDbMockTableRows("job", [targetRow, currentRow]);
     };
 
     const routeResponse = (
@@ -784,8 +801,8 @@ describe("job candidate endpoints", () => {
 
     it("POST /jobs/candidates calculates candidates without loading a target job", async () => {
         getSessionMock.mockResolvedValue(session);
-        setDbMockRows("select", []);
-        trackCache.set("free-driver", {
+        setDbMockTableRows("job", []);
+        trackCache.set("user-1", {
             type: "update",
             latitude: 48.1,
             longitude: 16.2,
@@ -809,8 +826,11 @@ describe("job candidate endpoints", () => {
         const body = (await response.json()) as Record<string, unknown>[];
 
         expect(response.status).toBe(200);
-        expect(body.map(({ driverId }) => driverId)).toEqual(["free-driver"]);
-        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        expect(body.map(({ driverId }) => driverId)).toEqual(["user-1"]);
+        expect(body.map(({ driverName }) => driverName)).toEqual([
+            "Test Driver",
+        ]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(2);
         const { sql } = getFirstQuery();
         expect(sql).toContain('"assigned_driver_id" in ($1)');
         expect(sql).toContain('"completed_at" is null');
@@ -862,6 +882,10 @@ describe("job candidate endpoints", () => {
     it("ranks on-time drivers by final approach and routes earlier backlog first", async () => {
         getSessionMock.mockResolvedValue(session);
         setTargetAndCurrentJobRows(null);
+        setDriverUsers(
+            ["busy-driver", "Busy Driver"],
+            ["free-driver", "Free Driver"],
+        );
         trackCache.set("busy-driver", {
             type: "update",
             latitude: 48.2,
@@ -908,6 +932,7 @@ describe("job candidate endpoints", () => {
         ]);
         expect(body[0]).toEqual({
             driverId: "busy-driver",
+            driverName: "Busy Driver",
             state: "free",
             latitude: 48.2,
             longitude: 16.3,
@@ -925,6 +950,7 @@ describe("job candidate endpoints", () => {
         });
         expect(body[1]).toEqual({
             driverId: "free-driver",
+            driverName: "Free Driver",
             state: "free",
             latitude: 48.1,
             longitude: 16.2,
@@ -984,6 +1010,7 @@ describe("job candidate endpoints", () => {
             "2026-08-05T09:00:00.000",
             "2026-08-05T08:55:00.000",
         );
+        setDriverUsers(["busy-driver", "Busy Driver"]);
         trackCache.set("busy-driver", {
             type: "update",
             latitude: 48.2,
@@ -1010,6 +1037,7 @@ describe("job candidate endpoints", () => {
 
         expect(response.status).toBe(200);
         expect(candidate?.state).toBe(state);
+        expect(candidate?.driverName).toBe("Busy Driver");
         expect(candidate?.currentJobId).toBe(currentJobId);
         expect(candidate?.precedingJobIds).toEqual([currentJobId]);
 
@@ -1029,6 +1057,7 @@ describe("job candidate endpoints", () => {
             "2099-08-05T10:10:00.000",
             "2099-08-05T11:00:00.000",
         );
+        setDriverUsers(["busy-driver", "Busy Driver"]);
         trackCache.set("busy-driver", {
             type: "update",
             latitude: 48.2,
@@ -1077,6 +1106,10 @@ describe("job candidate endpoints", () => {
     it("ranks immediate jobs by the earliest pickup time", async () => {
         getSessionMock.mockResolvedValue(session);
         setTargetAndCurrentJobRows(null, "2020-08-05T12:00:00.000");
+        setDriverUsers(
+            ["slow-driver", "Slow Driver"],
+            ["fast-driver", "Fast Driver"],
+        );
         trackCache.set("slow-driver", {
             type: "update",
             latitude: 48.1,
