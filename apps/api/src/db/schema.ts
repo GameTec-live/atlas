@@ -99,6 +99,7 @@ export const vehicle = pgTable(
     "vehicle",
     {
         id: uuid("id").primaryKey().defaultRandom(),
+        fingerprint: text("fingerprint").unique(),
         brand: text("brand").notNull(),
         model: text("model").notNull(),
         year: timestamp("year").notNull(),
@@ -115,6 +116,7 @@ export const vehicle = pgTable(
             .notNull(),
     },
     (table) => [
+        index("vehicle_fingerprint_idx").on(table.fingerprint),
         index("vehicle_licensePlate_idx").on(table.licensePlate),
         index("vehicle_brand_idx").on(table.brand),
         index("vehicle_model_idx").on(table.model),

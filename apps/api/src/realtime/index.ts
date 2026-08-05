@@ -1,6 +1,14 @@
 import { Elysia } from "elysia";
 import { authHandler } from "../authHandler";
+import {
+    cacheTrackMessage,
+    deleteCachedTrackMessage,
+    startTelemetryPersistence,
+    stopTelemetryPersistence,
+} from "./cache";
 import { type NotifyResponse, RealtimeModel } from "./model";
+
+export { persistVehicleTelemetry, trackCache } from "./cache";
 
 const BROADCAST_TRACK_TOPIC = "api:ws:track";
 const BROADCAST_NOTIFY_TOPIC = "api:ws:notify:";
@@ -26,6 +34,8 @@ export const realtime = new Elysia({
     },
 })
     .use(authHandler)
+    .onStart(startTelemetryPersistence)
+    .onStop(stopTelemetryPersistence)
     .get("/", () => {
         return {
             message: "Realtime endpoints: /track, /notify",
@@ -47,9 +57,11 @@ export const realtime = new Elysia({
                 userId: ws.data.user.id,
                 userName: ws.data.user.name,
             });
+            cacheTrackMessage(ws.data.user.id, message);
         },
         close(ws) {
             ws.unsubscribe(BROADCAST_TRACK_TOPIC);
+            deleteCachedTrackMessage(ws.data.user.id);
             ws.publish(BROADCAST_TRACK_TOPIC, {
                 type: "connectionChange",
                 userId: ws.data.user.id,

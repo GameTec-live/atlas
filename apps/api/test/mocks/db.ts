@@ -98,6 +98,7 @@ export const exampleData = {
     vehicle: [
         {
             id: vehicleId,
+            fingerprint: null,
             brand: "Volkswagen",
             model: "Transporter",
             year: new Date("2024-01-01T00:00:00.000Z"),
@@ -238,6 +239,7 @@ const defaultTableRows: Record<TableName, unknown[][]> = {
     ]),
     vehicle: exampleData.vehicle.map((row) => [
         row.id,
+        row.fingerprint,
         row.brand,
         row.model,
         toTimestamp(row.year),

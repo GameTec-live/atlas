@@ -17,7 +17,9 @@ const trackMessage = t.Object({
         occupied: "occupied",
         away: "away",
     }),
-    fuelLevel: t.Optional(t.Number()),
+    vehicleId: t.Optional(t.String({ format: "uuid" })),
+    fuelLevel: t.Optional(t.Number({ minimum: 0, maximum: 100 })),
+    odometer: t.Optional(t.Number({ minimum: 0 })),
 });
 
 const trackInputMessage = t.Omit(trackMessage, ["userId", "userName"]);
@@ -50,3 +52,4 @@ export const RealtimeModel = {
 } as const;
 
 export type NotifyResponse = Static<typeof RealtimeModel.notifyResponse>;
+export type TrackInputMessage = Static<typeof RealtimeModel.trackInputMessage>;

@@ -117,6 +117,9 @@ describe("fleet authentication", () => {
         ["POST", "/vehicles", vehicleBody],
         ["PUT", `/vehicles/${vehicleId}`, { model: "Crafter" }],
         ["DELETE", `/vehicles/${vehicleId}`, undefined],
+        ["GET", "/fingerprint/device-123", undefined],
+        ["GET", "/fingerprint/candidates", undefined],
+        ["POST", "/fingerprint/pair", { vehicleId, fingerprint: "device-123" }],
     ])("returns 401 for an unauthenticated %s %s", async (method, path, body) => {
         const response = await app.handle(
             new Request(`http://localhost/fleet${path}`, {
@@ -135,8 +138,6 @@ describe("fleet authentication", () => {
     });
 
     it.each([
-        ["GET", "/vehicles", undefined],
-        ["GET", `/vehicles/${vehicleId}`, undefined],
         ["POST", "/vehicles", vehicleBody],
         ["PUT", `/vehicles/${vehicleId}`, { model: "Crafter" }],
         ["DELETE", `/vehicles/${vehicleId}`, undefined],
@@ -255,17 +256,33 @@ describe("GET /fleet/vehicles/:id", () => {
 describe("POST /fleet/vehicles", () => {
     it("creates a vehicle using every supported field", async () => {
         getSessionMock.mockResolvedValue(adminSession);
+        const createdVehicleRow = first(
+            getDbMockTableRows("vehicle"),
+            "vehicle row",
+        );
+        createdVehicleRow[2] = vehicleBody.brand;
+        createdVehicleRow[3] = vehicleBody.model;
+        createdVehicleRow[4] = vehicleBody.year.slice(0, -1);
+        createdVehicleRow[5] = vehicleBody.licensePlate;
+        createdVehicleRow[6] = vehicleBody.odometer;
+        createdVehicleRow[7] = vehicleBody.fuelLevel;
+        createdVehicleRow[8] = vehicleBody.maintenanceEvery;
+        createdVehicleRow[9] = vehicleBody.assessmentMonth.slice(0, -1);
+        createdVehicleRow[10] = vehicleBody.smartSupport;
+        setDbMockRows("insert", [createdVehicleRow]);
 
         const response = await jsonRequest("/vehicles", "POST", vehicleBody);
 
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual({
-            message: "Vehicle created successfully",
+            ...serializedVehicle,
+            ...vehicleBody,
         });
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
         const { sql, values } = getFirstQuery();
         expect(sql).toContain('insert into "vehicle"');
+        expect(sql).toContain("returning");
         expect(values).toEqual([
             vehicleBody.brand,
             vehicleBody.model,
@@ -283,12 +300,43 @@ describe("POST /fleet/vehicles", () => {
         getSessionMock.mockResolvedValue(adminSession);
         const { odometer, fuelLevel, smartSupport, ...requiredBody } =
             vehicleBody;
+        const createdVehicleRow = first(
+            getDbMockTableRows("vehicle"),
+            "vehicle row",
+        );
+        createdVehicleRow[2] = requiredBody.brand;
+        createdVehicleRow[3] = requiredBody.model;
+        createdVehicleRow[4] = requiredBody.year.slice(0, -1);
+        createdVehicleRow[5] = requiredBody.licensePlate;
+        createdVehicleRow[6] = null;
+        createdVehicleRow[7] = null;
+        createdVehicleRow[8] = requiredBody.maintenanceEvery;
+        createdVehicleRow[9] = requiredBody.assessmentMonth.slice(0, -1);
+        createdVehicleRow[10] = true;
+        setDbMockRows("insert", [createdVehicleRow]);
 
         const response = await jsonRequest("/vehicles", "POST", requiredBody);
 
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual({
-            message: "Vehicle created successfully",
+            ...serializedVehicle,
+            ...requiredBody,
+            odometer: null,
+            fuelLevel: null,
+            smartSupport: true,
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 500 when the inserted vehicle is not returned", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRows("insert", []);
+
+        const response = await jsonRequest("/vehicles", "POST", vehicleBody);
+
+        expect(response.status).toBe(500);
+        expect(await response.json()).toEqual({
+            error: "Failed to create vehicle",
         });
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
     });
@@ -427,5 +475,187 @@ describe("DELETE /fleet/vehicles/:id", () => {
 
         expect(response.status).toBe(422);
         expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("GET /fleet/fingerprint/:fingerprint", () => {
+    it("returns the vehicle paired with the fingerprint", async () => {
+        getSessionMock.mockResolvedValue(session);
+        const vehicleRow = first(getDbMockTableRows("vehicle"), "vehicle row");
+        vehicleRow[1] = "device-123";
+        setDbMockRows("select", [vehicleRow]);
+
+        const response = await request("/fingerprint/device-123");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+            ...serializedVehicle,
+            fingerprint: "device-123",
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain(
+            'from "vehicle" where "vehicle"."fingerprint" = $1',
+        );
+        expect(values).toEqual(["device-123"]);
+    });
+
+    it("returns 404 when no vehicle has the fingerprint", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockRows("select", []);
+
+        const response = await request("/fingerprint/unknown-device");
+
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({ error: "Vehicle not found" });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 500 when the lookup fails", async () => {
+        getSessionMock.mockResolvedValue(session);
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database unavailable"),
+        );
+
+        const response = await request("/fingerprint/device-123");
+
+        expect(response.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("GET /fleet/fingerprint/candidates", () => {
+    it("returns only the pairing fields for unpaired vehicles", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockRows("select", [
+            [
+                exampleVehicle.id,
+                exampleVehicle.brand,
+                exampleVehicle.model,
+                exampleVehicle.year.toISOString().slice(0, -1),
+                exampleVehicle.licensePlate,
+            ],
+        ]);
+
+        const response = await request("/fingerprint/candidates");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([
+            {
+                id: exampleVehicle.id,
+                brand: exampleVehicle.brand,
+                model: exampleVehicle.model,
+                year: exampleVehicle.year.toISOString(),
+                licensePlate: exampleVehicle.licensePlate,
+            },
+        ]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain(
+            'select "id", "brand", "model", "year", "license_plate" from "vehicle"',
+        );
+        expect(sql).toContain('"vehicle"."fingerprint" is null');
+        expect(values).toEqual([]);
+    });
+
+    it("returns an empty list when every vehicle is already paired", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockRows("select", []);
+
+        const response = await request("/fingerprint/candidates");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 500 when the candidate lookup fails", async () => {
+        getSessionMock.mockResolvedValue(session);
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database unavailable"),
+        );
+
+        const response = await request("/fingerprint/candidates");
+
+        expect(response.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("POST /fleet/fingerprint/pair", () => {
+    it("pairs a fingerprint with an unpaired vehicle", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockRowCount("update", 1);
+
+        const response = await jsonRequest("/fingerprint/pair", "POST", {
+            vehicleId,
+            fingerprint: "device-123",
+        });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+            message: "Fingerprint paired successfully",
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain(
+            'update "vehicle" set "fingerprint" = $1, "updated_at" = $2',
+        );
+        expect(sql).toContain('"vehicle"."id" = $3');
+        expect(sql).toContain('"vehicle"."fingerprint" is null');
+        expect(values).toHaveLength(3);
+        expect(values[0]).toBe("device-123");
+        expect(values[1]).toEqual(expect.any(String));
+        expect(values[2]).toBe(vehicleId);
+    });
+
+    it("returns 404 when the vehicle is missing or already paired", async () => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await jsonRequest("/fingerprint/pair", "POST", {
+            vehicleId,
+            fingerprint: "device-123",
+        });
+
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({
+            error: "Vehicle not found or already paired",
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        ["a missing vehicle id", { fingerprint: "device-123" }],
+        [
+            "a non-UUID vehicle id",
+            { vehicleId: "not-a-uuid", fingerprint: "device-123" },
+        ],
+        ["a missing fingerprint", { vehicleId }],
+        ["a non-string fingerprint", { vehicleId, fingerprint: 123 }],
+    ])("returns 422 for %s without updating the database", async (_, body) => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await jsonRequest("/fingerprint/pair", "POST", body);
+
+        expect(response.status).toBe(422);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 when the update fails", async () => {
+        getSessionMock.mockResolvedValue(session);
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database unavailable"),
+        );
+
+        const response = await jsonRequest("/fingerprint/pair", "POST", {
+            vehicleId,
+            fingerprint: "device-123",
+        });
+
+        expect(response.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
     });
 });

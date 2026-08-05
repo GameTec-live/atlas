@@ -7,6 +7,7 @@ export const RoleModel = {
             "id",
             "createdAt",
             "updatedAt",
+            "driverId",
         ]).properties,
     }),
 } as const;

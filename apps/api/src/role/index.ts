@@ -4,7 +4,7 @@ import { DatabaseError } from "pg";
 import { authHandler } from "../authHandler";
 import { config } from "../config";
 import { db } from "../db";
-import { role } from "../db/schema";
+import { role, user } from "../db/schema";
 import { RoleModel } from "./model";
 
 const dispatcherLockNamespace = 0x524f4c45; // ASCII "ROLE"
@@ -21,8 +21,10 @@ export const roles = new Elysia({
                 .select({
                     driverId: role.driverId,
                     role: role.role,
+                    name: user.name,
                 })
                 .from(role)
+                .innerJoin(user, eq(role.driverId, user.id))
                 .where(eq(role.date, new Date()));
 
             const numOfDispatchers = roles.filter(
@@ -44,7 +46,7 @@ export const roles = new Elysia({
     )
     .post(
         "/",
-        async ({ body }) => {
+        async ({ body, user }) => {
             try {
                 if (body.role === "dispatcher") {
                     const assignmentDate = body.date ?? new Date();
@@ -75,7 +77,10 @@ export const roles = new Elysia({
                             return false;
                         }
 
-                        await tx.insert(role).values(body);
+                        await tx.insert(role).values({
+                            ...body,
+                            driverId: user.id,
+                        });
                         return true;
                     });
 
@@ -88,7 +93,10 @@ export const roles = new Elysia({
                     });
                 }
 
-                await db.insert(role).values(body);
+                await db.insert(role).values({
+                    ...body,
+                    driverId: user.id,
+                });
             } catch (e) {
                 if (e instanceof DrizzleQueryError) {
                     if (e.cause instanceof DatabaseError) {

@@ -10,6 +10,8 @@ import { BUILD_INFO } from "./constants";
 import { runMigrations } from "./db/migrate";
 import { fleet } from "./fleet";
 import { geoservices } from "./geoservices";
+import { jobs } from "./jobs";
+import { logbooks } from "./logbooks";
 import { realtime } from "./realtime";
 import { roles } from "./role";
 
@@ -59,12 +61,24 @@ const scalar = {
     showDeveloperTools: "never",
 } satisfies ScalarConfiguration;
 
+const openAPIComponents = await OpenAPI.components;
+
 export const app = new Elysia()
     .use(
         openapi({
             references,
             documentation: {
-                components: await OpenAPI.components,
+                components: {
+                    ...openAPIComponents,
+                    securitySchemes: {
+                        ...openAPIComponents.securitySchemes,
+                        APIKeyAuth: {
+                            type: "apiKey",
+                            in: "header",
+                            name: "Authorization",
+                        },
+                    },
+                },
                 paths: await OpenAPI.getPaths(),
                 info: {
                     title: "Atlas API",
@@ -91,6 +105,8 @@ export const app = new Elysia()
     .use(geoservices)
     .use(fleet)
     .use(roles)
+    .use(jobs)
+    .use(logbooks)
     .get("/", () => {
         return {
             message:
