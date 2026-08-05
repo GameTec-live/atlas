@@ -1,0 +1,73 @@
+type: http_request
+model: http_request
+id: rq_Fut9v4kHGQ
+createdAt: 2026-08-05T09:09:03.869099800
+updatedAt: 2026-08-05T09:09:03.869100200
+workspaceId: wk_gbXsp49jy7
+folderId: fl_QFm98Q59yE
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  form:
+  - enabled: true
+    name: brand
+    value: <string>
+  - enabled: true
+    name: model
+    value: <string>
+  - enabled: true
+    name: year
+    value: <Date>
+  - enabled: true
+    name: licensePlate
+    value: <string>
+  - enabled: true
+    name: maintenanceEvery
+    value: <number>
+  - enabled: true
+    name: assessmentMonth
+    value: <Date>
+  - enabled: true
+    name: fingerprint
+    value: <string>
+  - enabled: true
+    name: odometer
+    value: <number>
+  - enabled: true
+    name: fuelLevel
+    value: <number>
+  - enabled: true
+    name: smartSupport
+    value: <boolean>
+bodyType: application/x-www-form-urlencoded
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/x-www-form-urlencoded
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: post Fleet Vehicles
+sortPriority: 13.0
+url: ${[baseUrl]}/fleet/vehicles
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

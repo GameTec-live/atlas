@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import { Elysia } from "elysia";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
 import {
@@ -10,14 +10,27 @@ import {
     setDbMockRows,
 } from "../mocks/db";
 
-const envMock: { JOBTOKEN?: string } = {};
+const envMock: { JOBTOKEN?: string; ROUTER_URL: string } = {
+    ROUTER_URL: "http://router.test",
+};
 
 mock.module("@/env", () => ({
     env: envMock,
 }));
 
 const { jobs } = await import("@/src/jobs");
+const { trackCache } = await import("@/src/realtime");
 const app = new Elysia().use(jobs);
+
+const originalFetch = globalThis.fetch;
+const fetchMock = mock(
+    async (
+        _input: string | URL | Request,
+        _init?: RequestInit,
+    ): Promise<Response> => {
+        throw new Error("Unexpected routing request");
+    },
+);
 
 const jobBody = {
     assignedDriverId: "user-1",
@@ -140,6 +153,28 @@ const getJobRequest = (authenticated = true, id = jobId) => {
     return app.handle(new Request(`http://localhost/jobs/${id}`, { headers }));
 };
 
+const candidatesRequest = (authenticated = true, id = jobId) => {
+    const headers = new Headers();
+    if (authenticated) headers.set("authorization", "Bearer test-token");
+
+    return app.handle(
+        new Request(`http://localhost/jobs/${id}/candidates`, { headers }),
+    );
+};
+
+const adhocCandidatesRequest = (body: unknown, authenticated = true) => {
+    const headers = new Headers({ "content-type": "application/json" });
+    if (authenticated) headers.set("authorization", "Bearer test-token");
+
+    return app.handle(
+        new Request("http://localhost/jobs/candidates", {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+        }),
+    );
+};
+
 const getFirstQuery = () => {
     const call = dbClientQueryMock.mock.calls[0];
     if (!call) throw new Error("Expected a database call");
@@ -173,6 +208,13 @@ beforeEach(() => {
     envMock.JOBTOKEN = undefined;
     resetAuthMocks();
     resetDbMocks();
+    trackCache.clear();
+    fetchMock.mockReset();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+});
+
+afterAll(() => {
+    globalThis.fetch = originalFetch;
 });
 
 describe("GET /jobs/assigned", () => {
@@ -624,6 +666,454 @@ describe("POST /jobs/create", () => {
 
         expect(response.status).toBe(500);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("job candidate endpoints", () => {
+    const currentJobId = "411ba9ee-e2aa-42c4-880f-8cda75d2e6ad";
+    type CandidateResponse = {
+        state: string;
+        currentJobId?: string;
+        precedingJobIds: string[];
+        followingJobs: unknown[];
+        maximumFollowingLatenessSeconds: number;
+        routeDurationSeconds: number;
+    };
+
+    const setTargetAndCurrentJobRows = (
+        assignedDriverId: string | null,
+        dueDate = "2099-08-05T12:00:00.000",
+        currentDueDate = "2026-08-05T09:00:00.000",
+        currentStartedAt: string | null = null,
+    ) => {
+        const [targetRow] = getDbMockTableRows("job");
+        if (!targetRow) throw new Error("Expected job fixture data");
+
+        targetRow[1] = assignedDriverId;
+        targetRow[3] = "(48.5,16.6)";
+        targetRow[4] = "(48.6,16.7)";
+        targetRow[5] = dueDate;
+        targetRow[7] = null;
+        targetRow[8] = null;
+
+        const currentRow = [...targetRow];
+        currentRow[0] = currentJobId;
+        currentRow[1] = "busy-driver";
+        currentRow[3] = "(48.3,16.4)";
+        currentRow[4] = "(48.4,16.5)";
+        currentRow[5] = currentDueDate;
+        currentRow[7] = currentStartedAt;
+
+        setDbMockRows("select", [targetRow, currentRow]);
+    };
+
+    const routeResponse = (
+        points: { lat: number; lon: number }[],
+        times: number[],
+    ) => {
+        const summary = (time: number) => ({
+            has_time_restrictions: false,
+            has_toll: false,
+            has_highway: false,
+            has_ferry: false,
+            min_lat: Math.min(...points.map(({ lat }) => lat)),
+            min_lon: Math.min(...points.map(({ lon }) => lon)),
+            max_lat: Math.max(...points.map(({ lat }) => lat)),
+            max_lon: Math.max(...points.map(({ lon }) => lon)),
+            time,
+            length: time / 100,
+            cost: time,
+        });
+        const totalTime = times.reduce((total, time) => total + time, 0);
+
+        return {
+            trip: {
+                locations: points.map((point, index) => ({
+                    type: "break",
+                    ...point,
+                    original_index: index,
+                })),
+                legs: times.map((time) => ({
+                    summary: summary(time),
+                    shape: "encoded-route-shape",
+                })),
+                summary: summary(totalTime),
+                status_message: "Found route between points",
+                status: 0,
+                units: "kilometers",
+                language: "en-US",
+            },
+        };
+    };
+
+    it("POST /jobs/candidates requires authentication", async () => {
+        const response = await adhocCandidatesRequest(
+            { from: [48.5, 16.6] },
+            false,
+        );
+
+        expect(response.status).toBe(401);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("POST /jobs/candidates validates the ad-hoc job", async () => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await adhocCandidatesRequest({
+            dueDate: "2099-08-05T12:00:00.000Z",
+        });
+
+        expect(response.status).toBe(422);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("POST /jobs/candidates defaults an omitted due date to now", async () => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await adhocCandidatesRequest({
+            from: [48.5, 16.6],
+        });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("POST /jobs/candidates calculates candidates without loading a target job", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockRows("select", []);
+        trackCache.set("free-driver", {
+            type: "update",
+            latitude: 48.1,
+            longitude: 16.2,
+            state: "free",
+        });
+        fetchMock.mockImplementation(async (input) => {
+            const routerUrl = new URL(String(input));
+            const query = JSON.parse(routerUrl.searchParams.get("json") ?? "");
+            const points = query.locations.map(
+                ({ lat, lon }: { lat: number; lon: number }) => ({ lat, lon }),
+            );
+
+            return Response.json(routeResponse(points, [300]));
+        });
+
+        const response = await adhocCandidatesRequest({
+            from: [48.5, 16.6],
+            to: [48.6, 16.7],
+            dueDate: "2099-08-05T12:00:00.000Z",
+        });
+        const body = (await response.json()) as Record<string, unknown>[];
+
+        expect(response.status).toBe(200);
+        expect(body.map(({ driverId }) => driverId)).toEqual(["free-driver"]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        const { sql } = getFirstQuery();
+        expect(sql).toContain('"assigned_driver_id" in ($1)');
+        expect(sql).toContain('"completed_at" is null');
+
+        const routerUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+        const route = JSON.parse(routerUrl.searchParams.get("json") ?? "");
+        expect(
+            route.locations.map(
+                ({ lat, lon }: { lat: number; lon: number }) => [lat, lon],
+            ),
+        ).toEqual([
+            [48.1, 16.2],
+            [48.5, 16.6],
+        ]);
+    });
+
+    it("returns 401 without a session", async () => {
+        const response = await candidatesRequest(false);
+
+        expect(response.status).toBe(401);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 when the job does not exist", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockRows("select", []);
+
+        const response = await candidatesRequest();
+
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({ error: "Job not found" });
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects candidate calculation for an already assigned job", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setTargetAndCurrentJobRows("existing-driver");
+
+        const response = await candidatesRequest();
+
+        expect(response.status).toBe(409);
+        expect(await response.json()).toEqual({
+            error: "Job is already assigned",
+        });
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("ranks on-time drivers by final approach and routes earlier backlog first", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setTargetAndCurrentJobRows(null);
+        trackCache.set("busy-driver", {
+            type: "update",
+            latitude: 48.2,
+            longitude: 16.3,
+            state: "free",
+        });
+        trackCache.set("free-driver", {
+            type: "update",
+            latitude: 48.1,
+            longitude: 16.2,
+            state: "free",
+        });
+        trackCache.set("away-driver", {
+            type: "update",
+            latitude: 48,
+            longitude: 16.1,
+            state: "away",
+        });
+        trackCache.set("unpredictable-driver", {
+            type: "update",
+            latitude: 48.6,
+            longitude: 16.7,
+            state: "occupied",
+        });
+        fetchMock.mockImplementation(async (input) => {
+            const routerUrl = new URL(String(input));
+            const query = JSON.parse(routerUrl.searchParams.get("json") ?? "");
+            const points = query.locations.map(
+                ({ lat, lon }: { lat: number; lon: number }) => ({ lat, lon }),
+            );
+            const times = points.length === 4 ? [400, 450, 50] : [300];
+
+            return Response.json(routeResponse(points, times));
+        });
+
+        const response = await candidatesRequest();
+        const body = (await response.json()) as Record<string, unknown>[];
+
+        expect(response.status).toBe(200);
+        expect(body).toHaveLength(2);
+        expect(body.map(({ driverId }) => driverId)).toEqual([
+            "busy-driver",
+            "free-driver",
+        ]);
+        expect(body[0]).toEqual({
+            driverId: "busy-driver",
+            state: "free",
+            latitude: 48.2,
+            longitude: 16.3,
+            precedingJobIds: [currentJobId],
+            followingJobs: [],
+            estimatedArrivalAt: expect.any(String),
+            estimatedPickupAt: expect.any(String),
+            routeDurationSeconds: 900,
+            waitingDurationSeconds: expect.any(Number),
+            routeDistanceKilometers: 9,
+            approachDurationSeconds: 50,
+            approachDistanceKilometers: 0.5,
+            lateBySeconds: 0,
+            maximumFollowingLatenessSeconds: 0,
+        });
+        expect(body[1]).toEqual({
+            driverId: "free-driver",
+            state: "free",
+            latitude: 48.1,
+            longitude: 16.2,
+            precedingJobIds: [],
+            followingJobs: [],
+            estimatedArrivalAt: expect.any(String),
+            estimatedPickupAt: expect.any(String),
+            routeDurationSeconds: 300,
+            waitingDurationSeconds: expect.any(Number),
+            routeDistanceKilometers: 3,
+            approachDurationSeconds: 300,
+            approachDistanceKilometers: 3,
+            lateBySeconds: 0,
+            maximumFollowingLatenessSeconds: 0,
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+
+        const busyRouteUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+        const busyRoute = JSON.parse(
+            busyRouteUrl.searchParams.get("json") ?? "",
+        );
+        expect(
+            busyRoute.locations.map(
+                ({ lat, lon }: { lat: number; lon: number }) => [lat, lon],
+            ),
+        ).toEqual([
+            [48.2, 16.3],
+            [48.3, 16.4],
+            [48.4, 16.5],
+            [48.5, 16.6],
+        ]);
+    });
+
+    it.each([
+        [
+            "onTheWay" as const,
+            [
+                [48.2, 16.3],
+                [48.3, 16.4],
+                [48.4, 16.5],
+                [48.5, 16.6],
+            ],
+        ],
+        [
+            "occupied" as const,
+            [
+                [48.2, 16.3],
+                [48.4, 16.5],
+                [48.5, 16.6],
+            ],
+        ],
+    ])("uses telemetry state %s for a started job", async (state, expectedPoints) => {
+        getSessionMock.mockResolvedValue(session);
+        setTargetAndCurrentJobRows(
+            null,
+            "2099-08-05T12:00:00.000",
+            "2026-08-05T09:00:00.000",
+            "2026-08-05T08:55:00.000",
+        );
+        trackCache.set("busy-driver", {
+            type: "update",
+            latitude: 48.2,
+            longitude: 16.3,
+            state,
+        });
+        fetchMock.mockImplementation(async (input) => {
+            const routerUrl = new URL(String(input));
+            const query = JSON.parse(routerUrl.searchParams.get("json") ?? "");
+            const points = query.locations.map(
+                ({ lat, lon }: { lat: number; lon: number }) => ({ lat, lon }),
+            );
+
+            return Response.json(
+                routeResponse(
+                    points,
+                    Array.from({ length: points.length - 1 }, () => 100),
+                ),
+            );
+        });
+
+        const response = await candidatesRequest();
+        const [candidate] = (await response.json()) as CandidateResponse[];
+
+        expect(response.status).toBe(200);
+        expect(candidate?.state).toBe(state);
+        expect(candidate?.currentJobId).toBe(currentJobId);
+        expect(candidate?.precedingJobIds).toEqual([currentJobId]);
+
+        const routerUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+        const route = JSON.parse(routerUrl.searchParams.get("json") ?? "");
+        expect(
+            route.locations.map(
+                ({ lat, lon }: { lat: number; lon: number }) => [lat, lon],
+            ),
+        ).toEqual(expectedPoints);
+    });
+
+    it("inserts a sooner job before later backlog and verifies the later pickup", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setTargetAndCurrentJobRows(
+            null,
+            "2099-08-05T10:10:00.000",
+            "2099-08-05T11:00:00.000",
+        );
+        trackCache.set("busy-driver", {
+            type: "update",
+            latitude: 48.2,
+            longitude: 16.3,
+            state: "free",
+        });
+        fetchMock.mockImplementation(async (input) => {
+            const routerUrl = new URL(String(input));
+            const query = JSON.parse(routerUrl.searchParams.get("json") ?? "");
+            const points = query.locations.map(
+                ({ lat, lon }: { lat: number; lon: number }) => ({ lat, lon }),
+            );
+
+            return Response.json(routeResponse(points, [300, 600, 300]));
+        });
+
+        const response = await candidatesRequest();
+        const [candidate] = (await response.json()) as CandidateResponse[];
+
+        expect(response.status).toBe(200);
+        expect(candidate?.precedingJobIds).toEqual([]);
+        expect(candidate?.followingJobs).toEqual([
+            {
+                jobId: currentJobId,
+                estimatedPickupAt: "2099-08-05T11:00:00.000Z",
+                lateBySeconds: 0,
+            },
+        ]);
+        expect(candidate?.maximumFollowingLatenessSeconds).toBe(0);
+        expect(candidate?.routeDurationSeconds).toBe(300);
+
+        const routerUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+        const route = JSON.parse(routerUrl.searchParams.get("json") ?? "");
+        expect(
+            route.locations.map(
+                ({ lat, lon }: { lat: number; lon: number }) => [lat, lon],
+            ),
+        ).toEqual([
+            [48.2, 16.3],
+            [48.5, 16.6],
+            [48.6, 16.7],
+            [48.3, 16.4],
+        ]);
+    });
+
+    it("ranks immediate jobs by the earliest pickup time", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setTargetAndCurrentJobRows(null, "2020-08-05T12:00:00.000");
+        trackCache.set("slow-driver", {
+            type: "update",
+            latitude: 48.1,
+            longitude: 16.2,
+            state: "free",
+        });
+        trackCache.set("fast-driver", {
+            type: "update",
+            latitude: 48.2,
+            longitude: 16.3,
+            state: "free",
+        });
+        fetchMock.mockImplementation(async (input) => {
+            const routerUrl = new URL(String(input));
+            const query = JSON.parse(routerUrl.searchParams.get("json") ?? "");
+            const points = query.locations.map(
+                ({ lat, lon }: { lat: number; lon: number }) => ({ lat, lon }),
+            );
+            const duration = points[0]?.lat === 48.2 ? 100 : 500;
+
+            return Response.json(routeResponse(points, [duration]));
+        });
+
+        const response = await candidatesRequest();
+        const body = (await response.json()) as Record<string, unknown>[];
+
+        expect(response.status).toBe(200);
+        expect(body.map(({ driverId }) => driverId)).toEqual([
+            "fast-driver",
+            "slow-driver",
+        ]);
+        expect(
+            body.map(({ routeDurationSeconds }) => routeDurationSeconds),
+        ).toEqual([100, 500]);
+        expect(
+            body.every(({ lateBySeconds }) => Number(lateBySeconds) > 0),
+        ).toBeTrue();
     });
 });
 

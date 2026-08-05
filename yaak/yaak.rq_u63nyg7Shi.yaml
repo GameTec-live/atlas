@@ -1,34 +1,25 @@
 type: http_request
 model: http_request
-id: rq_uCbiBhoYqX
-createdAt: 2026-07-21T07:20:50.703489700
-updatedAt: 2026-08-05T09:11:20.384871700
+id: rq_u63nyg7Shi
+createdAt: 2026-08-05T09:09:04.137962700
+updatedAt: 2026-08-05T09:09:04.137963100
 workspaceId: wk_gbXsp49jy7
-folderId: fl_Pe9scVD4yF
+folderId: fl_MQZcoedbXv
 authentication:
   token: ${[bearerToken]}
 authenticationType: bearer
-body:
-  text: |-
-    {
-      "email": "test@gametec.live",
-      "password": "12345678"
-    }
-bodyType: application/json
-description: Sign in with email and password
+body: {}
+bodyType: null
+description: ''
 headers:
-- enabled: true
-  name: Content-Type
-  value: application/json
-  id: null
 - enabled: true
   name: Accept
   value: application/json
   id: null
-method: POST
-name: sign In Email
-sortPriority: 8.0
-url: ${[baseUrl]}/api/auth/sign-in/email
+method: GET
+name: get Roles
+sortPriority: 23.0
+url: ${[baseUrl]}/roles/
 urlParameters: []
 settingSendCookies:
   enabled: false

@@ -1,35 +1,30 @@
 type: http_request
 model: http_request
-id: rq_uCbiBhoYqX
-createdAt: 2026-07-21T07:20:50.703489700
-updatedAt: 2026-08-05T09:11:20.384871700
+id: rq_PEctrebmP5
+createdAt: 2026-08-05T09:09:03.797334400
+updatedAt: 2026-08-05T09:09:03.797334900
 workspaceId: wk_gbXsp49jy7
-folderId: fl_Pe9scVD4yF
+folderId: fl_QcJDtzoEjW
 authentication:
   token: ${[bearerToken]}
 authenticationType: bearer
-body:
-  text: |-
-    {
-      "email": "test@gametec.live",
-      "password": "12345678"
-    }
-bodyType: application/json
-description: Sign in with email and password
+body: {}
+bodyType: null
+description: ''
 headers:
-- enabled: true
-  name: Content-Type
-  value: application/json
-  id: null
 - enabled: true
   name: Accept
   value: application/json
   id: null
-method: POST
-name: sign In Email
-sortPriority: 8.0
-url: ${[baseUrl]}/api/auth/sign-in/email
-urlParameters: []
+method: GET
+name: get Fleet Fingerprint By Fingerprint
+sortPriority: 19.0
+url: ${[baseUrl]}/fleet/fingerprint/:fingerprint
+urlParameters:
+- enabled: true
+  name: :fingerprint
+  value: <string>
+  id: null
 settingSendCookies:
   enabled: false
   value: true
