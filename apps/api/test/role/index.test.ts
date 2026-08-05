@@ -16,6 +16,7 @@ const app = new Elysia().use(roles);
 
 const driverId = session.user.id;
 const secondDriverId = "user-2";
+const driverName = session.user.name;
 
 const request = (method = "GET", body?: unknown, authenticated = true) => {
     const headers = new Headers();
@@ -97,9 +98,9 @@ describe("GET /roles/", () => {
     it("returns today's roles and dispatcher capacity metadata", async () => {
         getSessionMock.mockResolvedValue(session);
         setDbMockRows("select", [
-            [driverId, "driver"],
-            [secondDriverId, "dispatcher"],
-            ["user-3", "dispatcher"],
+            [driverId, "driver", driverName],
+            [secondDriverId, "dispatcher", "Second Driver"],
+            ["user-3", "dispatcher", "Third Driver"],
         ]);
 
         const response = await request();
@@ -107,9 +108,17 @@ describe("GET /roles/", () => {
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual({
             roles: [
-                { driverId, role: "driver" },
-                { driverId: secondDriverId, role: "dispatcher" },
-                { driverId: "user-3", role: "dispatcher" },
+                { driverId, role: "driver", name: driverName },
+                {
+                    driverId: secondDriverId,
+                    role: "dispatcher",
+                    name: "Second Driver",
+                },
+                {
+                    driverId: "user-3",
+                    role: "dispatcher",
+                    name: "Third Driver",
+                },
             ],
             count: 3,
             dispatchers: 2,
@@ -121,7 +130,10 @@ describe("GET /roles/", () => {
 
         const { sql, values } = queryAt(0);
         expect(sql).toContain(
-            'select "driver_id", "role" from "role" where "role"."date" = $1',
+            'select "role"."driver_id", "role"."role", "user"."name" from "role"',
+        );
+        expect(sql).toContain(
+            'inner join "user" on "role"."driver_id" = "user"."id"',
         );
         expect(values).toHaveLength(1);
         expect(values[0]).toMatch(
