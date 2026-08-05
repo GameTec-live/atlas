@@ -5,9 +5,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.gtlv.core.repository.AuthRepository
 import org.gtlv.core.repository.AuthResult
+import org.gtlv.core.shift.ShiftSessionManager
 
 class SessionManager(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val shiftSessionManager: ShiftSessionManager
 ) {
     private val _state =
         MutableStateFlow<SessionState>(SessionState.Checking)
@@ -18,9 +20,11 @@ class SessionManager(
     suspend fun restoreSession(): SessionRestoreResult {
         val result = authRepository.restoreStoredSession()
 
-        _state.value = when (result) {
+        when (result) {
             is SessionRestoreResult.Valid -> {
-                SessionState.SignedIn(
+                shiftSessionManager.restore()
+
+                _state.value = SessionState.SignedIn(
                     userName = result.userName
                 )
             }
@@ -30,7 +34,8 @@ class SessionManager(
             SessionRestoreResult.InvalidResponse,
             SessionRestoreResult.NetworkError,
             is SessionRestoreResult.ServerError -> {
-                SessionState.SignedOut
+                shiftSessionManager.clear()
+                _state.value = SessionState.SignedOut
             }
         }
 
@@ -47,6 +52,8 @@ class SessionManager(
         )
 
         if (result is AuthResult.Success) {
+            shiftSessionManager.restore()
+
             _state.value = SessionState.SignedIn(
                 userName = result.userName
             )
@@ -56,6 +63,7 @@ class SessionManager(
     }
 
     suspend fun logout() {
+        shiftSessionManager.clear()
         authRepository.logout()
         _state.value = SessionState.SignedOut
     }

@@ -22,7 +22,9 @@ sealed interface SelectRoleResult {
 
     data object Success : SelectRoleResult
 
-    data object RoleUnavailable : SelectRoleResult
+    data class RoleUnavailable(
+        val message: String?
+    ) : SelectRoleResult
 
     data object Unauthorized : SelectRoleResult
 

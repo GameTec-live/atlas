@@ -26,4 +26,11 @@
     <string name="dispatcher_unavailable">Maximum number of dispatcher spots reached</string>
     <string name="role_selection_error">Could not select the role</string>
     <string name="shift_save_error">The role was selected, but the shift could not be saved</string>
+    <string name="select_role_title">Select your role</string>
+    <string name="select_role_description">Choose the role for your current shift</string>
+    <string name="role_dispatcher">Dispatcher</string>
+    <string name="role_driver">Driver</string>
+    <string name="dispatcher_spots_available">%1$d dispatcher spots available</string>
+    <string name="dispatcher_spot_available">1 dispatcher spot available</string>
+    <string name="role_retry">Retry</string>
 </resources>

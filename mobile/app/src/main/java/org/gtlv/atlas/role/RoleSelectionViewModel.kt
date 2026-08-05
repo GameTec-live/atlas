@@ -16,6 +16,7 @@ import org.gtlv.core.role.SelectRoleResult
 import org.gtlv.core.session.SessionManager
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.shift.ShiftSessionManager
+import android.util.Log
 
 class RoleSelectionViewModel(
     private val roleRepository: RoleRepository,
@@ -157,8 +158,6 @@ class RoleSelectionViewModel(
             return
         }
 
-        // This happens before launching the coroutine, preventing
-        // two rapid button presses from starting two requests.
         _uiState.update {
             it.copy(
                 isSelectingRole = true,
@@ -168,12 +167,19 @@ class RoleSelectionViewModel(
         }
 
         viewModelScope.launch {
-            when (val result = roleRepository.selectRole(role)) {
+            val result = roleRepository.selectRole(role)
+
+            Log.e(
+                "RoleSelection",
+                "POST /roles/ result: $result"
+            )
+
+            when (result) {
                 SelectRoleResult.Success -> {
                     saveShift(role)
                 }
 
-                SelectRoleResult.RoleUnavailable -> {
+                is SelectRoleResult.RoleUnavailable -> {
                     _uiState.update {
                         it.copy(
                             isSelectingRole = false,
@@ -197,8 +203,6 @@ class RoleSelectionViewModel(
                             )
                         )
                     }
-
-                    loadAvailability()
                 }
 
                 SelectRoleResult.Unauthorized -> {

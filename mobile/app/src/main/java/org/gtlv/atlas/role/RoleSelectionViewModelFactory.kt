@@ -1,8 +1,7 @@
-package org.gtltlv.atlas.role
+package org.gtlv.atlas.role
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import org.gtlv.atlas.role.RoleSelectionViewModel
 import org.gtlv.core.role.RoleRepository
 import org.gtlv.core.session.SessionManager
 import org.gtlv.core.shift.ShiftSessionManager

@@ -12,6 +12,7 @@ import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
 import org.json.JSONObject
 import java.io.IOException
+import android.util.Log
 
 class RoleRepositoryImpl(
     private val networkClient: NetworkClient,
@@ -102,13 +103,21 @@ class RoleRepositoryImpl(
                     val responseText =
                         response.body?.string().orEmpty()
 
+                    Log.e(
+                        "RoleRepository",
+                        "POST /roles/ code=${response.code}, " +
+                                "request=$requestJson, body=$responseText"
+                    )
+
                     when {
                         response.isSuccessful -> {
                             SelectRoleResult.Success
                         }
 
                         response.code == 409 -> {
-                            SelectRoleResult.RoleUnavailable
+                            SelectRoleResult.RoleUnavailable(
+                                message = readServerMessage(responseText)
+                            )
                         }
 
                         response.code == 401 -> {
