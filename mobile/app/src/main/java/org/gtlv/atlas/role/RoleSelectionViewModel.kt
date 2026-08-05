@@ -169,10 +169,6 @@ class RoleSelectionViewModel(
         viewModelScope.launch {
             val result = roleRepository.selectRole(role)
 
-            Log.e(
-                "RoleSelection",
-                "POST /roles/ result: $result"
-            )
 
             when (result) {
                 SelectRoleResult.Success -> {
