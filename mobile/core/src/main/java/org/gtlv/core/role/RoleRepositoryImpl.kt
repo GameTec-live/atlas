@@ -12,7 +12,6 @@ import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
 import org.json.JSONObject
 import java.io.IOException
-import android.util.Log
 
 class RoleRepositoryImpl(
     private val networkClient: NetworkClient,
@@ -103,12 +102,6 @@ class RoleRepositoryImpl(
                     val responseText =
                         response.body?.string().orEmpty()
 
-                    Log.e(
-                        "RoleRepository",
-                        "POST /roles/ code=${response.code}, " +
-                                "request=$requestJson, body=$responseText"
-                    )
-
                     when {
                         response.isSuccessful -> {
                             SelectRoleResult.Success
@@ -163,23 +156,66 @@ class RoleRepositoryImpl(
 
             if (
                 !root.has("numFree") ||
-                !root.has("free")
+                !root.has("free") ||
+                !root.has("roles")
             ) {
                 return RoleAvailabilityResult.InvalidResponse
             }
 
             val numFree = root.getInt("numFree")
             val free = root.getBoolean("free")
+            val rolesJson = root.getJSONArray("roles")
 
             if (numFree < 0) {
                 return RoleAvailabilityResult.InvalidResponse
             }
 
+            val assignedRoles = mutableListOf<AssignedRole>()
+
+            for (index in 0 until rolesJson.length()) {
+                val roleJson = rolesJson.getJSONObject(index)
+
+                val driverId = roleJson
+                    .optString("driverId")
+                    .trim()
+
+                val roleValue = roleJson
+                    .optString("role")
+                    .trim()
+                    .lowercase()
+
+                val name = roleJson
+                    .optString("name")
+                    .trim()
+                    .ifBlank { null }
+
+                if (driverId.isBlank()) {
+                    return RoleAvailabilityResult.InvalidResponse
+                }
+
+                val role = when (roleValue) {
+                    "driver" -> ShiftRole.DRIVER
+                    "dispatcher" -> ShiftRole.DISPATCHER
+
+                    else -> {
+                        return RoleAvailabilityResult.InvalidResponse
+                    }
+                }
+
+                assignedRoles.add(
+                    AssignedRole(
+                        driverId = driverId,
+                        role = role,
+                        name = name
+                    )
+                )
+            }
+
             RoleAvailabilityResult.Success(
                 availability = RoleAvailability(
                     dispatcherSpotsFree = numFree,
-                    dispatcherAvailable =
-                        free && numFree > 0
+                    dispatcherAvailable = free && numFree > 0,
+                    assignedRoles = assignedRoles
                 )
             )
         } catch (_: Exception) {
@@ -191,8 +227,10 @@ class RoleRepositoryImpl(
         responseText: String
     ): String? {
         return runCatching {
-            JSONObject(responseText)
-                .optString("message")
+            val root = JSONObject(responseText)
+
+            root.optString("message")
+                .ifBlank { root.optString("error") }
                 .ifBlank { null }
         }.getOrNull()
     }

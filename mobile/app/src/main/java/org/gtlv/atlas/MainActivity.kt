@@ -36,6 +36,8 @@ import org.gtlv.core.role.RoleRepositoryImpl
 import org.gtlv.core.shift.DataStoreShiftSessionStore
 import org.gtlv.core.shift.ShiftSessionManager
 import org.gtlv.core.shift.ShiftSessionState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -86,6 +88,7 @@ class MainActivity : ComponentActivity() {
     private val sessionManager by lazy {
         SessionManager(
             authRepository = authRepository,
+            roleRepository = roleRepository,
             shiftSessionManager = shiftSessionManager
         )
     }
@@ -112,6 +115,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AtlasTheme {
+                val coroutineScope = rememberCoroutineScope()
+
                 val loginState by loginViewModel.uiState
                     .collectAsStateWithLifecycle()
 
@@ -142,6 +147,17 @@ class MainActivity : ComponentActivity() {
                                 loginViewModel::saveServerAddress,
                             onDismissServerDialog =
                                 loginViewModel::closeServerDialog
+                        )
+                    }
+
+                    is SessionState.RoleCheckFailed -> {
+                        RoleCheckFailedScreen(
+                            onRetry = {
+                                coroutineScope.launch {
+                                    sessionManager.retryRoleCheck()
+                                }
+                            },
+                            onLogout = loginViewModel::logout
                         )
                     }
 
@@ -194,6 +210,31 @@ private fun SessionLoadingScreen() {
         contentAlignment = Alignment.Center
     ) {
         CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun RoleCheckFailedScreen(
+    onRetry: () -> Unit,
+    onLogout: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Could not check your current role.",
+            style = MaterialTheme.typography.bodyLarge
+        )
+
+        Button(onClick = onRetry) {
+            Text(text = "Retry")
+        }
+
+        Button(onClick = onLogout) {
+            Text(text = "Log out")
+        }
     }
 }
 

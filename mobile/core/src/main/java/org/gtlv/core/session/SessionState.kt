@@ -7,6 +7,12 @@ sealed interface SessionState {
     data object SignedOut : SessionState
 
     data class SignedIn(
+        val userId: String,
+        val userName: String
+    ) : SessionState
+
+    data class RoleCheckFailed(
+        val userId: String,
         val userName: String
     ) : SessionState
 }
