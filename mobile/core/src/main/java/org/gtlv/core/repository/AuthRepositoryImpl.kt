@@ -14,12 +14,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
 import kotlinx.coroutines.flow.first
+import org.gtlv.core.network.AccessTokenProvider
 
 class AuthRepositoryImpl(
     private val networkClient: NetworkClient,
     private val serverSettingsRepository: ServerSettingsRepository,
     private val secureSessionStore: SecureSessionStore
-) : AuthRepository {
+) : AuthRepository, AccessTokenProvider {
 
     private var accessToken: String? = null
 
@@ -214,7 +215,7 @@ class AuthRepositoryImpl(
         }.getOrNull()
     }
 
-    internal fun currentAccessToken(): String? {
+    override fun currentAccessToken(): String? {
         return accessToken
     }
 
