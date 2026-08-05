@@ -1,3 +1,22 @@
 <resources>
-    <string name="app_name">atlas</string>
+    <string name="app_name">Atlas</string>
+    <string name="app_subtitle">Taxi fleet management</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="login">Login</string>
+    <string name="change_server">Change server address</string>
+    <string name="login_alert_dialog_label">Server address</string>
+    <string name="buttom_save">Save</string>
+    <string name="button_cancel">Cancel</string>
+    <string name="login_set_serveraddress">Set server address</string>
+    <string name="server_address_error">Enter a valid HTTP or HTTPS address</string>
+    <string name="username_required">Enter your username</string>
+    <string name="password_required">Enter your password</string>
+    <string name="invalid_credentials">Invalid username or password</string>
+    <string name="cannot_connect_to_server">Cannot connect to the server</string>
+    <string name="invalid_server_response">The server returned an invalid response</string>
+    <string name="server_error_with_code">Server error (%1$d)</string>
+    <string name="cannot_verify_session">Cannot verify the saved session. Check your connection.</string>
+    <string name="invalid_session_response">The server returned an invalid session response</string>
+    <string name="session_check_failed">Session check failed (%1$d)</string>
 </resources>
