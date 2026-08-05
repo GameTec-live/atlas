@@ -23,6 +23,8 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.car.app)
+    implementation(libs.androidx.car.app.projected)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)

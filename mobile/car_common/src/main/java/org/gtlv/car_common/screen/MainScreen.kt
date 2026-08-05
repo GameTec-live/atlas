@@ -1,4 +1,68 @@
 package org.gtlv.car_common.screen
 
-class MainScreen {
+import android.os.Handler
+import android.os.Looper
+import androidx.car.app.CarContext
+import androidx.car.app.Screen
+import androidx.car.app.model.MessageTemplate
+import androidx.car.app.model.Template
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import org.gtlv.car_common.R
+
+/** Minimal role-specific start screen. Its content can be replaced without changing the gate. */
+@Suppress("DEPRECATION") // Legacy title API keeps the template compatible with pre-Car-API-7 hosts.
+class MainScreen(
+    carContext: CarContext,
+    private val hasRole: () -> Boolean?,
+    private val onRoleLost: () -> Unit,
+    private val pollingIntervalMillis: Long = WaitingScreen.DEFAULT_POLLING_INTERVAL_MILLIS,
+) : Screen(carContext), DefaultLifecycleObserver {
+    private val handler = Handler(Looper.getMainLooper())
+    private var isObserving = false
+
+    private val rolePoll = object : Runnable {
+        override fun run() {
+            if (!isObserving) return
+
+            val roleAvailable = runCatching(hasRole).getOrNull()
+
+            if (roleAvailable != true) {
+                stopObserving()
+                onRoleLost()
+            } else {
+                handler.postDelayed(this, pollingIntervalMillis)
+            }
+        }
+    }
+
+    init {
+        lifecycle.addObserver(this)
+    }
+
+    override fun onStart(owner: LifecycleOwner) {
+        isObserving = true
+        handler.removeCallbacks(rolePoll)
+        handler.post(rolePoll)
+    }
+
+    override fun onStop(owner: LifecycleOwner) {
+        stopObserving()
+    }
+
+    override fun onDestroy(owner: LifecycleOwner) {
+        stopObserving()
+        lifecycle.removeObserver(this)
+    }
+
+    override fun onGetTemplate(): Template = MessageTemplate.Builder(
+        carContext.getString(R.string.main_screen_message),
+    )
+        .setTitle(carContext.getString(R.string.main_screen_title))
+        .build()
+
+    private fun stopObserving() {
+        isObserving = false
+        handler.removeCallbacks(rolePoll)
+    }
 }
