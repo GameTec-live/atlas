@@ -16,6 +16,21 @@ const jobInsertModel = t.Object({
     ]),
 });
 
+const rankingCriterionModel = t.Enum({
+    followingJobDisruption: "followingJobDisruption",
+    maximumFollowingLateness: "maximumFollowingLateness",
+    targetLateness: "targetLateness",
+    estimatedPickupAt: "estimatedPickupAt",
+    approachDuration: "approachDuration",
+    estimatedArrivalAt: "estimatedArrivalAt",
+});
+
+const rankingOutcomeModel = t.Enum({
+    better: "better",
+    equal: "equal",
+    worse: "worse",
+});
+
 export const JobModel = {
     jobInsertModel: t.Omit(jobInsertModel, ["startedAt", "completedAt"]),
     jobUpdateModel: t.Partial(jobInsertModel),
@@ -59,5 +74,61 @@ export const JobModel = {
         approachDistanceKilometers: t.Number({ minimum: 0 }),
         lateBySeconds: t.Number({ minimum: 0 }),
         maximumFollowingLatenessSeconds: t.Number({ minimum: 0 }),
+        rankingTrace: t.Object({
+            rank: t.Integer({ minimum: 1 }),
+            summaryCode: t.Enum({
+                onlyEligibleDriver: "onlyEligibleDriver",
+                rankedAhead: "rankedAhead",
+                rankedBehind: "rankedBehind",
+                tied: "tied",
+            }),
+            summaryValues: t.Object({
+                rank: t.Integer({ minimum: 1 }),
+                comparedToDriverId: t.Optional(t.String()),
+                comparedToDriverName: t.Optional(t.String()),
+                decisiveCriterion: t.Optional(rankingCriterionModel),
+            }),
+            summary: t.String(),
+            comparedTo: t.Optional(
+                t.Object({
+                    driverId: t.String(),
+                    driverName: t.String(),
+                    relation: t.Enum({
+                        ahead: "ahead",
+                        behind: "behind",
+                        tied: "tied",
+                    }),
+                }),
+            ),
+            decisiveCriterion: t.Optional(rankingCriterionModel),
+            steps: t.Array(
+                t.Object({
+                    criterion: rankingCriterionModel,
+                    outcome: rankingOutcomeModel,
+                    code: t.String({
+                        pattern:
+                            "^(followingJobDisruption|maximumFollowingLateness|targetLateness|estimatedPickupAt|approachDuration|estimatedArrivalAt)\\.(better|equal|worse)$",
+                    }),
+                    values: t.Object({
+                        candidate: t.Union([
+                            t.Boolean(),
+                            t.Number(),
+                            t.String(),
+                        ]),
+                        comparedTo: t.Union([
+                            t.Boolean(),
+                            t.Number(),
+                            t.String(),
+                        ]),
+                        unit: t.Enum({
+                            boolean: "boolean",
+                            seconds: "seconds",
+                            dateTime: "dateTime",
+                        }),
+                    }),
+                    message: t.String(),
+                }),
+            ),
+        }),
     }),
 } as const;

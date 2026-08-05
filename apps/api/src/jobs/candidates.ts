@@ -48,6 +48,58 @@ export interface DriverCandidate {
     maximumFollowingLatenessSeconds: number;
 }
 
+export type RankingCriterion =
+    | "followingJobDisruption"
+    | "maximumFollowingLateness"
+    | "targetLateness"
+    | "estimatedPickupAt"
+    | "approachDuration"
+    | "estimatedArrivalAt";
+
+export type RankingOutcome = "better" | "equal" | "worse";
+export type RankingStepCode = `${RankingCriterion}.${RankingOutcome}`;
+export type RankingValueUnit = "boolean" | "seconds" | "dateTime";
+export type RankingSummaryCode =
+    | "onlyEligibleDriver"
+    | "rankedAhead"
+    | "rankedBehind"
+    | "tied";
+
+export interface RankingTraceStep {
+    criterion: RankingCriterion;
+    outcome: RankingOutcome;
+    code: RankingStepCode;
+    values: {
+        candidate: boolean | number | string;
+        comparedTo: boolean | number | string;
+        unit: RankingValueUnit;
+    };
+    message: string;
+}
+
+export interface RankingTrace {
+    rank: number;
+    summaryCode: RankingSummaryCode;
+    summaryValues: {
+        rank: number;
+        comparedToDriverId?: string;
+        comparedToDriverName?: string;
+        decisiveCriterion?: RankingCriterion;
+    };
+    summary: string;
+    comparedTo?: {
+        driverId: string;
+        driverName: string;
+        relation: "ahead" | "behind" | "tied";
+    };
+    decisiveCriterion?: RankingCriterion;
+    steps: RankingTraceStep[];
+}
+
+export interface RankedDriverCandidate extends DriverCandidate {
+    rankingTrace: RankingTrace;
+}
+
 const toRoutePoint = (point: [number, number]): RoutePoint => ({
     latitude: point[0],
     longitude: point[1],
@@ -299,41 +351,221 @@ export async function calculateDriverCandidate(
     };
 }
 
-export function rankDriverCandidates(candidates: DriverCandidate[]) {
-    return candidates.sort((left, right) => {
-        const leftDisruptsFollowingJobs =
-            left.maximumFollowingLatenessSeconds > 0;
-        const rightDisruptsFollowingJobs =
-            right.maximumFollowingLatenessSeconds > 0;
+interface CandidateComparison {
+    order: number;
+    steps: RankingTraceStep[];
+}
 
-        if (leftDisruptsFollowingJobs !== rightDisruptsFollowingJobs) {
-            return leftDisruptsFollowingJobs ? 1 : -1;
-        }
-        if (
-            left.maximumFollowingLatenessSeconds !==
-            right.maximumFollowingLatenessSeconds
-        ) {
-            return (
-                left.maximumFollowingLatenessSeconds -
-                right.maximumFollowingLatenessSeconds
-            );
-        }
+const comparisonOutcome = (order: number): RankingTraceStep["outcome"] =>
+    order < 0 ? "better" : order > 0 ? "worse" : "equal";
 
-        const leftIsLate = left.lateBySeconds > 0;
-        const rightIsLate = right.lateBySeconds > 0;
-        if (leftIsLate !== rightIsLate) return leftIsLate ? 1 : -1;
+const compareDriverCandidates = (
+    candidate: DriverCandidate,
+    other: DriverCandidate,
+): CandidateComparison => {
+    const steps: RankingTraceStep[] = [];
+    const addStep = (
+        criterion: RankingCriterion,
+        order: number,
+        values: RankingTraceStep["values"],
+        messages: Record<RankingTraceStep["outcome"], string>,
+    ) => {
+        const outcome = comparisonOutcome(order);
+        steps.push({
+            criterion,
+            outcome,
+            code: `${criterion}.${outcome}`,
+            values,
+            message: messages[outcome],
+        });
+        return order;
+    };
 
-        if (leftIsLate) {
-            return (
-                left.estimatedPickupAt.getTime() -
-                right.estimatedPickupAt.getTime()
-            );
-        }
+    const candidateDisruptsFollowingJobs =
+        candidate.maximumFollowingLatenessSeconds > 0;
+    const otherDisruptsFollowingJobs =
+        other.maximumFollowingLatenessSeconds > 0;
+    let order = addStep(
+        "followingJobDisruption",
+        Number(candidateDisruptsFollowingJobs) -
+            Number(otherDisruptsFollowingJobs),
+        {
+            candidate: candidateDisruptsFollowingJobs,
+            comparedTo: otherDisruptsFollowingJobs,
+            unit: "boolean",
+        },
+        {
+            better: `Keeps all following jobs on time; ${other.driverName} would delay at least one.`,
+            equal: candidateDisruptsFollowingJobs
+                ? `Like ${other.driverName}, delays at least one following job.`
+                : `Like ${other.driverName}, keeps all following jobs on time.`,
+            worse: `Would delay at least one following job; ${other.driverName} keeps all of them on time.`,
+        },
+    );
+    if (order !== 0) return { order, steps };
 
-        return (
-            left.approachDurationSeconds - right.approachDurationSeconds ||
-            left.estimatedArrivalAt.getTime() -
-                right.estimatedArrivalAt.getTime()
+    order = addStep(
+        "maximumFollowingLateness",
+        candidate.maximumFollowingLatenessSeconds -
+            other.maximumFollowingLatenessSeconds,
+        {
+            candidate: candidate.maximumFollowingLatenessSeconds,
+            comparedTo: other.maximumFollowingLatenessSeconds,
+            unit: "seconds",
+        },
+        {
+            better: `Worst following-job delay is ${candidate.maximumFollowingLatenessSeconds} seconds, compared with ${other.driverName} at ${other.maximumFollowingLatenessSeconds} seconds.`,
+            equal: `Worst following-job delay matches ${other.driverName} at ${candidate.maximumFollowingLatenessSeconds} seconds.`,
+            worse: `Worst following-job delay is ${candidate.maximumFollowingLatenessSeconds} seconds, compared with ${other.driverName} at ${other.maximumFollowingLatenessSeconds} seconds.`,
+        },
+    );
+    if (order !== 0) return { order, steps };
+
+    const candidateIsLate = candidate.lateBySeconds > 0;
+    const otherIsLate = other.lateBySeconds > 0;
+    order = addStep(
+        "targetLateness",
+        Number(candidateIsLate) - Number(otherIsLate),
+        {
+            candidate: candidateIsLate,
+            comparedTo: otherIsLate,
+            unit: "boolean",
+        },
+        {
+            better: `Can pick up the target job on time; ${other.driverName} would be late.`,
+            equal: candidateIsLate
+                ? `Like ${other.driverName}, would be late for the target job.`
+                : `Like ${other.driverName}, can pick up the target job on time.`,
+            worse: `Would be late for the target job; ${other.driverName} can pick it up on time.`,
+        },
+    );
+    if (order !== 0) return { order, steps };
+
+    if (candidateIsLate) {
+        order = addStep(
+            "estimatedPickupAt",
+            candidate.estimatedPickupAt.getTime() -
+                other.estimatedPickupAt.getTime(),
+            {
+                candidate: candidate.estimatedPickupAt.toISOString(),
+                comparedTo: other.estimatedPickupAt.toISOString(),
+                unit: "dateTime",
+            },
+            {
+                better: `Estimated pickup is ${candidate.estimatedPickupAt.toISOString()}, earlier than ${other.driverName} at ${other.estimatedPickupAt.toISOString()}.`,
+                equal: `Estimated pickup matches ${other.driverName} at ${candidate.estimatedPickupAt.toISOString()}.`,
+                worse: `Estimated pickup is ${candidate.estimatedPickupAt.toISOString()}, later than ${other.driverName} at ${other.estimatedPickupAt.toISOString()}.`,
+            },
         );
-    });
+        return { order, steps };
+    }
+
+    order = addStep(
+        "approachDuration",
+        candidate.approachDurationSeconds - other.approachDurationSeconds,
+        {
+            candidate: candidate.approachDurationSeconds,
+            comparedTo: other.approachDurationSeconds,
+            unit: "seconds",
+        },
+        {
+            better: `Final approach takes ${candidate.approachDurationSeconds} seconds, shorter than ${other.driverName} at ${other.approachDurationSeconds} seconds.`,
+            equal: `Final approach matches ${other.driverName} at ${candidate.approachDurationSeconds} seconds.`,
+            worse: `Final approach takes ${candidate.approachDurationSeconds} seconds, longer than ${other.driverName} at ${other.approachDurationSeconds} seconds.`,
+        },
+    );
+    if (order !== 0) return { order, steps };
+
+    order = addStep(
+        "estimatedArrivalAt",
+        candidate.estimatedArrivalAt.getTime() -
+            other.estimatedArrivalAt.getTime(),
+        {
+            candidate: candidate.estimatedArrivalAt.toISOString(),
+            comparedTo: other.estimatedArrivalAt.toISOString(),
+            unit: "dateTime",
+        },
+        {
+            better: `Estimated arrival is ${candidate.estimatedArrivalAt.toISOString()}, earlier than ${other.driverName} at ${other.estimatedArrivalAt.toISOString()}.`,
+            equal: `Estimated arrival matches ${other.driverName} at ${candidate.estimatedArrivalAt.toISOString()}.`,
+            worse: `Estimated arrival is ${candidate.estimatedArrivalAt.toISOString()}, later than ${other.driverName} at ${other.estimatedArrivalAt.toISOString()}.`,
+        },
+    );
+    return { order, steps };
+};
+
+const buildRankingTrace = (
+    candidates: DriverCandidate[],
+    index: number,
+): RankingTrace => {
+    const candidate = candidates[index];
+    if (!candidate) throw new Error("Expected ranked candidate");
+
+    const rank = index + 1;
+    if (candidates.length === 1) {
+        return {
+            rank,
+            summaryCode: "onlyEligibleDriver",
+            summaryValues: { rank },
+            summary: "Only eligible driver.",
+            steps: [],
+        };
+    }
+
+    const other = index === 0 ? candidates[1] : candidates[index - 1];
+    if (!other) throw new Error("Expected comparison candidate");
+
+    const comparison = compareDriverCandidates(candidate, other);
+    const relation =
+        comparison.order < 0
+            ? "ahead"
+            : comparison.order > 0
+              ? "behind"
+              : "tied";
+    const decisiveStep = comparison.steps.findLast(
+        ({ outcome }) => outcome !== "equal",
+    );
+    const summary = decisiveStep
+        ? `Ranked ${relation} ${other.driverName}. ${decisiveStep.message}`
+        : `Tied with ${other.driverName} on every ranking criterion; list order is used only for presentation.`;
+    const summaryCode =
+        relation === "ahead"
+            ? "rankedAhead"
+            : relation === "behind"
+              ? "rankedBehind"
+              : "tied";
+
+    return {
+        rank,
+        summaryCode,
+        summaryValues: {
+            rank,
+            comparedToDriverId: other.driverId,
+            comparedToDriverName: other.driverName,
+            ...(decisiveStep
+                ? { decisiveCriterion: decisiveStep.criterion }
+                : {}),
+        },
+        summary,
+        comparedTo: {
+            driverId: other.driverId,
+            driverName: other.driverName,
+            relation,
+        },
+        ...(decisiveStep ? { decisiveCriterion: decisiveStep.criterion } : {}),
+        steps: comparison.steps,
+    };
+};
+
+export function rankDriverCandidates(
+    candidates: DriverCandidate[],
+): RankedDriverCandidate[] {
+    const sortedCandidates = candidates.sort(
+        (left, right) => compareDriverCandidates(left, right).order,
+    );
+
+    return sortedCandidates.map((candidate, index) => ({
+        ...candidate,
+        rankingTrace: buildRankingTrace(sortedCandidates, index),
+    }));
 }

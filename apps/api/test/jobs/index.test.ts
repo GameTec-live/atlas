@@ -680,7 +680,32 @@ describe("job candidate endpoints", () => {
         followingJobs: unknown[];
         maximumFollowingLatenessSeconds: number;
         routeDurationSeconds: number;
+        rankingTrace: {
+            rank: number;
+            summaryCode: string;
+            summaryValues: Record<string, unknown>;
+            summary: string;
+            comparedTo?: {
+                driverId: string;
+                driverName: string;
+                relation: "ahead" | "behind" | "tied";
+            };
+            decisiveCriterion?: string;
+            steps: {
+                criterion: string;
+                outcome: "better" | "equal" | "worse";
+                code: string;
+                values: {
+                    candidate: boolean | number | string;
+                    comparedTo: boolean | number | string;
+                    unit: "boolean" | "seconds" | "dateTime";
+                };
+                message: string;
+            }[];
+        };
     };
+    type CandidateRecord = Record<string, unknown> &
+        Pick<CandidateResponse, "rankingTrace">;
 
     const setDriverUsers = (...drivers: [id: string, name: string][]) => {
         const [exampleUserRow] = getDbMockTableRows("user");
@@ -823,7 +848,7 @@ describe("job candidate endpoints", () => {
             to: [48.6, 16.7],
             dueDate: "2099-08-05T12:00:00.000Z",
         });
-        const body = (await response.json()) as Record<string, unknown>[];
+        const body = (await response.json()) as CandidateRecord[];
 
         expect(response.status).toBe(200);
         expect(body.map(({ driverId }) => driverId)).toEqual(["user-1"]);
@@ -922,7 +947,7 @@ describe("job candidate endpoints", () => {
         });
 
         const response = await candidatesRequest();
-        const body = (await response.json()) as Record<string, unknown>[];
+        const body = (await response.json()) as CandidateRecord[];
 
         expect(response.status).toBe(200);
         expect(body).toHaveLength(2);
@@ -947,6 +972,7 @@ describe("job candidate endpoints", () => {
             approachDistanceKilometers: 0.5,
             lateBySeconds: 0,
             maximumFollowingLatenessSeconds: 0,
+            rankingTrace: expect.any(Object),
         });
         expect(body[1]).toEqual({
             driverId: "free-driver",
@@ -965,6 +991,90 @@ describe("job candidate endpoints", () => {
             approachDistanceKilometers: 3,
             lateBySeconds: 0,
             maximumFollowingLatenessSeconds: 0,
+            rankingTrace: expect.any(Object),
+        });
+        expect(body[0]?.rankingTrace).toEqual({
+            rank: 1,
+            summaryCode: "rankedAhead",
+            summaryValues: {
+                rank: 1,
+                comparedToDriverId: "free-driver",
+                comparedToDriverName: "Free Driver",
+                decisiveCriterion: "approachDuration",
+            },
+            summary:
+                "Ranked ahead Free Driver. Final approach takes 50 seconds, shorter than Free Driver at 300 seconds.",
+            comparedTo: {
+                driverId: "free-driver",
+                driverName: "Free Driver",
+                relation: "ahead",
+            },
+            decisiveCriterion: "approachDuration",
+            steps: [
+                {
+                    criterion: "followingJobDisruption",
+                    outcome: "equal",
+                    code: "followingJobDisruption.equal",
+                    values: {
+                        candidate: false,
+                        comparedTo: false,
+                        unit: "boolean",
+                    },
+                    message:
+                        "Like Free Driver, keeps all following jobs on time.",
+                },
+                {
+                    criterion: "maximumFollowingLateness",
+                    outcome: "equal",
+                    code: "maximumFollowingLateness.equal",
+                    values: {
+                        candidate: 0,
+                        comparedTo: 0,
+                        unit: "seconds",
+                    },
+                    message:
+                        "Worst following-job delay matches Free Driver at 0 seconds.",
+                },
+                {
+                    criterion: "targetLateness",
+                    outcome: "equal",
+                    code: "targetLateness.equal",
+                    values: {
+                        candidate: false,
+                        comparedTo: false,
+                        unit: "boolean",
+                    },
+                    message:
+                        "Like Free Driver, can pick up the target job on time.",
+                },
+                {
+                    criterion: "approachDuration",
+                    outcome: "better",
+                    code: "approachDuration.better",
+                    values: {
+                        candidate: 50,
+                        comparedTo: 300,
+                        unit: "seconds",
+                    },
+                    message:
+                        "Final approach takes 50 seconds, shorter than Free Driver at 300 seconds.",
+                },
+            ],
+        });
+        expect(body[1]?.rankingTrace).toMatchObject({
+            rank: 2,
+            comparedTo: {
+                driverId: "busy-driver",
+                driverName: "Busy Driver",
+                relation: "behind",
+            },
+            decisiveCriterion: "approachDuration",
+            steps: expect.arrayContaining([
+                expect.objectContaining({
+                    criterion: "approachDuration",
+                    outcome: "worse",
+                }),
+            ]),
         });
         expect(fetchMock).toHaveBeenCalledTimes(2);
 
@@ -1040,6 +1150,13 @@ describe("job candidate endpoints", () => {
         expect(candidate?.driverName).toBe("Busy Driver");
         expect(candidate?.currentJobId).toBe(currentJobId);
         expect(candidate?.precedingJobIds).toEqual([currentJobId]);
+        expect(candidate?.rankingTrace).toEqual({
+            rank: 1,
+            summaryCode: "onlyEligibleDriver",
+            summaryValues: { rank: 1 },
+            summary: "Only eligible driver.",
+            steps: [],
+        });
 
         const routerUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
         const route = JSON.parse(routerUrl.searchParams.get("json") ?? "");
@@ -1134,7 +1251,7 @@ describe("job candidate endpoints", () => {
         });
 
         const response = await candidatesRequest();
-        const body = (await response.json()) as Record<string, unknown>[];
+        const body = (await response.json()) as CandidateRecord[];
 
         expect(response.status).toBe(200);
         expect(body.map(({ driverId }) => driverId)).toEqual([
@@ -1147,6 +1264,27 @@ describe("job candidate endpoints", () => {
         expect(
             body.every(({ lateBySeconds }) => Number(lateBySeconds) > 0),
         ).toBeTrue();
+        expect(body[0]?.rankingTrace).toMatchObject({
+            rank: 1,
+            comparedTo: {
+                driverId: "slow-driver",
+                driverName: "Slow Driver",
+                relation: "ahead",
+            },
+            decisiveCriterion: "estimatedPickupAt",
+            steps: expect.arrayContaining([
+                expect.objectContaining({
+                    criterion: "estimatedPickupAt",
+                    outcome: "better",
+                    code: "estimatedPickupAt.better",
+                    values: {
+                        candidate: expect.any(String),
+                        comparedTo: expect.any(String),
+                        unit: "dateTime",
+                    },
+                }),
+            ]),
+        });
     });
 });
 
