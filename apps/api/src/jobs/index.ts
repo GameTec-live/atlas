@@ -78,7 +78,7 @@ export const jobs = new Elysia({
                 .select()
                 .from(job)
                 .where(eq(job.assignedDriverId, user.id))
-                .orderBy(asc(job.dueDate));
+                .orderBy(asc(job.dueDate), asc(job.startedAt));
             return jobs;
         },
         {
@@ -92,7 +92,7 @@ export const jobs = new Elysia({
                 .select()
                 .from(job)
                 .where(isNull(job.assignedDriverId))
-                .orderBy(asc(job.dueDate));
+                .orderBy(asc(job.dueDate), asc(job.createdAt));
             return jobs;
         },
         {
@@ -113,7 +113,7 @@ export const jobs = new Elysia({
                     })
                     .from(job)
                     .where(isNull(job.assignedDriverId))
-                    .orderBy(asc(job.dueDate));
+                    .orderBy(asc(job.dueDate), asc(job.createdAt));
                 return jobs;
             }
 
