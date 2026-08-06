@@ -1,10 +1,70 @@
-import { asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { Elysia, status, t } from "elysia";
 import { env } from "@/env";
 import { authHandler } from "../authHandler";
 import { db } from "../db";
-import { job } from "../db/schema";
+import { job, user } from "../db/schema";
+import { trackCache } from "../realtime/cache";
+import {
+    type CandidateTarget,
+    calculateDriverCandidate,
+    rankDriverCandidates,
+} from "./candidates";
 import { JobModel } from "./model";
+
+const calculateCandidates = async (target: CandidateTarget) => {
+    const trackedDrivers = [...trackCache.entries()];
+    if (trackedDrivers.length === 0) return [];
+
+    const driverIds = trackedDrivers.map(([driverId]) => driverId);
+    const [unfinishedJobs, driverUsers] = await Promise.all([
+        db
+            .select()
+            .from(job)
+            .where(
+                and(
+                    inArray(job.assignedDriverId, driverIds),
+                    isNull(job.completedAt),
+                ),
+            ),
+        db
+            .select({ id: user.id, name: user.name })
+            .from(user)
+            .where(inArray(user.id, driverIds)),
+    ]);
+    const driverNames = new Map(
+        driverUsers.map((driverUser) => [driverUser.id, driverUser.name]),
+    );
+    const jobsByDriver = new Map<string, typeof unfinishedJobs>();
+    for (const unfinishedJob of unfinishedJobs) {
+        if (!unfinishedJob.assignedDriverId) continue;
+        const driverJobs =
+            jobsByDriver.get(unfinishedJob.assignedDriverId) ?? [];
+        driverJobs.push(unfinishedJob);
+        jobsByDriver.set(unfinishedJob.assignedDriverId, driverJobs);
+    }
+
+    const now = new Date();
+    const candidates = await Promise.all(
+        trackedDrivers.map(([driverId, telemetry]) => {
+            const driverName = driverNames.get(driverId);
+            if (!driverName) return undefined;
+
+            return calculateDriverCandidate(
+                driverId,
+                driverName,
+                telemetry,
+                target,
+                jobsByDriver.get(driverId) ?? [],
+                now,
+            );
+        }),
+    );
+
+    return rankDriverCandidates(
+        candidates.filter((candidate) => candidate !== undefined),
+    );
+};
 
 export const jobs = new Elysia({
     prefix: "/jobs",
@@ -18,7 +78,7 @@ export const jobs = new Elysia({
                 .select()
                 .from(job)
                 .where(eq(job.assignedDriverId, user.id))
-                .orderBy(asc(job.dueDate));
+                .orderBy(asc(job.dueDate), asc(job.startedAt));
             return jobs;
         },
         {
@@ -32,7 +92,7 @@ export const jobs = new Elysia({
                 .select()
                 .from(job)
                 .where(isNull(job.assignedDriverId))
-                .orderBy(asc(job.dueDate));
+                .orderBy(asc(job.dueDate), asc(job.createdAt));
             return jobs;
         },
         {
@@ -53,7 +113,7 @@ export const jobs = new Elysia({
                     })
                     .from(job)
                     .where(isNull(job.assignedDriverId))
-                    .orderBy(asc(job.dueDate));
+                    .orderBy(asc(job.dueDate), asc(job.createdAt));
                 return jobs;
             }
 
@@ -81,6 +141,53 @@ export const jobs = new Elysia({
         },
         {
             body: JobModel.jobInsertModel,
+            auth: true,
+        },
+    )
+    .post(
+        "/candidates",
+        ({ body }) =>
+            calculateCandidates({
+                from: body.from,
+                to: body.to ?? null,
+                dueDate: body.dueDate ?? new Date(),
+            }),
+        {
+            body: JobModel.jobCandidateRequestModel,
+            response: t.Array(JobModel.candidateModel),
+            auth: true,
+        },
+    )
+    .get(
+        "/:id/candidates",
+        async ({ params }) => {
+            const [targetJob] = await db
+                .select()
+                .from(job)
+                .where(eq(job.id, params.id))
+                .limit(1);
+
+            if (!targetJob) {
+                return status(404, { error: "Job not found" });
+            }
+            if (targetJob.assignedDriverId !== null) {
+                return status(409, { error: "Job is already assigned" });
+            }
+            if (targetJob.completedAt !== null) {
+                return status(409, { error: "Job is already completed" });
+            }
+
+            return calculateCandidates(targetJob);
+        },
+        {
+            params: t.Object({
+                id: t.String({ format: "uuid" }),
+            }),
+            response: {
+                200: t.Array(JobModel.candidateModel),
+                404: t.Object({ error: t.String() }),
+                409: t.Object({ error: t.String() }),
+            },
             auth: true,
         },
     )
