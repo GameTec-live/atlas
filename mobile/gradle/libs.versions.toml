@@ -16,6 +16,8 @@ datastore = "1.2.1"
 coil = "3.3.0"
 material3Adaptive = "1.2.0"
 navigation = "2.9.8"
+mapLibreSdk = "13.4.1"
+playServicesLocation = "21.4.0"
 
 
 [libraries]
@@ -43,8 +45,8 @@ coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version
 coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }
 androidx-material3-adaptive = { module = "androidx.compose.material3.adaptive:adaptive", version.ref = "material3Adaptive" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
-
-
+maplibre-sdk = { module = "org.maplibre.gl:android-sdk", version.ref = "mapLibreSdk" }
+google-play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
