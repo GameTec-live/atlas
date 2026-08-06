@@ -189,7 +189,7 @@ class SessionManager(
 
             /*
              * Do not swallow authentication cleanup failures.
-             * If this throws, the caller can retry logout.
+             * If this throws, the caller can retry logoutt.
              */
             authRepository.logout()
 
