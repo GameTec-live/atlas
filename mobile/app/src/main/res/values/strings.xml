@@ -33,4 +33,14 @@
     <string name="dispatcher_spots_available">%1$d dispatcher spots available</string>
     <string name="dispatcher_spot_available">1 dispatcher spot available</string>
     <string name="role_retry">Retry</string>
+    <string name="location_permission_title">Location required</string>
+    <string name="location_permission_retry_message">Atlas requires location access to operate. You can allow precise or approximate location.</string>
+    <string name="location_permission_settings_message">
+    Location permission is required to use Atlas. Open the application settings and enable location permission.</string>
+    <string name="location_permission_allow_button">Allow location</string>
+    <string name="location_permission_settings_button">Open settings</string>
+    <string name="map_load_error">The map could not be loaded.</string>
+    <string name="map_location_display_error">Your location could not be displayed on the map.</string>
+    <string name="map_recenter_location">Return to current location</string>
+    <string name="logout">Log out</string>
 </resources>

@@ -9,9 +9,16 @@ import org.gtlv.core.session.SessionManager
 import org.gtlv.core.settings.DataStoreServerSettingsRepository
 import org.gtlv.core.shift.DataStoreShiftSessionStore
 import org.gtlv.core.shift.ShiftSessionManager
+import org.gtlv.atlas.location.PhoneLocationProvider
+import org.gtlv.core.location.LocationProvider
 
 class AtlasApplication : Application() {
 
+    val locationProvider: LocationProvider by lazy {
+        PhoneLocationProvider(
+            context = applicationContext
+        )
+    }
     val networkClient by lazy {
         NetworkClient()
     }

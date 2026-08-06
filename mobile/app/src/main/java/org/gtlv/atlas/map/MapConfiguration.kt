@@ -15,4 +15,6 @@ internal object MapConfiguration {
     const val INITIAL_LATITUDE = 48.500
     const val INITIAL_LONGITUDE = 14.580
     const val INITIAL_ZOOM = 13.0
+
+    const val USER_LOCATION_ZOOM = 18.0
 }

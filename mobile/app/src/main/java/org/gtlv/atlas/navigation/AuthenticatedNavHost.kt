@@ -6,12 +6,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import org.gtlv.atlas.main.MainScreen
+import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
 
 @Composable
 internal fun AuthenticatedNavHost(
     userName: String,
     role: ShiftRole,
+    locationState: LocationState,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -26,6 +28,7 @@ internal fun AuthenticatedNavHost(
             MainScreen(
                 userName = userName,
                 role = role,
+                locationState = locationState,
                 onLogout = onLogout
             )
         }
