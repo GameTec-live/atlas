@@ -24,88 +24,42 @@ import org.gtlv.atlas.auth.LoginViewModel
 import org.gtlv.atlas.auth.LoginViewModelFactory
 import org.gtlv.atlas.role.RoleSelectionScreen
 import org.gtlv.atlas.ui.theme.AtlasTheme
-import org.gtlv.core.network.NetworkClient
-import org.gtlv.core.repository.AuthRepositoryImpl
-import org.gtlv.core.session.SecureSessionStore
-import org.gtlv.core.session.SessionManager
 import org.gtlv.core.session.SessionState
-import org.gtlv.core.settings.DataStoreServerSettingsRepository
 import org.gtlv.atlas.role.RoleSelectionViewModelFactory
 import org.gtlv.atlas.role.RoleSelectionViewModel
-import org.gtlv.core.role.RoleRepositoryImpl
-import org.gtlv.core.shift.DataStoreShiftSessionStore
-import org.gtlv.core.shift.ShiftSessionManager
 import org.gtlv.core.shift.ShiftSessionState
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    private val networkClient by lazy {
-        NetworkClient()
+    private val atlasApplication by lazy {
+        application as AtlasApplication
     }
 
-    private val serverSettingsRepository by lazy {
-        DataStoreServerSettingsRepository(
-            context = applicationContext
-        )
-    }
+    private val sessionManager
+        get() = atlasApplication.sessionManager
 
-    private val secureSessionStore by lazy {
-        SecureSessionStore(
-            context = applicationContext
-        )
-    }
-
-    private val authRepository by lazy {
-        AuthRepositoryImpl(
-            networkClient = networkClient,
-            serverSettingsRepository = serverSettingsRepository,
-            secureSessionStore = secureSessionStore
-        )
-    }
-
-    private val shiftSessionStore by lazy {
-        DataStoreShiftSessionStore(
-            context = applicationContext
-        )
-    }
-
-    private val shiftSessionManager by lazy {
-        ShiftSessionManager(
-            store = shiftSessionStore
-        )
-    }
-
-    private val roleRepository by lazy {
-        RoleRepositoryImpl(
-            networkClient = networkClient,
-            serverSettingsRepository = serverSettingsRepository,
-            accessTokenProvider = authRepository
-        )
-    }
-
-    private val sessionManager by lazy {
-        SessionManager(
-            authRepository = authRepository,
-            roleRepository = roleRepository,
-            shiftSessionManager = shiftSessionManager
-        )
-    }
+    private val shiftSessionManager
+        get() = atlasApplication.shiftSessionManager
 
     private val loginViewModel: LoginViewModel by viewModels {
         LoginViewModelFactory(
-            sessionManager = sessionManager,
-            serverSettingsRepository = serverSettingsRepository
+            sessionManager = atlasApplication.sessionManager,
+            serverSettingsRepository =
+                atlasApplication.serverSettingsRepository
         )
     }
 
     private val roleSelectionViewModel:
             RoleSelectionViewModel by viewModels {
         RoleSelectionViewModelFactory(
-            roleRepository = roleRepository,
-            shiftSessionManager = shiftSessionManager,
-            sessionManager = sessionManager
+            roleRepository =
+                atlasApplication.roleRepository,
+            shiftSessionManager =
+                atlasApplication.shiftSessionManager,
+            sessionManager =
+                atlasApplication.sessionManager
         )
     }
 
