@@ -22,8 +22,10 @@ export const user = pgTable("user", {
     email: text("email").notNull().unique(),
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
+    createdAt: timestamp("created_at", { withTimezone: true })
+        .defaultNow()
+        .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
         .defaultNow()
         .$onUpdate(() => /* @__PURE__ */ new Date())
         .notNull(),
@@ -32,17 +34,19 @@ export const user = pgTable("user", {
     role: text("role"),
     banned: boolean("banned").default(false),
     banReason: text("ban_reason"),
-    banExpires: timestamp("ban_expires"),
+    banExpires: timestamp("ban_expires", { withTimezone: true }),
 });
 
 export const session = pgTable(
     "session",
     {
         id: text("id").primaryKey(),
-        expiresAt: timestamp("expires_at").notNull(),
+        expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
         token: text("token").notNull().unique(),
-        createdAt: timestamp("created_at").defaultNow().notNull(),
-        updatedAt: timestamp("updated_at")
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
             .$onUpdate(() => /* @__PURE__ */ new Date())
             .notNull(),
         ipAddress: text("ip_address"),
@@ -67,12 +71,18 @@ export const account = pgTable(
         accessToken: text("access_token"),
         refreshToken: text("refresh_token"),
         idToken: text("id_token"),
-        accessTokenExpiresAt: timestamp("access_token_expires_at"),
-        refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+        accessTokenExpiresAt: timestamp("access_token_expires_at", {
+            withTimezone: true,
+        }),
+        refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+            withTimezone: true,
+        }),
         scope: text("scope"),
         password: text("password"),
-        createdAt: timestamp("created_at").defaultNow().notNull(),
-        updatedAt: timestamp("updated_at")
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
             .$onUpdate(() => /* @__PURE__ */ new Date())
             .notNull(),
     },
@@ -85,9 +95,11 @@ export const verification = pgTable(
         id: text("id").primaryKey(),
         identifier: text("identifier").notNull(),
         value: text("value").notNull(),
-        expiresAt: timestamp("expires_at").notNull(),
-        createdAt: timestamp("created_at").defaultNow().notNull(),
-        updatedAt: timestamp("updated_at")
+        expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
             .defaultNow()
             .$onUpdate(() => /* @__PURE__ */ new Date())
             .notNull(),
@@ -102,15 +114,17 @@ export const vehicle = pgTable(
         fingerprint: text("fingerprint").unique(),
         brand: text("brand").notNull(),
         model: text("model").notNull(),
-        year: timestamp("year").notNull(),
+        year: integer("year").notNull(),
         licensePlate: text("license_plate").notNull(),
         odometer: bigint("odometer", { mode: "number" }),
         fuelLevel: real("fuel_level"),
         maintenanceEvery: integer("maintenance_every").notNull(),
-        assessmentMonth: timestamp("assessment_month").notNull(),
+        assessmentMonth: integer("assessment_month").notNull(),
         smartSupport: boolean("smart_support").default(true).notNull(),
-        createdAt: timestamp("created_at").defaultNow().notNull(),
-        updatedAt: timestamp("updated_at")
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
             .defaultNow()
             .$onUpdate(() => /* @__PURE__ */ new Date())
             .notNull(),
@@ -129,6 +143,11 @@ export const vehicle = pgTable(
             sql`${table.fuelLevel} >= 0 AND ${table.fuelLevel} <= 100`,
         ),
         check("vehicle_odometer_check", sql`${table.odometer} >= 0`),
+        check("vehicle_year_check", sql`${table.year} >= 1800`),
+        check(
+            "vehicle_assessmentMonth_check",
+            sql`${table.assessmentMonth} >= 1 AND ${table.assessmentMonth} <= 12`,
+        ),
     ],
 );
 
@@ -142,8 +161,10 @@ export const maintenance = pgTable(
         note: text("note"),
         odometer: bigint("odometer", { mode: "number" }),
         mechanic: text("mechanic"),
-        createdAt: timestamp("created_at").defaultNow().notNull(),
-        updatedAt: timestamp("updated_at")
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
             .defaultNow()
             .$onUpdate(() => /* @__PURE__ */ new Date())
             .notNull(),
@@ -167,12 +188,16 @@ export const job = pgTable(
         }),
         from: point("from").notNull(),
         to: point("to"),
-        dueDate: timestamp("due_date").defaultNow().notNull(),
+        dueDate: timestamp("due_date", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
         note: text("note"),
-        startedAt: timestamp("started_at"),
-        completedAt: timestamp("completed_at"),
-        createdAt: timestamp("created_at").defaultNow().notNull(),
-        updatedAt: timestamp("updated_at")
+        startedAt: timestamp("started_at", { withTimezone: true }),
+        completedAt: timestamp("completed_at", { withTimezone: true }),
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
             .defaultNow()
             .$onUpdate(() => /* @__PURE__ */ new Date())
             .notNull(),
@@ -195,11 +220,15 @@ export const logbook = pgTable(
         }),
         startOdometer: bigint("start_odometer", { mode: "number" }).notNull(),
         endOdometer: bigint("end_odometer", { mode: "number" }),
-        startedAt: timestamp("started_at").defaultNow().notNull(),
-        endedAt: timestamp("ended_at"),
+        startedAt: timestamp("started_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        endedAt: timestamp("ended_at", { withTimezone: true }),
         revenue: real("revenue"),
-        createdAt: timestamp("created_at").defaultNow().notNull(),
-        updatedAt: timestamp("updated_at")
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
             .defaultNow()
             .$onUpdate(() => /* @__PURE__ */ new Date())
             .notNull(),
@@ -232,8 +261,10 @@ export const role = pgTable(
             .references(() => user.id, { onDelete: "cascade" }),
         role: roleEnum("role").notNull(),
         date: date("date", { mode: "date" }).notNull().defaultNow(),
-        createdAt: timestamp("created_at").defaultNow().notNull(),
-        updatedAt: timestamp("updated_at")
+        createdAt: timestamp("created_at", { withTimezone: true })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp("updated_at", { withTimezone: true })
             .defaultNow()
             .$onUpdate(() => /* @__PURE__ */ new Date())
             .notNull(),

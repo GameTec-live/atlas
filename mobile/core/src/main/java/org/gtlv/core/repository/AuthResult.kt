@@ -3,6 +3,7 @@ package org.gtlv.core.repository
 sealed interface AuthResult {
 
     data class Success(
+        val userId: String,
         val userName: String
     ) : AuthResult
 

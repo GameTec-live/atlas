@@ -35,19 +35,17 @@ const vehicleId = exampleVehicle.id;
 const vehicleBody = {
     brand: "Volkswagen",
     model: "Crafter",
-    year: "2025-01-01T00:00:00.000Z",
+    year: 2025,
     licensePlate: "ATLAS-2",
     odometer: 0,
     fuelLevel: 100,
     maintenanceEvery: 0,
-    assessmentMonth: "2026-08-01T00:00:00.000Z",
+    assessmentMonth: 8,
     smartSupport: false,
 };
 
 const serializedVehicle = {
     ...exampleVehicle,
-    year: exampleVehicle.year.toISOString(),
-    assessmentMonth: exampleVehicle.assessmentMonth.toISOString(),
     createdAt: exampleVehicle.createdAt.toISOString(),
     updatedAt: exampleVehicle.updatedAt.toISOString(),
 };
@@ -262,12 +260,12 @@ describe("POST /fleet/vehicles", () => {
         );
         createdVehicleRow[2] = vehicleBody.brand;
         createdVehicleRow[3] = vehicleBody.model;
-        createdVehicleRow[4] = vehicleBody.year.slice(0, -1);
+        createdVehicleRow[4] = vehicleBody.year;
         createdVehicleRow[5] = vehicleBody.licensePlate;
         createdVehicleRow[6] = vehicleBody.odometer;
         createdVehicleRow[7] = vehicleBody.fuelLevel;
         createdVehicleRow[8] = vehicleBody.maintenanceEvery;
-        createdVehicleRow[9] = vehicleBody.assessmentMonth.slice(0, -1);
+        createdVehicleRow[9] = vehicleBody.assessmentMonth;
         createdVehicleRow[10] = vehicleBody.smartSupport;
         setDbMockRows("insert", [createdVehicleRow]);
 
@@ -306,12 +304,12 @@ describe("POST /fleet/vehicles", () => {
         );
         createdVehicleRow[2] = requiredBody.brand;
         createdVehicleRow[3] = requiredBody.model;
-        createdVehicleRow[4] = requiredBody.year.slice(0, -1);
+        createdVehicleRow[4] = requiredBody.year;
         createdVehicleRow[5] = requiredBody.licensePlate;
         createdVehicleRow[6] = null;
         createdVehicleRow[7] = null;
         createdVehicleRow[8] = requiredBody.maintenanceEvery;
-        createdVehicleRow[9] = requiredBody.assessmentMonth.slice(0, -1);
+        createdVehicleRow[9] = requiredBody.assessmentMonth;
         createdVehicleRow[10] = true;
         setDbMockRows("insert", [createdVehicleRow]);
 
@@ -343,7 +341,7 @@ describe("POST /fleet/vehicles", () => {
 
     it.each([
         ["a missing brand", { ...vehicleBody, brand: undefined }],
-        ["an invalid year", { ...vehicleBody, year: "not-a-date" }],
+        ["an invalid year", { ...vehicleBody, year: "not-a-year" }],
         ["a negative odometer", { ...vehicleBody, odometer: -1 }],
         ["a fuel level below zero", { ...vehicleBody, fuelLevel: -0.01 }],
         ["a fuel level above 100", { ...vehicleBody, fuelLevel: 100.01 }],
@@ -353,7 +351,7 @@ describe("POST /fleet/vehicles", () => {
         ],
         [
             "an invalid assessment month",
-            { ...vehicleBody, assessmentMonth: "not-a-date" },
+            { ...vehicleBody, assessmentMonth: 13 },
         ],
     ])("returns 422 for %s", async (_description, body) => {
         getSessionMock.mockResolvedValue(adminSession);
@@ -420,7 +418,7 @@ describe("PUT /fleet/vehicles/:id", () => {
         [
             "an invalid assessment month",
             `/vehicles/${vehicleId}`,
-            { assessmentMonth: "not-a-date" },
+            { assessmentMonth: 0 },
         ],
     ])("returns 422 for %s", async (_description, path, body) => {
         getSessionMock.mockResolvedValue(adminSession);
@@ -533,7 +531,7 @@ describe("GET /fleet/fingerprint/candidates", () => {
                 exampleVehicle.id,
                 exampleVehicle.brand,
                 exampleVehicle.model,
-                exampleVehicle.year.toISOString().slice(0, -1),
+                exampleVehicle.year,
                 exampleVehicle.licensePlate,
             ],
         ]);
@@ -546,7 +544,7 @@ describe("GET /fleet/fingerprint/candidates", () => {
                 id: exampleVehicle.id,
                 brand: exampleVehicle.brand,
                 model: exampleVehicle.model,
-                year: exampleVehicle.year.toISOString(),
+                year: exampleVehicle.year,
                 licensePlate: exampleVehicle.licensePlate,
             },
         ]);

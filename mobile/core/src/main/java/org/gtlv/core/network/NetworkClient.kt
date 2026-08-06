@@ -1,7 +1,7 @@
 package org.gtlv.core.network
 
-import org.gtlv.core.network.cookie.MemoryCookieJar
 import okhttp3.OkHttpClient
+import org.gtlv.core.network.cookie.MemoryCookieJar
 import java.util.concurrent.TimeUnit
 
 class NetworkClient(

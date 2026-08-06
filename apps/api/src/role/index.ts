@@ -25,7 +25,7 @@ export const roles = new Elysia({
                 })
                 .from(role)
                 .innerJoin(user, eq(role.driverId, user.id))
-                .where(eq(role.date, new Date()));
+                .where(eq(role.date, sql`current_date`));
 
             const numOfDispatchers = roles.filter(
                 (r) => r.role === "dispatcher",
@@ -49,7 +49,7 @@ export const roles = new Elysia({
         async ({ body, user }) => {
             try {
                 if (body.role === "dispatcher") {
-                    const assignmentDate = body.date ?? new Date();
+                    const assignmentDate = body.date ?? sql`current_date`;
                     const claimed = await db.transaction(async (tx) => {
                         await tx.execute(
                             sql`select pg_advisory_xact_lock(

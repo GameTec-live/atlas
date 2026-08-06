@@ -135,10 +135,8 @@ describe("GET /roles/", () => {
         expect(sql).toContain(
             'inner join "user" on "role"."driver_id" = "user"."id"',
         );
-        expect(values).toHaveLength(1);
-        expect(values[0]).toMatch(
-            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
-        );
+        expect(sql).toContain('"role"."date" = current_date');
+        expect(values).toHaveLength(0);
     });
 
     it("returns an empty, fully available summary when nobody has a role", async () => {
@@ -214,12 +212,9 @@ describe("POST /roles/", () => {
         const capacityQuery = queryAt(2);
         expect(capacityQuery.sql).toContain('select count(*) from "role"');
         expect(capacityQuery.sql).toContain('"role"."role" = $1');
-        expect(capacityQuery.sql).toContain('"role"."date" = $2');
-        expect(capacityQuery.values).toHaveLength(2);
+        expect(capacityQuery.sql).toContain('"role"."date" = current_date');
+        expect(capacityQuery.values).toHaveLength(1);
         expect(capacityQuery.values[0]).toBe("dispatcher");
-        expect(capacityQuery.values[1]).toMatch(
-            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
-        );
 
         const insertQuery = queryAt(3);
         expect(insertQuery.sql).toContain('insert into "role"');

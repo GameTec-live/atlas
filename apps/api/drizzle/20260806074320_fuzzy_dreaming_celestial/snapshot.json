@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "cb8f7d44-49fb-4d5d-990d-adb20dc70afc",
+  "id": "50edd277-6ebd-4d20-b56e-3a7ff453f742",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -167,7 +167,7 @@
       "table": "account"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
@@ -180,7 +180,7 @@
       "table": "account"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
@@ -219,7 +219,7 @@
       "table": "account"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -232,7 +232,7 @@
       "table": "account"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -310,7 +310,7 @@
       "table": "job"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -336,7 +336,7 @@
       "table": "job"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
@@ -349,7 +349,7 @@
       "table": "job"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
@@ -362,7 +362,7 @@
       "table": "job"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -375,7 +375,7 @@
       "table": "job"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -453,7 +453,7 @@
       "table": "logbook"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -466,7 +466,7 @@
       "table": "logbook"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
@@ -492,7 +492,7 @@
       "table": "logbook"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -505,7 +505,7 @@
       "table": "logbook"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -583,7 +583,7 @@
       "table": "maintenance"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -596,7 +596,7 @@
       "table": "maintenance"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -648,7 +648,7 @@
       "table": "role"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -661,7 +661,7 @@
       "table": "role"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -687,7 +687,7 @@
       "table": "session"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -713,7 +713,7 @@
       "table": "session"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -726,7 +726,7 @@
       "table": "session"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -882,7 +882,7 @@
       "table": "user"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -895,7 +895,7 @@
       "table": "user"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -973,7 +973,7 @@
       "table": "user"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
@@ -994,6 +994,19 @@
       "generated": null,
       "identity": null,
       "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "vehicle"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "fingerprint",
       "entityType": "columns",
       "schema": "public",
       "table": "vehicle"
@@ -1025,7 +1038,7 @@
       "table": "vehicle"
     },
     {
-      "type": "timestamp",
+      "type": "integer",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -1090,7 +1103,7 @@
       "table": "vehicle"
     },
     {
-      "type": "timestamp",
+      "type": "integer",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -1116,7 +1129,7 @@
       "table": "vehicle"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -1129,7 +1142,7 @@
       "table": "vehicle"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -1181,7 +1194,7 @@
       "table": "verification"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -1194,7 +1207,7 @@
       "table": "verification"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -1207,7 +1220,7 @@
       "table": "verification"
     },
     {
-      "type": "timestamp",
+      "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
@@ -1428,6 +1441,27 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "session"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "fingerprint",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "vehicle_fingerprint_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "vehicle"
     },
     {
       "nameExplicit": true,
@@ -1784,6 +1818,17 @@
       "entityType": "uniques"
     },
     {
+      "nameExplicit": false,
+      "columns": [
+        "fingerprint"
+      ],
+      "nullsNotDistinct": false,
+      "name": "vehicle_fingerprint_key",
+      "schema": "public",
+      "table": "vehicle",
+      "entityType": "uniques"
+    },
+    {
       "value": "\"end_odometer\" IS NULL OR \"end_odometer\" >= \"start_odometer\"",
       "name": "logbook_endOdometer_check",
       "entityType": "checks",
@@ -1828,6 +1873,20 @@
     {
       "value": "\"odometer\" >= 0",
       "name": "vehicle_odometer_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "vehicle"
+    },
+    {
+      "value": "\"year\" >= 1800",
+      "name": "vehicle_year_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "vehicle"
+    },
+    {
+      "value": "\"assessment_month\" >= 1 AND \"assessment_month\" <= 12",
+      "name": "vehicle_assessmentMonth_check",
       "entityType": "checks",
       "schema": "public",
       "table": "vehicle"
