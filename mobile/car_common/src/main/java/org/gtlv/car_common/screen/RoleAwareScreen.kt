@@ -9,12 +9,14 @@ import androidx.car.app.model.Template
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import org.gtlv.car_common.R
+import org.gtlv.core.shift.ShiftRole
 
-/** Minimal role-specific start screen. Its content can be replaced without changing the gate. */
+/** Shared role monitoring for the concrete driver and dispatcher screens. */
 @Suppress("DEPRECATION") // Legacy title API keeps the template compatible with pre-Car-API-7 hosts.
-class MainScreen(
+abstract class RoleAwareScreen(
     carContext: CarContext,
-    private val hasRole: () -> Boolean?,
+    private val expectedRole: ShiftRole,
+    private val getRole: () -> ShiftRole?,
     private val onRoleLost: () -> Unit,
     private val pollingIntervalMillis: Long = WaitingScreen.DEFAULT_POLLING_INTERVAL_MILLIS,
 ) : Screen(carContext), DefaultLifecycleObserver {
@@ -25,9 +27,9 @@ class MainScreen(
         override fun run() {
             if (!isObserving) return
 
-            val roleAvailable = runCatching(hasRole).getOrNull()
+            val role = runCatching(getRole).getOrNull()
 
-            if (roleAvailable != true) {
+            if (role != expectedRole) {
                 stopObserving()
                 onRoleLost()
             } else {

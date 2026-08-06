@@ -9,6 +9,7 @@ import androidx.car.app.model.Template
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import org.gtlv.car_common.R
+import org.gtlv.core.shift.ShiftRole
 
 /**
  * Fail-closed entry screen shown until the connected phone user has a role.
@@ -19,8 +20,8 @@ import org.gtlv.car_common.R
 @Suppress("DEPRECATION") // Legacy title API keeps the template compatible with pre-Car-API-7 hosts.
 class WaitingScreen(
     carContext: CarContext,
-    private val hasRole: () -> Boolean?,
-    private val onRoleAvailable: () -> Unit,
+    private val getRole: () -> ShiftRole?,
+    private val onRoleAvailable: (ShiftRole) -> Unit,
     private val pollingIntervalMillis: Long = DEFAULT_POLLING_INTERVAL_MILLIS,
 ) : Screen(carContext), DefaultLifecycleObserver {
 
@@ -32,10 +33,10 @@ class WaitingScreen(
         override fun run() {
             if (!isObserving) return
 
-            val roleAvailable = runCatching(hasRole).getOrNull()
+            val role = runCatching(getRole).getOrNull()
 
-            if (roleAvailable == true) {
-                navigateToRoleContent()
+            if (role != null) {
+                navigateToRoleContent(role)
             } else {
                 handler.postDelayed(this, pollingIntervalMillis)
             }
@@ -68,11 +69,11 @@ class WaitingScreen(
         .setTitle(carContext.getString(R.string.waiting_screen_title))
         .build()
 
-    private fun navigateToRoleContent() {
+    private fun navigateToRoleContent(role: ShiftRole) {
         if (hasNavigated) return
         hasNavigated = true
         stopObserving()
-        onRoleAvailable()
+        onRoleAvailable(role)
     }
 
     private fun stopObserving() {
