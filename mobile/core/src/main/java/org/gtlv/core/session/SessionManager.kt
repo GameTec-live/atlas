@@ -10,6 +10,8 @@ import org.gtlv.core.role.RoleRepository
 import org.gtlv.core.shift.ShiftSessionManager
 import org.gtlv.core.shift.ShiftSessionState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 class SessionManager(
     private val authRepository: AuthRepository,
@@ -174,8 +176,24 @@ class SessionManager(
     }
 
     suspend fun logout() {
-        shiftSessionManager.clear()
-        authRepository.logout()
-        _state.value = SessionState.SignedOut
+        withContext(NonCancellable) {
+            /*
+             * A broken local shift store must not prevent the
+             * authentication session from being cleared.
+             */
+            try {
+                shiftSessionManager.clear()
+            } catch (_: Exception) {
+                // Continue with authentication cleanup.
+            }
+
+            /*
+             * Do not swallow authentication cleanup failures.
+             * If this throws, the caller can retry logout.
+             */
+            authRepository.logout()
+
+            _state.value = SessionState.SignedOut
+        }
     }
 }
