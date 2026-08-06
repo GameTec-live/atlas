@@ -9,6 +9,7 @@ import org.gtlv.core.role.RoleAvailabilityResult
 import org.gtlv.core.role.RoleRepository
 import org.gtlv.core.shift.ShiftSessionManager
 import org.gtlv.core.shift.ShiftSessionState
+import kotlinx.coroutines.CancellationException
 
 class SessionManager(
     private val authRepository: AuthRepository,
@@ -85,66 +86,90 @@ class SessionManager(
     ) {
         _state.value = SessionState.Checking
 
-        // Restore any shift that survived an application restart.
-        shiftSessionManager.restore()
+        try {
+            // Restore any shift that survived an application restart.
+            shiftSessionManager.restore()
 
-        when (
-            val result = roleRepository.getAvailability()
-        ) {
-            is RoleAvailabilityResult.Success -> {
-                val assignedRole = result
-                    .availability
-                    .assignedRoles
-                    .firstOrNull { assignment ->
-                        assignment.driverId == userId
+            when (
+                val result = roleRepository.getAvailability()
+            ) {
+                is RoleAvailabilityResult.Success -> {
+                    val assignedRole = result
+                        .availability
+                        .assignedRoles
+                        .firstOrNull { assignment ->
+                            assignment.driverId == userId
+                        }
+
+                    if (assignedRole == null) {
+                        /*
+                         * The local shift is stale when the server says
+                         * this user currently has no role.
+                         */
+                        shiftSessionManager.clear()
+                    } else {
+                        val currentShiftState =
+                            shiftSessionManager.state.value
+
+                        val currentShift =
+                            (
+                                    currentShiftState
+                                            as? ShiftSessionState.Active
+                                    )
+                                ?.session
+
+                        /*
+                         * Keep the original start time when the restored
+                         * local role matches the server role.
+                         *
+                         * If there is no local shift, or its role differs
+                         * from the server role, persist a new local shift.
+                         */
+                        if (
+                            currentShift == null ||
+                            currentShift.role != assignedRole.role
+                        ) {
+                            shiftSessionManager.startShift(
+                                assignedRole.role
+                            )
+                        }
                     }
 
-                if (assignedRole == null) {
-                    // A local shift is stale when the server says
-                    // this user currently has no role.
-                    shiftSessionManager.clear()
-                } else {
-                    val currentShiftState =
-                        shiftSessionManager.state.value
-
-                    val currentShift =
-                        (currentShiftState as? ShiftSessionState.Active)
-                            ?.session
-
-                    /*
-                     * Keep the existing start time after an ordinary
-                     * process restart. After logout the shift was
-                     * deleted, so a new login reaches startShift()
-                     * and records Instant.now() in UTC.
-                     */
-                    if (
-                        currentShift == null ||
-                        currentShift.role != assignedRole.role
-                    ) {
-                        shiftSessionManager.startShift(
-                            assignedRole.role
-                        )
-                    }
+                    _state.value = SessionState.SignedIn(
+                        userId = userId,
+                        userName = userName
+                    )
                 }
 
-                _state.value = SessionState.SignedIn(
-                    userId = userId,
-                    userName = userName
-                )
-            }
+                RoleAvailabilityResult.Unauthorized -> {
+                    logout()
+                }
 
-            RoleAvailabilityResult.Unauthorized -> {
-                logout()
+                RoleAvailabilityResult.NetworkError,
+                RoleAvailabilityResult.InvalidResponse,
+                is RoleAvailabilityResult.ServerError -> {
+                    _state.value =
+                        SessionState.RoleCheckFailed(
+                            userId = userId,
+                            userName = userName
+                        )
+                }
             }
-
-            RoleAvailabilityResult.NetworkError,
-            RoleAvailabilityResult.InvalidResponse,
-            is RoleAvailabilityResult.ServerError -> {
-                _state.value = SessionState.RoleCheckFailed(
-                    userId = userId,
-                    userName = userName
-                )
-            }
+        } catch (exception: CancellationException) {
+            /*
+             * Coroutine cancellation is lifecycle control, not an
+             * application failure. It must remain cancelled.
+             */
+            throw exception
+        } catch (_: Exception) {
+            /*
+             * A local restore, clear or save operation failed.
+             * Leave Checking so the UI can show Retry and Logout.
+             */
+            _state.value = SessionState.RoleCheckFailed(
+                userId = userId,
+                userName = userName
+            )
         }
     }
 
