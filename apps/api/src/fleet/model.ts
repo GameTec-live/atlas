@@ -10,8 +10,8 @@ const vehicleInsertModel = t.Object({
     odometer: t.Optional(t.Number({ minimum: 0 })),
     fuelLevel: t.Optional(t.Number({ minimum: 0, maximum: 100 })),
     maintenanceEvery: t.Number({ minimum: 0 }),
-    year: t.Date(),
-    assessmentMonth: t.Date(),
+    year: t.Integer({ minimum: 1800 }),
+    assessmentMonth: t.Integer({ minimum: 1, maximum: 12 }),
 });
 
 export const FleetModel = {
