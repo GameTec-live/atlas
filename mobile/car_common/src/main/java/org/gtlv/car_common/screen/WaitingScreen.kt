@@ -9,6 +9,7 @@ import androidx.car.app.model.Template
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import org.gtlv.car_common.R
+import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
 
 /**
@@ -22,6 +23,7 @@ class WaitingScreen(
     carContext: CarContext,
     private val getRole: () -> ShiftRole?,
     private val onRoleAvailable: (ShiftRole) -> Unit,
+    private val serverSettingsRepository: ServerSettingsRepository?,
     private val pollingIntervalMillis: Long = DEFAULT_POLLING_INTERVAL_MILLIS,
 ) : Screen(carContext), DefaultLifecycleObserver {
 

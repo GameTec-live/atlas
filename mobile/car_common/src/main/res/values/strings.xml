@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="waiting_screen_title">Continue on your phone</string>
-    <string name="waiting_screen_explanation">Log in and select your role in the Atlas app on your connected phone. This screen will continue automatically after your role is available.</string>
+    <string name="waiting_screen_explanation">Log in and select your role in the Atlas app on your connected phone. \n This screen will continue automatically after your role is available.</string>
     <string name="main_screen_title">Atlas</string>
     <string name="main_screen_message">You are signed in.</string>
 </resources>

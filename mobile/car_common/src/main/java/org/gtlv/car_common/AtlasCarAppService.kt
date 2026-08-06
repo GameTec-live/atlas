@@ -13,6 +13,7 @@ import org.gtlv.car_common.screen.WaitingScreen
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.shift.ShiftSessionState
 import org.gtlv.core.shift.ShiftSessionProvider
+import org.gtlv.core.settings.ServerSettingsProvider
 
 class AtlasCarAppService : CarAppService() {
 
@@ -35,10 +36,14 @@ class AtlasSession : Session() {
                 ?.session
                 ?.role
         }
+        val serverSettingsRepository =
+            (carContext.applicationContext as? ServerSettingsProvider)
+                ?.serverSettingsRepository
 
         return WaitingScreen(
             carContext = carContext,
             getRole = getRole,
+            serverSettingsRepository = serverSettingsRepository,
             onRoleAvailable = { role ->
                 val onRoleLost: () -> Unit = {
                     carContext.getCarService(ScreenManager::class.java).pop()

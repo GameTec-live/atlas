@@ -8,16 +8,17 @@ import org.gtlv.core.role.RoleRepositoryImpl
 import org.gtlv.core.session.SecureSessionStore
 import org.gtlv.core.session.SessionManager
 import org.gtlv.core.settings.DataStoreServerSettingsRepository
+import org.gtlv.core.settings.ServerSettingsProvider
 import org.gtlv.core.shift.DataStoreShiftSessionStore
 import org.gtlv.core.shift.ShiftSessionManager
 
-class AtlasApplication : Application(), ShiftSessionProvider {
+class AtlasApplication : Application(), ShiftSessionProvider, ServerSettingsProvider {
 
     val networkClient by lazy {
         NetworkClient()
     }
 
-    val serverSettingsRepository by lazy {
+    override val serverSettingsRepository by lazy {
         DataStoreServerSettingsRepository(
             context = applicationContext
         )
