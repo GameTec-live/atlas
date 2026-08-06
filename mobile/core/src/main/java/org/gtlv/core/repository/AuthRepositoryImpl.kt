@@ -2,24 +2,25 @@ package org.gtlv.core.repository
 
 
 
-import org.gtlv.core.network.NetworkClient
-import org.gtlv.core.session.SecureSessionStore
-import org.gtlv.core.session.SessionRestoreResult
-import org.gtlv.core.settings.ServerSettingsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.gtlv.core.network.AccessTokenProvider
+import org.gtlv.core.network.NetworkClient
+import org.gtlv.core.session.SecureSessionStore
+import org.gtlv.core.session.SessionRestoreResult
+import org.gtlv.core.settings.ServerSettingsRepository
 import org.json.JSONObject
 import java.io.IOException
-import kotlinx.coroutines.flow.first
 
 class AuthRepositoryImpl(
     private val networkClient: NetworkClient,
     private val serverSettingsRepository: ServerSettingsRepository,
     private val secureSessionStore: SecureSessionStore
-) : AuthRepository {
+) : AuthRepository, AccessTokenProvider {
 
     private var accessToken: String? = null
 
@@ -154,15 +155,17 @@ class AuthRepositoryImpl(
             val user = root.optJSONObject("user")
                 ?: return SessionRestoreResult.InvalidResponse
 
+            val userId = user.optString("id")
             val email = user.optString("email")
             val name = user
                 .optString("name")
                 .ifBlank { email }
 
-            if (name.isBlank()) {
+            if (userId.isBlank() || name.isBlank()) {
                 SessionRestoreResult.InvalidResponse
             } else {
                 SessionRestoreResult.Valid(
+                    userId = userId,
                     userName = name
                 )
             }
@@ -176,13 +179,23 @@ class AuthRepositoryImpl(
     ): AuthResult {
         return try {
             val root = JSONObject(responseText)
-            val token = root.getString("token")
-            val user = root.getJSONObject("user")
+            val token = root.optString("token")
+            val user = root.optJSONObject("user")
+                ?: return AuthResult.InvalidResponse
 
+            val userId = user.optString("id")
             val email = user.optString("email")
             val name = user
                 .optString("name")
                 .ifBlank { email }
+
+            if (
+                token.isBlank() ||
+                userId.isBlank() ||
+                name.isBlank()
+            ) {
+                return AuthResult.InvalidResponse
+            }
 
             val cookies = networkClient.cookieJar.snapshot()
 
@@ -194,6 +207,7 @@ class AuthRepositoryImpl(
             accessToken = token
 
             AuthResult.Success(
+                userId = userId,
                 userName = name
             )
         } catch (_: Exception) {
@@ -203,7 +217,6 @@ class AuthRepositoryImpl(
             AuthResult.InvalidResponse
         }
     }
-
     private fun readServerMessage(
         responseText: String
     ): String? {
@@ -214,7 +227,7 @@ class AuthRepositoryImpl(
         }.getOrNull()
     }
 
-    internal fun currentAccessToken(): String? {
+    override fun currentAccessToken(): String? {
         return accessToken
     }
 

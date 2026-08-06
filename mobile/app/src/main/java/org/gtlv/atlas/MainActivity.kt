@@ -14,60 +14,52 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import org.gtlv.atlas.auth.LoginScreen
 import org.gtlv.atlas.auth.LoginViewModel
 import org.gtlv.atlas.auth.LoginViewModelFactory
+import org.gtlv.atlas.role.RoleSelectionScreen
+import org.gtlv.atlas.role.RoleSelectionViewModel
+import org.gtlv.atlas.role.RoleSelectionViewModelFactory
 import org.gtlv.atlas.ui.theme.AtlasTheme
-import org.gtlv.core.network.NetworkClient
-import org.gtlv.core.repository.AuthRepository
-import org.gtlv.core.repository.AuthRepositoryImpl
-import org.gtlv.core.session.SecureSessionStore
-import org.gtlv.core.session.SessionManager
 import org.gtlv.core.session.SessionState
-import org.gtlv.core.settings.DataStoreServerSettingsRepository
+import org.gtlv.core.shift.ShiftSessionState
 
 class MainActivity : ComponentActivity() {
 
-    private val networkClient by lazy {
-        NetworkClient()
+    private val atlasApplication by lazy {
+        application as AtlasApplication
     }
 
-    private val serverSettingsRepository by lazy {
-        DataStoreServerSettingsRepository(
-            context = applicationContext
-        )
-    }
+    private val sessionManager
+        get() = atlasApplication.sessionManager
 
-    private val secureSessionStore by lazy {
-        SecureSessionStore(
-            context = applicationContext
-        )
-    }
-
-    private val authRepository: AuthRepository by lazy {
-        AuthRepositoryImpl(
-            networkClient = networkClient,
-            serverSettingsRepository = serverSettingsRepository,
-            secureSessionStore = secureSessionStore
-        )
-    }
-
-    private val sessionManager by lazy {
-        SessionManager(
-            authRepository = authRepository
-        )
-    }
+    private val shiftSessionManager
+        get() = atlasApplication.shiftSessionManager
 
     private val loginViewModel: LoginViewModel by viewModels {
         LoginViewModelFactory(
-            sessionManager = sessionManager,
-            serverSettingsRepository = serverSettingsRepository
+            sessionManager = atlasApplication.sessionManager,
+            serverSettingsRepository =
+                atlasApplication.serverSettingsRepository
+        )
+    }
+
+    private val roleSelectionViewModel:
+            RoleSelectionViewModel by viewModels {
+        RoleSelectionViewModelFactory(
+            roleRepository =
+                atlasApplication.roleRepository,
+            shiftSessionManager =
+                atlasApplication.shiftSessionManager,
+            sessionManager =
+                atlasApplication.sessionManager
         )
     }
 
@@ -77,6 +69,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AtlasTheme {
+                val coroutineScope = rememberCoroutineScope()
+
                 val loginState by loginViewModel.uiState
                     .collectAsStateWithLifecycle()
 
@@ -110,11 +104,52 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    is SessionState.SignedIn -> {
-                        MainScreen(
-                            userName = currentSession.userName,
+                    is SessionState.RoleCheckFailed -> {
+                        RoleCheckFailedScreen(
+                            onRetry = {
+                                coroutineScope.launch {
+                                    sessionManager.retryRoleCheck()
+                                }
+                            },
                             onLogout = loginViewModel::logout
                         )
+                    }
+
+                    is SessionState.SignedIn -> {
+                        val shiftState by shiftSessionManager.state
+                            .collectAsStateWithLifecycle()
+
+                        when (shiftState) {
+                            ShiftSessionState.Loading -> {
+                                SessionLoadingScreen()
+                            }
+
+                            ShiftSessionState.NoActiveShift -> {
+                                val roleState by roleSelectionViewModel.uiState
+                                    .collectAsStateWithLifecycle()
+
+                                LaunchedEffect(Unit) {
+                                    roleSelectionViewModel.retry()
+                                }
+
+                                RoleSelectionScreen(
+                                    state = roleState,
+                                    onDispatcherSelected =
+                                        roleSelectionViewModel::selectDispatcher,
+                                    onDriverSelected =
+                                        roleSelectionViewModel::selectDriver,
+                                    onRetry =
+                                        roleSelectionViewModel::retry
+                                )
+                            }
+
+                            is ShiftSessionState.Active -> {
+                                MainScreen(
+                                    userName = currentSession.userName,
+                                    onLogout = loginViewModel::logout
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -129,6 +164,31 @@ private fun SessionLoadingScreen() {
         contentAlignment = Alignment.Center
     ) {
         CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun RoleCheckFailedScreen(
+    onRetry: () -> Unit,
+    onLogout: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Could not check your current role.",
+            style = MaterialTheme.typography.bodyLarge
+        )
+
+        Button(onClick = onRetry) {
+            Text(text = "Retry")
+        }
+
+        Button(onClick = onLogout) {
+            Text(text = "Log out")
+        }
     }
 }
 

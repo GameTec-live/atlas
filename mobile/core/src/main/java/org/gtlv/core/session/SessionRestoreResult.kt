@@ -3,6 +3,7 @@ package org.gtlv.core.session
 sealed interface SessionRestoreResult {
 
     data class Valid(
+        val userId: String,
         val userName: String
     ) : SessionRestoreResult
 
