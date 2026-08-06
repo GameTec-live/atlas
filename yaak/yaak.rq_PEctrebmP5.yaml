@@ -1,0 +1,42 @@
+type: http_request
+model: http_request
+id: rq_PEctrebmP5
+createdAt: 2026-08-05T09:09:03.797334400
+updatedAt: 2026-08-05T09:09:03.797334900
+workspaceId: wk_gbXsp49jy7
+folderId: fl_QcJDtzoEjW
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: ''
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: get Fleet Fingerprint By Fingerprint
+sortPriority: 19.0
+url: ${[baseUrl]}/fleet/fingerprint/:fingerprint
+urlParameters:
+- enabled: true
+  name: :fingerprint
+  value: <string>
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

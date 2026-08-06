@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_u63nyg7Shi
+createdAt: 2026-08-05T09:09:04.137962700
+updatedAt: 2026-08-05T09:09:04.137963100
+workspaceId: wk_gbXsp49jy7
+folderId: fl_MQZcoedbXv
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: ''
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: get Roles
+sortPriority: 23.0
+url: ${[baseUrl]}/roles/
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

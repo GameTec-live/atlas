@@ -1,0 +1,47 @@
+type: http_request
+model: http_request
+id: rq_Xo3FSCaW97
+createdAt: 2026-08-05T09:09:04.004950400
+updatedAt: 2026-08-05T09:09:04.004950800
+workspaceId: wk_gbXsp49jy7
+folderId: fl_FMwYLXdJE3
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  form: []
+bodyType: application/x-www-form-urlencoded
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/x-www-form-urlencoded
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: post Jobs By Id Cancel
+sortPriority: 37.0
+url: ${[baseUrl]}/jobs/:id/cancel
+urlParameters:
+- enabled: true
+  name: :id
+  value: <uuid>
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

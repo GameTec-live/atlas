@@ -1,0 +1,43 @@
+type: http_request
+model: http_request
+id: rq_LR9bKyYBgz
+createdAt: 2026-08-05T09:09:03.753243800
+updatedAt: 2026-08-05T09:09:03.753244500
+workspaceId: wk_gbXsp49jy7
+folderId: fl_2JD8xSfj8w
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  text: ''
+bodyType: other
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: ''
+  id: null
+- enabled: true
+  name: Accept
+  value: text/plain
+  id: null
+method: PUT
+name: put Config Logo
+sortPriority: 5.0
+url: ${[baseUrl]}/config/logo
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

@@ -1,0 +1,64 @@
+type: http_request
+model: http_request
+id: rq_fWzmGBrtzr
+createdAt: 2026-08-05T09:09:04.110528
+updatedAt: 2026-08-05T09:09:04.110528500
+workspaceId: wk_gbXsp49jy7
+folderId: null
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  form:
+  - enabled: true
+    name: startedAt
+    value: <Date>
+  - enabled: true
+    name: startOdometer
+    value: '0'
+  - enabled: true
+    name: endOdometer
+    value: '0'
+  - enabled: true
+    name: endedAt
+    value: <Date>
+  - enabled: true
+    name: revenue
+    value: <number>
+  - enabled: true
+    name: vehicleId
+    value: <uuid>
+  - enabled: true
+    name: vehicleFingerprint
+    value: <string>
+bodyType: application/x-www-form-urlencoded
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/x-www-form-urlencoded
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: post Logbooks Submit
+sortPriority: 38.0
+url: ${[baseUrl]}/logbooks/submit
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

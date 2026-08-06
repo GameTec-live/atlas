@@ -1,0 +1,49 @@
+type: http_request
+model: http_request
+id: rq_aRzUh82qZr
+createdAt: 2026-08-05T09:09:04.151822400
+updatedAt: 2026-08-05T09:09:04.151822700
+workspaceId: wk_gbXsp49jy7
+folderId: fl_MQZcoedbXv
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  form:
+  - enabled: true
+    name: role
+    value: <string>
+  - enabled: true
+    name: date
+    value: <Date>
+bodyType: application/x-www-form-urlencoded
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/x-www-form-urlencoded
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: POST
+name: post Roles
+sortPriority: 24.0
+url: ${[baseUrl]}/roles/
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

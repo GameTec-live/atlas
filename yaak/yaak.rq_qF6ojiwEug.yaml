@@ -1,0 +1,43 @@
+type: http_request
+model: http_request
+id: rq_qF6ojiwEug
+createdAt: 2026-08-05T09:09:03.709074600
+updatedAt: 2026-08-05T09:09:03.709075200
+workspaceId: wk_gbXsp49jy7
+folderId: fl_LXYnVY9h3z
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body:
+  form: []
+bodyType: application/x-www-form-urlencoded
+description: ''
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/x-www-form-urlencoded
+  id: null
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: PUT
+name: put Config
+sortPriority: 2.0
+url: ${[baseUrl]}/config/
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

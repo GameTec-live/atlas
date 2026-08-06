@@ -1,0 +1,42 @@
+type: http_request
+model: http_request
+id: rq_ND7wpLS7et
+createdAt: 2026-08-05T09:09:04.018082800
+updatedAt: 2026-08-05T09:09:04.018083400
+workspaceId: wk_gbXsp49jy7
+folderId: fl_FMwYLXdJE3
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: ''
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: get Jobs By Id Candidates
+sortPriority: 33.0
+url: ${[baseUrl]}/jobs/:id/candidates
+urlParameters:
+- enabled: true
+  name: :id
+  value: <uuid>
+  id: null
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

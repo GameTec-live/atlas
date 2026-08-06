@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_YV22jDKLbZ
+createdAt: 2026-08-05T09:09:03.694763
+updatedAt: 2026-08-05T09:09:03.694763500
+workspaceId: wk_gbXsp49jy7
+folderId: fl_LXYnVY9h3z
+authentication:
+  token: ${[bearerToken]}
+authenticationType: bearer
+body: {}
+bodyType: null
+description: ''
+headers:
+- enabled: true
+  name: Accept
+  value: application/json
+  id: null
+method: GET
+name: get Config
+sortPriority: 1.0
+url: ${[baseUrl]}/config/
+urlParameters: []
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0

@@ -3,14 +3,13 @@ import { eq } from "drizzle-orm";
 import { Elysia } from "elysia";
 import { env } from "@/env";
 import { authHandler } from "../authHandler";
-import { config } from "../config";
 import { db } from "../db";
 import { shortname } from "../db/schema";
 import { type GeocoderResponse, GeoservicesModel } from "./model";
+import { requestRoute } from "./router";
 
 const CACHE_SIZE = 1000;
 const GEOCODER_URL = env.GEOCODER_URL.replace(/\/+$/, "");
-const ROUTER_URL = env.ROUTER_URL.replace(/\/+$/, "");
 
 interface ResolveCacheEntry {
     resolvedAddress: string;
@@ -113,51 +112,21 @@ export const geoservices = new Elysia({
     .get(
         "/route",
         async ({ query, set }) => {
-            const routeQuery = {
-                locations: [
+            const { status, result } = await requestRoute(
+                [
                     {
-                        options: {
-                            allowUTurn: false,
-                        },
-                        latLng: {
-                            lat: query.fromlat,
-                            lng: query.fromlon,
-                        },
-                        _initHooksCalled: true,
-                        lat: query.fromlat,
-                        lon: query.fromlon,
+                        latitude: query.fromlat,
+                        longitude: query.fromlon,
                     },
                     {
-                        options: {
-                            allowUTurn: false,
-                        },
-                        latLng: {
-                            lat: query.tolat,
-                            lng: query.tolon,
-                        },
-                        _initHooksCalled: true,
-                        lat: query.tolat,
-                        lon: query.tolon,
+                        latitude: query.tolat,
+                        longitude: query.tolon,
                     },
                 ],
-                costing: "auto",
-                directions_options: {
-                    language: query.lang || config.routing.defaultLanguage,
-                },
-            };
-
-            const routeResponse = await fetch(
-                `${ROUTER_URL}/route?json=${encodeURIComponent(JSON.stringify(routeQuery))}`,
-                {
-                    method: "GET",
-                },
-            );
-            const result = Value.Decode(
-                GeoservicesModel.routeResponse,
-                await routeResponse.json(),
+                query.lang,
             );
 
-            set.status = routeResponse.status;
+            set.status = status;
             return result;
         },
         {
