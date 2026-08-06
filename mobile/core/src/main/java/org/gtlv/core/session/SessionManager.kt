@@ -42,8 +42,15 @@ class SessionManager(
             SessionRestoreResult.InvalidResponse,
             SessionRestoreResult.NetworkError,
             is SessionRestoreResult.ServerError -> {
-                shiftSessionManager.clear()
-                _state.value = SessionState.SignedOut
+                try {
+                    shiftSessionManager.clear()
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (_: Exception) {
+
+                } finally {
+                    _state.value = SessionState.SignedOut
+                }
             }
         }
 
