@@ -30,6 +30,7 @@ import org.gtlv.atlas.role.RoleSelectionViewModelFactory
 import org.gtlv.atlas.ui.theme.AtlasTheme
 import org.gtlv.core.session.SessionState
 import org.gtlv.core.shift.ShiftSessionState
+import org.gtlv.atlas.navigation.AuthenticatedNavHost
 
 class MainActivity : ComponentActivity() {
 
@@ -119,7 +120,7 @@ class MainActivity : ComponentActivity() {
                         val shiftState by shiftSessionManager.state
                             .collectAsStateWithLifecycle()
 
-                        when (shiftState) {
+                        when (val currentShift = shiftState) {
                             ShiftSessionState.Loading -> {
                                 SessionLoadingScreen()
                             }
@@ -144,8 +145,9 @@ class MainActivity : ComponentActivity() {
                             }
 
                             is ShiftSessionState.Active -> {
-                                MainScreen(
+                                AuthenticatedNavHost(
                                     userName = currentSession.userName,
+                                    role = currentShift.session.role,
                                     onLogout = loginViewModel::logout
                                 )
                             }
@@ -185,27 +187,6 @@ private fun RoleCheckFailedScreen(
         Button(onClick = onRetry) {
             Text(text = "Retry")
         }
-
-        Button(onClick = onLogout) {
-            Text(text = "Log out")
-        }
-    }
-}
-
-@Composable
-private fun MainScreen(
-    userName: String,
-    onLogout: () -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "Welcome, $userName",
-            style = MaterialTheme.typography.headlineMedium
-        )
 
         Button(onClick = onLogout) {
             Text(text = "Log out")
