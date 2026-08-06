@@ -1,5 +1,6 @@
 package org.gtlv.atlas.role
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.role.composable.RoleSelectionContent
-import androidx.compose.foundation.layout.Arrangement
 
 @Composable
 fun RoleSelectionScreen(

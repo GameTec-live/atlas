@@ -2,19 +2,19 @@ package org.gtlv.core.repository
 
 
 
-import org.gtlv.core.network.NetworkClient
-import org.gtlv.core.session.SecureSessionStore
-import org.gtlv.core.session.SessionRestoreResult
-import org.gtlv.core.settings.ServerSettingsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.gtlv.core.network.AccessTokenProvider
+import org.gtlv.core.network.NetworkClient
+import org.gtlv.core.session.SecureSessionStore
+import org.gtlv.core.session.SessionRestoreResult
+import org.gtlv.core.settings.ServerSettingsRepository
 import org.json.JSONObject
 import java.io.IOException
-import kotlinx.coroutines.flow.first
-import org.gtlv.core.network.AccessTokenProvider
 
 class AuthRepositoryImpl(
     private val networkClient: NetworkClient,

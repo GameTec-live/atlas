@@ -16,20 +16,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import org.gtlv.atlas.auth.LoginScreen
 import org.gtlv.atlas.auth.LoginViewModel
 import org.gtlv.atlas.auth.LoginViewModelFactory
 import org.gtlv.atlas.role.RoleSelectionScreen
+import org.gtlv.atlas.role.RoleSelectionViewModel
+import org.gtlv.atlas.role.RoleSelectionViewModelFactory
 import org.gtlv.atlas.ui.theme.AtlasTheme
 import org.gtlv.core.session.SessionState
-import org.gtlv.atlas.role.RoleSelectionViewModelFactory
-import org.gtlv.atlas.role.RoleSelectionViewModel
 import org.gtlv.core.shift.ShiftSessionState
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 

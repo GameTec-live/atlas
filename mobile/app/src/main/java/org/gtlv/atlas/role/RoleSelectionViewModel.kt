@@ -16,7 +16,6 @@ import org.gtlv.core.role.SelectRoleResult
 import org.gtlv.core.session.SessionManager
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.shift.ShiftSessionManager
-import android.util.Log
 
 class RoleSelectionViewModel(
     private val roleRepository: RoleRepository,
