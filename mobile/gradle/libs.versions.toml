@@ -14,6 +14,7 @@ okhttp = "4.12.0"
 coroutines = "1.10.2"
 datastore = "1.2.1"
 coil = "3.3.0"
+material3Adaptive = "1.2.0"
 
 
 [libraries]
@@ -39,6 +40,8 @@ androidx-datastore-preferences = { module = "androidx.datastore:datastore-prefer
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }
+androidx-material3-adaptive = { module = "androidx.compose.material3.adaptive:adaptive", version.ref = "material3Adaptive" }
+
 
 
 [plugins]
