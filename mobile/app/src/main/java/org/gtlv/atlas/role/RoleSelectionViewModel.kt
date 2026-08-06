@@ -34,7 +34,13 @@ class RoleSelectionViewModel(
     }
 
     fun retry() {
-        loadAvailability()
+        val pendingRole = _uiState.value.pendingShiftRole
+
+        if (pendingRole != null) {
+            retryShiftSave(pendingRole)
+        } else {
+            loadAvailability()
+        }
     }
 
     fun selectDriver() {
@@ -50,7 +56,8 @@ class RoleSelectionViewModel(
 
         if (
             currentState.isLoadingAvailability ||
-            currentState.isSelectingRole
+            currentState.isSelectingRole ||
+            currentState.pendingShiftRole != null
         ) {
             return
         }
@@ -138,7 +145,8 @@ class RoleSelectionViewModel(
         if (
             !currentState.availabilityLoaded ||
             currentState.isLoadingAvailability ||
-            currentState.isSelectingRole
+            currentState.isSelectingRole ||
+            currentState.pendingShiftRole != null
         ) {
             return
         }
@@ -171,6 +179,12 @@ class RoleSelectionViewModel(
 
             when (result) {
                 SelectRoleResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            pendingShiftRole = role
+                        )
+                    }
+
                     saveShift(role)
                 }
 
@@ -231,14 +245,13 @@ class RoleSelectionViewModel(
 
     private suspend fun saveShift(role: ShiftRole) {
         try {
-            // ShiftSessionManager uses the UTC device clock and
-            // persists the role and start time.
             shiftSessionManager.startShift(role)
 
             _uiState.update {
                 it.copy(
                     isSelectingRole = false,
                     selectedRole = null,
+                    pendingShiftRole = null,
                     error = null
                 )
             }
@@ -249,11 +262,35 @@ class RoleSelectionViewModel(
                 it.copy(
                     isSelectingRole = false,
                     selectedRole = null,
+                    pendingShiftRole = role,
                     error = UiText.Resource(
                         R.string.shift_save_error
                     )
                 )
             }
+        }
+    }
+
+    private fun retryShiftSave(role: ShiftRole) {
+        val currentState = _uiState.value
+
+        if (
+            currentState.isSelectingRole ||
+            currentState.pendingShiftRole != role
+        ) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                isSelectingRole = true,
+                selectedRole = role,
+                error = null
+            )
+        }
+
+        viewModelScope.launch {
+            saveShift(role)
         }
     }
 

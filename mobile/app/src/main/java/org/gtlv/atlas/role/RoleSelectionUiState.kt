@@ -8,6 +8,7 @@ data class RoleSelectionUiState(
     val isLoadingAvailability: Boolean = false,
     val isSelectingRole: Boolean = false,
     val selectedRole: ShiftRole? = null,
+    val pendingShiftRole: ShiftRole? = null,
     val dispatcherAvailable: Boolean = false,
     val dispatcherSpotsFree: Int = 0,
     val error: UiText? = null

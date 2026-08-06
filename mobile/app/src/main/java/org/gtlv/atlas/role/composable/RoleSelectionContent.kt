@@ -60,7 +60,8 @@ internal fun RoleSelectionContent(
             enabled = state.availabilityLoaded &&
                     state.dispatcherAvailable &&
                     !state.isLoadingAvailability &&
-                    !state.isSelectingRole,
+                    !state.isSelectingRole &&
+                    state.pendingShiftRole == null,
             isLoading = state.isSelectingRole &&
                     state.selectedRole == ShiftRole.DISPATCHER,
             onClick = onDispatcherSelected
@@ -76,7 +77,8 @@ internal fun RoleSelectionContent(
             text = stringResource(R.string.role_driver),
             enabled = state.availabilityLoaded &&
                     !state.isLoadingAvailability &&
-                    !state.isSelectingRole,
+                    !state.isSelectingRole &&
+                    state.pendingShiftRole == null,
             isLoading = state.isSelectingRole &&
                     state.selectedRole == ShiftRole.DRIVER,
             onClick = onDriverSelected
@@ -95,8 +97,12 @@ internal fun RoleSelectionContent(
 
         if (
             state.error != null &&
-            !state.availabilityLoaded &&
-            !state.isLoadingAvailability
+            !state.isLoadingAvailability &&
+            !state.isSelectingRole &&
+            (
+                    !state.availabilityLoaded ||
+                            state.pendingShiftRole != null
+                    )
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 

@@ -107,7 +107,7 @@ class RoleRepositoryImpl(
                             SelectRoleResult.Success
                         }
 
-                        response.code == 409 -> {
+                        response.code == 409 || response.code == 418 -> {
                             SelectRoleResult.RoleUnavailable(
                                 message = readServerMessage(responseText)
                             )
