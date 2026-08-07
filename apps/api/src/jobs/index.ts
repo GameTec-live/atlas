@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { Elysia, status, t } from "elysia";
 import { env } from "@/env";
 import { authHandler } from "../authHandler";
@@ -343,5 +343,34 @@ export const jobs = new Elysia({
                 id: t.String({ format: "uuid" }),
             }),
             auth: true,
+        },
+    )
+    .get(
+        "/all",
+        async ({ query }) => {
+            const jobs = await db
+                .select()
+                .from(job)
+                .orderBy(desc(job.createdAt))
+                .where(
+                    query.filter === "assigned"
+                        ? isNotNull(job.assignedDriverId)
+                        : query.filter === "unassigned"
+                          ? isNull(job.assignedDriverId)
+                          : undefined,
+                );
+            return jobs;
+        },
+        {
+            query: t.Object({
+                filter: t.Optional(
+                    t.Enum({
+                        all: "all",
+                        assigned: "assigned",
+                        unassigned: "unassigned",
+                    }),
+                ),
+            }),
+            admin: true,
         },
     );
