@@ -19,7 +19,7 @@ export const shortnames = new Elysia({
             const [foundShortname] = await db
                 .select()
                 .from(shortname)
-                .where(eq(shortname.key, params.key.toLowerCase()))
+                .where(eq(shortname.key, params.key.trim().toLowerCase()))
                 .limit(1);
 
             if (!foundShortname) {
@@ -40,7 +40,7 @@ export const shortnames = new Elysia({
                 .insert(shortname)
                 .values({
                     ...body,
-                    key: body.key.toLowerCase(),
+                    key: body.key.trim().toLowerCase(),
                 })
                 .onConflictDoNothing({ target: shortname.key })
                 .returning();
@@ -62,7 +62,7 @@ export const shortnames = new Elysia({
             const [updatedShortname] = await db
                 .update(shortname)
                 .set(body)
-                .where(eq(shortname.key, params.key.toLowerCase()))
+                .where(eq(shortname.key, params.key.trim().toLowerCase()))
                 .returning();
 
             if (!updatedShortname) {
@@ -82,7 +82,7 @@ export const shortnames = new Elysia({
         async ({ params }) => {
             const [deletedShortname] = await db
                 .delete(shortname)
-                .where(eq(shortname.key, params.key.toLowerCase()))
+                .where(eq(shortname.key, params.key.trim().toLowerCase()))
                 .returning();
 
             if (!deletedShortname) {

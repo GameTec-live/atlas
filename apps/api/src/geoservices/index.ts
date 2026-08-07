@@ -23,7 +23,7 @@ const resolveShortname = async (address: string) => {
     const result = await db
         .select()
         .from(shortname)
-        .where(eq(shortname.key, address.toLowerCase()))
+        .where(eq(shortname.key, address.trim().toLowerCase()))
         .limit(1);
 
     return result[0]?.value ?? address;
