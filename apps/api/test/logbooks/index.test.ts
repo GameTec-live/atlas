@@ -389,21 +389,23 @@ describe("GET /logbooks/:id", () => {
         const response = await fetchRequest(`/${exampleLogbook.id}`);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([serializedFetchedLogbook]);
+        expect(await response.json()).toEqual(serializedFetchedLogbook);
 
         const { sql, values } = getQuery(0);
         expect(sql).toContain('where "logbook"."id" = $1');
         expect(values).toEqual([exampleLogbook.id]);
     });
 
-    it("returns an empty list when the logbook id does not exist", async () => {
+    it("returns 404 when the logbook id does not exist", async () => {
         getSessionMock.mockResolvedValue(adminSession);
         setDbMockRows("select", []);
 
         const response = await fetchRequest(`/${exampleLogbook.id}`);
 
-        expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([]);
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({
+            error: "Logbook entry not found",
+        });
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
     });
 

@@ -90,7 +90,7 @@ export const logbooks = new Elysia({
     .get(
         "/:id",
         async ({ params }) => {
-            const logbookEntries = await db
+            const [logbookEntry] = await db
                 .select({
                     id: logbook.id,
                     vehicleId: logbook.vehicleId,
@@ -115,7 +115,12 @@ export const logbooks = new Elysia({
                 .leftJoin(vehicle, eq(logbook.vehicleId, vehicle.id))
                 .leftJoin(user, eq(logbook.driverId, user.id))
                 .where(eq(logbook.id, params.id));
-            return logbookEntries;
+
+            if (!logbookEntry) {
+                return status(404, { error: "Logbook entry not found" });
+            }
+
+            return logbookEntry;
         },
         {
             params: t.Object({
