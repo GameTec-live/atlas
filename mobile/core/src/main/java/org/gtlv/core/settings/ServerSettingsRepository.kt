@@ -8,3 +8,7 @@ interface ServerSettingsRepository {
 
     suspend fun setServerAddress(address: String)
 }
+
+interface ServerSettingsProvider {
+    val serverSettingsRepository: ServerSettingsRepository
+}

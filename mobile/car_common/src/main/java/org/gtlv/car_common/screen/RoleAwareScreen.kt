@@ -10,26 +10,18 @@ import androidx.car.app.model.Template
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import org.gtlv.car_common.R
-import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
 
-/**
- * Fail-closed entry screen shown until the connected phone user has a role.
- *
- * Login and role selection are deliberately performed by the phone application. This screen only
- * observes whether core has loaded a role for the current user and advances once one is available.
- */
-class WaitingScreen(
+/** Shared role monitoring for the concrete driver and dispatcher screens. */
+abstract class RoleAwareScreen(
     carContext: CarContext,
+    private val expectedRole: ShiftRole,
     private val getRole: () -> ShiftRole?,
-    private val onRoleAvailable: (ShiftRole) -> Unit,
-    private val serverSettingsRepository: ServerSettingsRepository?,
-    private val pollingIntervalMillis: Long = DEFAULT_POLLING_INTERVAL_MILLIS,
+    private val onRoleLost: () -> Unit,
+    private val pollingIntervalMillis: Long = WaitingScreen.DEFAULT_POLLING_INTERVAL_MILLIS,
 ) : Screen(carContext), DefaultLifecycleObserver {
-
     private val handler = Handler(Looper.getMainLooper())
     private var isObserving = false
-    private var hasNavigated = false
 
     private val rolePoll = object : Runnable {
         override fun run() {
@@ -37,8 +29,9 @@ class WaitingScreen(
 
             val role = runCatching(getRole).getOrNull()
 
-            if (role != null) {
-                navigateToRoleContent(role)
+            if (role != expectedRole) {
+                stopObserving()
+                onRoleLost()
             } else {
                 handler.postDelayed(this, pollingIntervalMillis)
             }
@@ -50,7 +43,6 @@ class WaitingScreen(
     }
 
     override fun onStart(owner: LifecycleOwner) {
-        hasNavigated = false
         isObserving = true
         handler.removeCallbacks(rolePoll)
         handler.post(rolePoll)
@@ -66,7 +58,7 @@ class WaitingScreen(
     }
 
     override fun onGetTemplate(): Template = MessageTemplate.Builder(
-        carContext.getString(R.string.waiting_screen_explanation),
+        carContext.getString(R.string.main_screen_message),
     )
         .setHeader(
             Header.Builder()
@@ -75,19 +67,8 @@ class WaitingScreen(
         )
         .build()
 
-    private fun navigateToRoleContent(role: ShiftRole) {
-        if (hasNavigated) return
-        hasNavigated = true
-        stopObserving()
-        onRoleAvailable(role)
-    }
-
     private fun stopObserving() {
         isObserving = false
         handler.removeCallbacks(rolePoll)
-    }
-
-    companion object {
-        const val DEFAULT_POLLING_INTERVAL_MILLIS = 1_000L
     }
 }
