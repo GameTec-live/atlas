@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
+import androidx.car.app.model.Header
 import androidx.car.app.model.MessageTemplate
 import androidx.car.app.model.Template
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -12,7 +13,6 @@ import org.gtlv.car_common.R
 import org.gtlv.core.shift.ShiftRole
 
 /** Shared role monitoring for the concrete driver and dispatcher screens. */
-@Suppress("DEPRECATION") // Legacy title API keeps the template compatible with pre-Car-API-7 hosts.
 abstract class RoleAwareScreen(
     carContext: CarContext,
     private val expectedRole: ShiftRole,
@@ -60,7 +60,11 @@ abstract class RoleAwareScreen(
     override fun onGetTemplate(): Template = MessageTemplate.Builder(
         carContext.getString(R.string.main_screen_message),
     )
-        .setTitle(carContext.getString(R.string.main_screen_title))
+        .setHeader(
+            Header.Builder()
+                .setTitle(carContext.getString(R.string.main_screen_title))
+                .build(),
+        )
         .build()
 
     private fun stopObserving() {

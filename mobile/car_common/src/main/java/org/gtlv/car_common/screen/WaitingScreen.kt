@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
+import androidx.car.app.model.Header
 import androidx.car.app.model.MessageTemplate
 import androidx.car.app.model.Template
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -18,7 +19,6 @@ import org.gtlv.core.shift.ShiftRole
  * Login and role selection are deliberately performed by the phone application. This screen only
  * observes whether core has loaded a role for the current user and advances once one is available.
  */
-@Suppress("DEPRECATION") // Legacy title API keeps the template compatible with pre-Car-API-7 hosts.
 class WaitingScreen(
     carContext: CarContext,
     private val getRole: () -> ShiftRole?,
@@ -68,7 +68,11 @@ class WaitingScreen(
     override fun onGetTemplate(): Template = MessageTemplate.Builder(
         carContext.getString(R.string.waiting_screen_explanation),
     )
-        .setTitle(carContext.getString(R.string.waiting_screen_title))
+        .setHeader(
+            Header.Builder()
+                .setTitle(carContext.getString(R.string.main_screen_title))
+                .build(),
+        )
         .build()
 
     private fun navigateToRoleContent(role: ShiftRole) {
