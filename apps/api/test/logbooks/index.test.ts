@@ -1,4 +1,11 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import {
+    afterEach,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    setSystemTime,
+} from "bun:test";
 import { Elysia } from "elysia";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
 import {
@@ -41,6 +48,26 @@ const serializedLogbook = {
     updatedAt: exampleLogbook.updatedAt.toISOString(),
 };
 
+const adminSession = {
+    ...session,
+    user: {
+        ...session.user,
+        role: "admin",
+    },
+};
+
+const serializedFetchedLogbook = {
+    ...serializedLogbook,
+    driverName: first(exampleData.user, "user").name,
+    vehicle: {
+        id: exampleVehicle.id,
+        licensePlate: exampleVehicle.licensePlate,
+        brand: exampleVehicle.brand,
+        model: exampleVehicle.model,
+        year: exampleVehicle.year,
+    },
+};
+
 const submitRequest = (body: unknown, authenticated = true) => {
     const headers = new Headers({ "content-type": "application/json" });
     if (authenticated) {
@@ -54,6 +81,34 @@ const submitRequest = (body: unknown, authenticated = true) => {
             body: JSON.stringify(body),
         }),
     );
+};
+
+const fetchRequest = (path: string) =>
+    app.handle(
+        new Request(`http://localhost/logbooks${path}`, {
+            headers: { authorization: "Bearer test-token" },
+        }),
+    );
+
+const useJoinedLogbookRow = () => {
+    const logbookRow = first(getDbMockTableRows("logbook"), "logbook row");
+    const vehicleRow = first(getDbMockTableRows("vehicle"), "vehicle row");
+    const driver = first(exampleData.user, "user");
+
+    setDbMockRows("select", [
+        [
+            logbookRow[0],
+            logbookRow[1],
+            logbookRow[2],
+            driver.name,
+            ...logbookRow.slice(3),
+            vehicleRow[0],
+            vehicleRow[5],
+            vehicleRow[2],
+            vehicleRow[3],
+            vehicleRow[4],
+        ],
+    ]);
 };
 
 const getQuery = (index: number) => {
@@ -78,6 +133,10 @@ const getQuery = (index: number) => {
 beforeEach(() => {
     resetAuthMocks();
     resetDbMocks();
+});
+
+afterEach(() => {
+    setSystemTime();
 });
 
 describe("POST /logbooks/submit authentication", () => {
@@ -252,5 +311,294 @@ describe("POST /logbooks/submit errors and validation", () => {
 
         expect(response.status).toBe(422);
         expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("logbook fetch authentication", () => {
+    const fetchPaths = [
+        "/",
+        `/${exampleLogbook.id}`,
+        `/vehicle/${vehicleId}`,
+        `/driver/${exampleLogbook.driverId}`,
+        "/date",
+    ];
+
+    it.each(
+        fetchPaths,
+    )("returns 401 for an unauthenticated GET %s without querying the database", async (path) => {
+        const response = await fetchRequest(path);
+
+        expect(response.status).toBe(401);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it.each(
+        fetchPaths,
+    )("returns 403 for a non-admin GET %s without querying the database", async (path) => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await fetchRequest(path);
+
+        expect(response.status).toBe(403);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("GET /logbooks/", () => {
+    it("returns every logbook with its driver name and vehicle summary", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        useJoinedLogbookRow();
+
+        const response = await fetchRequest("/");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([serializedFetchedLogbook]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const { sql, values } = getQuery(0);
+        expect(sql).toContain('from "logbook"');
+        expect(sql).toContain(
+            'left join "vehicle" on "logbook"."vehicle_id" = "vehicle"."id"',
+        );
+        expect(sql).toContain(
+            'left join "user" on "logbook"."driver_id" = "user"."id"',
+        );
+        expect(sql).not.toContain(" where ");
+        expect(values).toEqual([]);
+    });
+
+    it("returns an empty list when no logbook entries exist", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRows("select", []);
+
+        const response = await fetchRequest("/");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("GET /logbooks/:id", () => {
+    it("filters by logbook id and returns the joined entry", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        useJoinedLogbookRow();
+
+        const response = await fetchRequest(`/${exampleLogbook.id}`);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(serializedFetchedLogbook);
+
+        const { sql, values } = getQuery(0);
+        expect(sql).toContain('where "logbook"."id" = $1');
+        expect(values).toEqual([exampleLogbook.id]);
+    });
+
+    it("returns 404 when the logbook id does not exist", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRows("select", []);
+
+        const response = await fetchRequest(`/${exampleLogbook.id}`);
+
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({
+            error: "Logbook entry not found",
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 422 for a non-UUID id without querying the database", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await fetchRequest("/not-a-uuid");
+
+        expect(response.status).toBe(422);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("GET /logbooks/vehicle/:vehicleId", () => {
+    it("filters entries by vehicle id", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        useJoinedLogbookRow();
+
+        const response = await fetchRequest(`/vehicle/${vehicleId}`);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([serializedFetchedLogbook]);
+
+        const { sql, values } = getQuery(0);
+        expect(sql).toContain('where "logbook"."vehicle_id" = $1');
+        expect(values).toEqual([vehicleId]);
+    });
+
+    it("returns an empty list when the vehicle has no entries", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRows("select", []);
+
+        const response = await fetchRequest(`/vehicle/${vehicleId}`);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+    });
+
+    it("returns 422 for a non-UUID vehicle id without querying the database", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await fetchRequest("/vehicle/not-a-uuid");
+
+        expect(response.status).toBe(422);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("GET /logbooks/driver/:driverId", () => {
+    it("filters entries by driver id", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        useJoinedLogbookRow();
+
+        const response = await fetchRequest(
+            `/driver/${exampleLogbook.driverId}`,
+        );
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([serializedFetchedLogbook]);
+
+        const { sql, values } = getQuery(0);
+        expect(sql).toContain('where "logbook"."driver_id" = $1');
+        expect(values).toEqual([exampleLogbook.driverId]);
+    });
+
+    it("returns an empty list when the driver has no entries", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRows("select", []);
+
+        const response = await fetchRequest("/driver/unknown-driver");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+
+        const { values } = getQuery(0);
+        expect(values).toEqual(["unknown-driver"]);
+    });
+});
+
+describe("GET /logbooks/date", () => {
+    const startDate = "2026-07-20T08:00:00.000Z";
+    const endDate = "2026-07-20T18:00:00.000Z";
+    const exactDate = "2026-07-20T09:15:00.000Z";
+
+    const dateRequest = (query: Record<string, string> = {}) => {
+        const search = new URLSearchParams(query).toString();
+        return fetchRequest(`/date${search ? `?${search}` : ""}`);
+    };
+
+    it("uses exactDate in preference to the range parameters", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        useJoinedLogbookRow();
+
+        const response = await dateRequest({
+            exactDate,
+            startDate,
+            endDate,
+        });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([serializedFetchedLogbook]);
+
+        const { sql, values } = getQuery(0);
+        expect(sql).toContain('where "logbook"."started_at" = $1');
+        expect(sql).not.toContain(" between ");
+        expect(values).toEqual([exactDate]);
+    });
+
+    it("filters inclusively between startDate and endDate", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        useJoinedLogbookRow();
+
+        const response = await dateRequest({ startDate, endDate });
+
+        expect(response.status).toBe(200);
+
+        const { sql, values } = getQuery(0);
+        expect(sql).toContain('where "logbook"."started_at" between $1 and $2');
+        expect(values).toEqual([startDate, endDate]);
+    });
+
+    it("filters from startDate when no endDate is supplied", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        useJoinedLogbookRow();
+
+        const response = await dateRequest({ startDate });
+
+        expect(response.status).toBe(200);
+
+        const { sql, values } = getQuery(0);
+        expect(sql).toContain('where "logbook"."started_at" >= $1');
+        expect(values).toEqual([startDate]);
+    });
+
+    it("filters through endDate when no startDate is supplied", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        useJoinedLogbookRow();
+
+        const response = await dateRequest({ endDate });
+
+        expect(response.status).toBe(200);
+
+        const { sql, values } = getQuery(0);
+        expect(sql).toContain('where "logbook"."started_at" <= $1');
+        expect(values).toEqual([endDate]);
+    });
+
+    it("defaults to entries started since local midnight", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        useJoinedLogbookRow();
+        setSystemTime(new Date("2026-07-20T14:32:10.000Z"));
+        const expectedMidnight = new Date();
+        expectedMidnight.setHours(0, 0, 0, 0);
+
+        const response = await dateRequest();
+
+        expect(response.status).toBe(200);
+
+        const { sql, values } = getQuery(0);
+        expect(sql).toContain('where "logbook"."started_at" >= $1');
+        expect(values).toEqual([expectedMidnight.toISOString()]);
+    });
+
+    it.each([
+        "startDate",
+        "endDate",
+        "exactDate",
+    ])("returns 422 for an invalid %s without querying the database", async (parameter) => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await dateRequest({ [parameter]: "not-a-date" });
+
+        expect(response.status).toBe(422);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("logbook fetch database errors", () => {
+    it.each([
+        "/",
+        `/${exampleLogbook.id}`,
+        `/vehicle/${vehicleId}`,
+        `/driver/${exampleLogbook.driverId}`,
+        "/date",
+    ])("returns 500 when GET %s cannot query the database", async (path) => {
+        getSessionMock.mockResolvedValue(adminSession);
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database unavailable"),
+        );
+
+        const response = await fetchRequest(path);
+
+        expect(response.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
     });
 });
