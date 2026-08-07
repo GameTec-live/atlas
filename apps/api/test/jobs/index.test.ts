@@ -154,6 +154,16 @@ const getJobRequest = (authenticated = true, id = jobId) => {
     return app.handle(new Request(`http://localhost/jobs/${id}`, { headers }));
 };
 
+const allJobsRequest = (filter?: string, authenticated = true) => {
+    const headers = new Headers();
+    if (authenticated) headers.set("authorization", "Bearer test-token");
+
+    const url = new URL("http://localhost/jobs/all");
+    if (filter !== undefined) url.searchParams.set("filter", filter);
+
+    return app.handle(new Request(url.toString(), { headers }));
+};
+
 const candidatesRequest = (authenticated = true, id = jobId) => {
     const headers = new Headers();
     if (authenticated) headers.set("authorization", "Bearer test-token");
@@ -203,6 +213,14 @@ const serializedJob = {
     completedAt: null,
     createdAt: exampleJob.createdAt.toISOString(),
     updatedAt: exampleJob.updatedAt.toISOString(),
+};
+
+const adminSession = {
+    ...session,
+    user: {
+        ...session.user,
+        role: "admin",
+    },
 };
 
 beforeEach(() => {
@@ -1997,6 +2015,118 @@ describe("GET /jobs/:id", () => {
         );
 
         const response = await getJobRequest();
+
+        expect(response.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("GET /jobs/all", () => {
+    it("returns 401 without a session and does not query the database", async () => {
+        const response = await allJobsRequest(undefined, false);
+
+        expect(response.status).toBe(401);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 403 for an authenticated non-admin and does not query the database", async () => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await allJobsRequest();
+
+        expect(response.status).toBe(403);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["an omitted filter", undefined],
+        ['filter="all"', "all"],
+    ])("returns every job newest first for %s", async (_description, filter) => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await allJobsRequest(filter);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([serializedJob]);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain('from "job" order by "job"."created_at" desc');
+        expect(sql).not.toContain(" where ");
+        expect(values).toEqual([]);
+    });
+
+    it("returns only assigned jobs when requested", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await allJobsRequest("assigned");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([serializedJob]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain(
+            'from "job" where ("job"."assigned_driver_id" is not null)',
+        );
+        expect(sql).toContain('order by "job"."created_at" desc');
+        expect(values).toEqual([]);
+    });
+
+    it("returns only unassigned jobs when requested", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        const [unassignedJobRow] = getDbMockTableRows("job");
+        if (!unassignedJobRow) throw new Error("Expected job fixture data");
+        unassignedJobRow[1] = null;
+        setDbMockRows("select", [unassignedJobRow]);
+
+        const response = await allJobsRequest("unassigned");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([
+            { ...serializedJob, assignedDriverId: null },
+        ]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain(
+            'from "job" where ("job"."assigned_driver_id" is null)',
+        );
+        expect(sql).toContain('order by "job"."created_at" desc');
+        expect(values).toEqual([]);
+    });
+
+    it("returns an empty list when no jobs match", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRows("select", []);
+
+        const response = await allJobsRequest("assigned");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 422 for an unsupported filter and does not query the database", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await allJobsRequest("completed");
+
+        expect(response.status).toBe(422);
+        expect(getSessionMock).not.toHaveBeenCalled();
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 when the job lookup fails", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database unavailable"),
+        );
+
+        const response = await allJobsRequest();
 
         expect(response.status).toBe(500);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
