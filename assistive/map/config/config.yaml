@@ -1,0 +1,17 @@
+route_prefix: /map
+
+pmtiles:
+  paths:
+    - /data/pmtiles
+
+fonts:
+  paths:
+    - /data/fonts
+
+sprites:
+  paths:
+    - /data/sprites
+
+styles:
+  paths:
+    - /data/styles

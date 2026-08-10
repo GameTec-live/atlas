@@ -15,6 +15,9 @@
 !packages
 !packages/**
 
+apps/web/pki/archive
+apps/web/pki/archive/**
+
 **/node_modules
 **/dist
 **/.tanstack

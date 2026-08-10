@@ -1,0 +1,107 @@
+name: atlas
+
+# Compose pulls these GHCR images before falling back to local builds.
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: atlas
+      POSTGRES_DB: atlas
+    volumes:
+      - db-data:/var/lib/postgresql/18/docker
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "atlas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  router:
+    image: ghcr.io/gametec-live/atlas-router:latest
+    build:
+      context: .
+      dockerfile: assistive/router/Dockerfile
+    volumes:
+      - router-data:/data
+      - geodata:/pbf:ro
+    restart: unless-stopped
+
+  map:
+    image: ghcr.io/gametec-live/atlas-map:latest
+    build:
+      context: .
+      dockerfile: assistive/map/Dockerfile
+    volumes:
+      - map-data:/data
+      - geodata:/data/pmtiles:ro
+    restart: unless-stopped
+
+  geocoder:
+    image: ghcr.io/gametec-live/geocoder-go:latest
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - geodata:/data:ro
+    restart: unless-stopped
+
+  api:
+    image: ghcr.io/gametec-live/atlas-api:latest
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    user: "65532:65532"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?BETTER_AUTH_URL is required}
+      DATABASE_URL: "postgres://atlas:atlas@db:5432/atlas"
+      GEOCODER_URL: "http://geocoder:8080"
+      ROUTER_URL: "http://router:8002"
+      JOBTOKEN: ${JOBTOKEN:?JOBTOKEN is required}
+    volumes:
+      - api-data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  web:
+    image: ghcr.io/gametec-live/atlas-web:latest
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    user: "10001:10001"
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+volumes:
+  api-data:
+  db-data:
+  caddy-data:
+  caddy-config:
+  router-data:
+  map-data:
+  geodata:
