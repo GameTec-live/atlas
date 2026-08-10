@@ -69,6 +69,10 @@ export const app = new Elysia()
         openapi({
             references,
             documentation: {
+                servers:
+                    process.env.NODE_ENV === "production"
+                        ? [{ url: "/api" }]
+                        : undefined,
                 components: {
                     ...openAPIComponents,
                     securitySchemes: {

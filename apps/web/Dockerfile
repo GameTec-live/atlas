@@ -22,14 +22,27 @@ ENV NODE_ENV=production
 
 RUN bun run --cwd apps/web build
 
-FROM nginxinc/nginx-unprivileged:1.31.2-alpine AS runtime
+FROM caddy:2.11.4-alpine AS runtime
 
-COPY --from=build --chown=101:101 /workspace/apps/web/dist /usr/share/nginx/html
-COPY --chown=101:101 apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+ARG CADDY_UID=10001
+ARG CADDY_GID=10001
 
-EXPOSE 8080
+RUN addgroup --system --gid "${CADDY_GID}" caddy \
+    && adduser --system --disabled-password --no-create-home --uid "${CADDY_UID}" --ingroup caddy caddy \
+    && mkdir -p /config /data /etc/caddy/pki /srv \
+    && chown -R "${CADDY_UID}:${CADDY_GID}" /config /data /srv
 
-USER 101:101
+# Keep the official binary's low-port capability explicit for the non-root user.
+RUN setcap cap_net_bind_service=+ep /usr/bin/caddy
+
+COPY --from=build --chown=${CADDY_UID}:${CADDY_GID} /workspace/apps/web/dist /srv
+COPY --chown=root:root --chmod=0444 apps/web/Caddyfile /etc/caddy/Caddyfile
+COPY --chown=${CADDY_UID}:${CADDY_GID} --chmod=0444 apps/web/pki/atlas-local-root.crt /etc/caddy/pki/root.crt
+COPY --chown=${CADDY_UID}:${CADDY_GID} --chmod=0400 apps/web/pki/atlas-local-root.key /etc/caddy/pki/root.key
+
+EXPOSE 80 443 443/udp
+
+USER ${CADDY_UID}:${CADDY_GID}
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --quiet --output-document=/dev/null http://127.0.0.1:8080/ || exit 1
+    CMD wget --quiet --output-document=/dev/null http://127.0.0.1:2019/health || exit 1

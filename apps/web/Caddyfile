@@ -1,0 +1,81 @@
+{
+	admin off
+	skip_install_trust
+
+	# Optionally allow for overriding authorization endpoint
+	on_demand_tls {
+		permission http {$CADDY_ON_DEMAND_ASK_ENDPOINT:http://127.0.0.1:2019/ask}
+	}
+
+	pki {
+		ca local {
+			name "Atlas Local CA"
+			root_cn "Atlas Local CA Root"
+			intermediate_cn "Atlas Local CA Intermediate"
+			root {
+				format pem_file
+				cert /etc/caddy/pki/root.crt
+				key /etc/caddy/pki/root.key
+			}
+		}
+	}
+}
+
+(webui) {
+	root /srv
+	encode zstd gzip
+
+	@api path /api /api/*
+	@map path /map/*
+
+	redir /map /map/ permanent
+
+	handle @api {
+		uri strip_prefix /api
+		reverse_proxy api:3000
+	}
+
+	handle @map {
+		reverse_proxy map:3000
+	}
+
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	handle {
+		route {
+			try_files {path} /index.html
+			@app_shell path /index.html
+			header @app_shell Cache-Control "no-cache, no-store, must-revalidate"
+			file_server
+		}
+	}
+}
+
+# Private health check and TLS authorization endpoint.
+http://127.0.0.1:2019 {
+	bind 127.0.0.1
+
+	@ask {
+		path /ask
+		query domain=*
+	}
+	respond @ask 200
+	respond /health 200
+	respond 404
+}
+
+https:// {
+	tls {
+		on_demand
+		# Fall back to the local CA when public ACME cannot issue.
+		issuer acme
+		issuer internal {
+			ca local
+		}
+	}
+
+	import webui
+}
