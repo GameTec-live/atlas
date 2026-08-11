@@ -47,6 +47,7 @@ type Dataset struct {
 	SourceURL    string     `json:"source_url"`
 	CountryCode  string     `json:"country_code,omitempty"`
 	Bounds       *Bounds    `json:"bounds,omitempty"`
+	ExcludeRoads bool       `json:"exclude_roads"`
 	Artifacts    []Artifact `json:"artifacts"`
 	InstalledAt  time.Time  `json:"installed_at"`
 }
@@ -78,10 +79,11 @@ type Job struct {
 }
 
 type JobRequest struct {
-	Name      string  `json:"name,omitempty"`
-	DatasetID string  `json:"dataset_id,omitempty"`
-	Bounds    *Bounds `json:"bbox,omitempty"`
-	Region    *Region `json:"region,omitempty"`
+	Name         string  `json:"name,omitempty"`
+	DatasetID    string  `json:"dataset_id,omitempty"`
+	Bounds       *Bounds `json:"bbox,omitempty"`
+	ExcludeRoads bool    `json:"excludeRoads"`
+	Region       *Region `json:"region,omitempty"`
 }
 
 type State struct {

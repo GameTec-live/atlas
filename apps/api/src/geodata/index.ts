@@ -42,9 +42,10 @@ async function requestGeodata<T extends TSchema>(
 function installRequest(body: InstallBody): RequestInit {
     const payload =
         "name" in body
-            ? { name: body.name }
+            ? { name: body.name, excludeRoads: body.excludeRoads ?? false }
             : {
                   id: body.id,
+                  excludeRoads: body.excludeRoads ?? false,
                   bbox: {
                       minLongitude: body.minLongitude,
                       minLatitude: body.minLatitude,
@@ -82,6 +83,7 @@ function simplifyDataset(dataset: UpstreamDataset) {
         state: dataset.state,
         source_type: dataset.source_type,
         bounds: dataset.bounds,
+        excludeRoads: dataset.exclude_roads,
         size_bytes: {
             pbf: size("pbf"),
             geocoder: size("geocoder"),

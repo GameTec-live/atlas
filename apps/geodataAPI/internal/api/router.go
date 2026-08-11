@@ -55,9 +55,10 @@ func (h *handler) listDatasets(c *gin.Context) {
 }
 
 type installRequest struct {
-	Name string        `json:"name"`
-	ID   string        `json:"id"`
-	BBox *model.Bounds `json:"bbox"`
+	Name         string        `json:"name"`
+	ID           string        `json:"id"`
+	BBox         *model.Bounds `json:"bbox"`
+	ExcludeRoads bool          `json:"excludeRoads"`
 }
 
 func (h *handler) installDataset(c *gin.Context) {
@@ -80,7 +81,7 @@ func (h *handler) installDataset(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "invalid_bbox", "bbox must have minLongitude < maxLongitude and minLatitude < maxLatitude")
 		return
 	}
-	job, err := h.manager.Install(c.Request.Context(), request.Name, request.ID, request.BBox)
+	job, err := h.manager.Install(c.Request.Context(), request.Name, request.ID, request.BBox, request.ExcludeRoads)
 	if err != nil {
 		fail(c, http.StatusConflict, "cannot_install_dataset", err.Error())
 		return

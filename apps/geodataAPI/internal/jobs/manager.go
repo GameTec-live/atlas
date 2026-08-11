@@ -122,7 +122,7 @@ func (m *Manager) Stop() {
 	})
 }
 
-func (m *Manager) Install(ctx context.Context, name, id string, bounds *model.Bounds) (model.Job, error) {
+func (m *Manager) Install(ctx context.Context, name, id string, bounds *model.Bounds, excludeRoads bool) (model.Job, error) {
 	if bounds == nil {
 		if strings.TrimSpace(name) == "" {
 			return model.Job{}, errors.New("name is required when bbox is omitted")
@@ -131,7 +131,7 @@ func (m *Manager) Install(ctx context.Context, name, id string, bounds *model.Bo
 		if err != nil {
 			return model.Job{}, err
 		}
-		request := model.JobRequest{Name: region.Name, DatasetID: slug(region.ID), Region: &region}
+		request := model.JobRequest{Name: region.Name, DatasetID: slug(region.ID), Region: &region, ExcludeRoads: excludeRoads}
 		return m.enqueue("install", request)
 	}
 
@@ -152,7 +152,7 @@ func (m *Manager) Install(ctx context.Context, name, id string, bounds *model.Bo
 	if id == "" {
 		return model.Job{}, errors.New("id must contain at least one letter or number")
 	}
-	request := model.JobRequest{Name: id, DatasetID: id, Bounds: bounds, Region: &region}
+	request := model.JobRequest{Name: id, DatasetID: id, Bounds: bounds, Region: &region, ExcludeRoads: excludeRoads}
 	return m.enqueue("install", request)
 }
 
@@ -381,6 +381,9 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	if len(request.Region.CountryCodes) > 0 {
 		args = append(args, "--country", request.Region.CountryCodes[0])
 	}
+	if request.ExcludeRoads {
+		args = append(args, "--include-roads=false")
+	}
 	args = append(args, finalPBF)
 	if err := m.runner.Run(ctx, m.cfg.PackgenBinary, args...); err != nil {
 		return fmt.Errorf("build geocoder pack: %w", err)
@@ -413,7 +416,7 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	dataset := model.Dataset{
 		ID: request.DatasetID, Name: request.Name, SourceURL: request.Region.PBFURL,
 		SourceRegion: request.Region.ID, CountryCode: countryCode, Bounds: request.Bounds,
-		Artifacts: artifacts, InstalledAt: time.Now().UTC(),
+		ExcludeRoads: request.ExcludeRoads, Artifacts: artifacts, InstalledAt: time.Now().UTC(),
 	}
 	if request.Bounds == nil {
 		dataset.SourceType = "name"

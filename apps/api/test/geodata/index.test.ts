@@ -71,6 +71,7 @@ const job = {
     created_at: "2026-08-11T10:00:00Z",
     request: {
         name: "austria",
+        excludeRoads: false,
     },
 };
 
@@ -194,6 +195,7 @@ describe("geodata API", () => {
 
         const response = await request("/datasets", "POST", {
             name: "austria",
+            excludeRoads: true,
         });
 
         expect(response.status).toBe(409);
@@ -205,6 +207,7 @@ describe("geodata API", () => {
             method: "POST",
             body: JSON.stringify({
                 name: "austria",
+                excludeRoads: true,
             }),
         });
     });
@@ -215,6 +218,7 @@ describe("geodata API", () => {
 
         const response = await request("/datasets", "POST", {
             id: "vienna",
+            excludeRoads: true,
             minLongitude: 16.17,
             minLatitude: 48.1,
             maxLongitude: 16.58,
@@ -227,6 +231,7 @@ describe("geodata API", () => {
             method: "POST",
             body: JSON.stringify({
                 id: "vienna",
+                excludeRoads: true,
                 bbox: {
                     minLongitude: 16.17,
                     minLatitude: 48.1,
@@ -251,6 +256,7 @@ describe("geodata API", () => {
                         source_url:
                             "https://download.geofabrik.de/europe/austria-latest.osm.pbf",
                         country_code: "AT",
+                        exclude_roads: true,
                         artifacts: [
                             {
                                 kind: "pbf",
@@ -288,6 +294,7 @@ describe("geodata API", () => {
                     name: "Austria",
                     state: "ready",
                     source_type: "name",
+                    excludeRoads: true,
                     size_bytes: { pbf: 100, geocoder: 200, map: 300 },
                     installed_at: "2026-08-11T10:03:00Z",
                 },

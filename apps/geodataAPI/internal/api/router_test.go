@@ -70,7 +70,7 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 	server := httptest.NewServer(api.NewRouter(manager, regionCatalog, dataStore))
 	defer server.Close()
 
-	response := requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets", `{"name":"austria"}`)
+	response := requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets", `{"name":"austria","excludeRoads":true}`)
 	if response.StatusCode != http.StatusAccepted {
 		t.Fatalf("start status: %d %s", response.StatusCode, readBody(response))
 	}
@@ -79,6 +79,9 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 	completed := waitForJob(t, manager, started.ID)
 	if completed.State != model.JobCompleted {
 		t.Fatalf("job failed: %#v", completed)
+	}
+	if !completed.Request.ExcludeRoads {
+		t.Fatal("excludeRoads was not retained in the job request")
 	}
 
 	content, err := os.ReadFile(filepath.Join(dataDir, "austria.osm.pbf"))
@@ -106,6 +109,9 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 	}
 	if len(installed.Items) != 1 || len(installed.Items[0].Artifacts) != 3 {
 		t.Fatalf("dataset is not synchronized across all formats: %#v", installed.Items)
+	}
+	if !installed.Items[0].ExcludeRoads {
+		t.Fatal("installed dataset does not report excluded roads")
 	}
 
 	wsURL, _ := url.Parse(server.URL)

@@ -47,6 +47,7 @@ const dataset = t.Object({
     state: t.Union([t.Literal("ready"), t.Literal("degraded")]),
     source_type: t.Union([t.Literal("name"), t.Literal("bbox")]),
     bounds: t.Optional(bounds),
+    excludeRoads: t.Boolean(),
     size_bytes: t.Object({
         pbf: t.Optional(t.Integer({ minimum: 0 })),
         geocoder: t.Optional(t.Integer({ minimum: 0 })),
@@ -64,6 +65,7 @@ const upstreamDataset = t.Object({
     source_url: t.String(),
     country_code: t.Optional(t.String()),
     bounds: t.Optional(bounds),
+    exclude_roads: t.Boolean(),
     artifacts: t.Array(upstreamArtifact),
     installed_at: t.String(),
 });
@@ -93,6 +95,7 @@ const upstreamJobRequest = t.Object({
     name: t.Optional(t.String()),
     dataset_id: t.Optional(t.String()),
     bbox: t.Optional(bounds),
+    excludeRoads: t.Boolean(),
     region: t.Optional(upstreamRegion),
 });
 
@@ -130,10 +133,12 @@ const upstreamJobUpdate = t.Union([
 
 const namedInstall = t.Object({
     name: t.String({ minLength: 1 }),
+    excludeRoads: t.Optional(t.Boolean()),
 });
 
 const boundedInstall = t.Object({
     id: t.Optional(t.String({ minLength: 1 })),
+    excludeRoads: t.Optional(t.Boolean()),
     minLongitude: bounds.properties.minLongitude,
     minLatitude: bounds.properties.minLatitude,
     maxLongitude: bounds.properties.maxLongitude,

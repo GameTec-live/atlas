@@ -27,7 +27,7 @@ FROM --platform=$BUILDPLATFORM golang:1.26-trixie AS packgen-build
 ARG TARGETOS
 ARG TARGETARCH
 # Pin the source rather than building a moving main branch.
-ARG GEOCODER_GO_REF=a8a20bc147554ede99f06e8441d835c8b7373181
+ARG GEOCODER_GO_REF=900119e14b0a5316fdba54901ceb46e24ce1fef7
 
 WORKDIR /src/geocoder-go
 RUN --mount=type=cache,target=/go/pkg/mod \

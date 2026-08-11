@@ -100,7 +100,7 @@ func TestFullPipelineMergesAndRebuildsMap(t *testing.T) {
 	manager.Start()
 	defer manager.Stop()
 
-	first, err := manager.Install(context.Background(), "one", "", nil)
+	first, err := manager.Install(context.Background(), "one", "", nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestFullPipelineMergesAndRebuildsMap(t *testing.T) {
 		}
 	}
 
-	second, err := manager.Install(context.Background(), "two", "", nil)
+	second, err := manager.Install(context.Background(), "two", "", nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,6 +125,13 @@ func TestFullPipelineMergesAndRebuildsMap(t *testing.T) {
 	runner.mu.Unlock()
 	if !strings.Contains(calls, "osmium merge") {
 		t.Fatalf("second install did not merge PBFs:\n%s", calls)
+	}
+	if !strings.Contains(calls, "packgen build --source openstreetmap") || !strings.Contains(calls, "--include-roads=false") {
+		t.Fatalf("first install did not exclude roads from its geocoder pack:\n%s", calls)
+	}
+	installed, found := dataStore.Dataset("one")
+	if !found || !installed.ExcludeRoads {
+		t.Fatalf("exclude-roads setting was not persisted: %#v", installed)
 	}
 
 	runner.setFailJava(true)

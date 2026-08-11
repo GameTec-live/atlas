@@ -139,8 +139,10 @@ Use the same endpoint for either source type. A name can be a Geofabrik ID or di
 ```sh
 curl -X POST http://localhost:8080/api/v1/datasets \
   -H "Content-Type: application/json" \
-  -d '{"name":"austria"}'
+  -d '{"name":"austria","excludeRoads":true}'
 ```
+
+`excludeRoads` defaults to `false`. Set it to `true` to pass `--include-roads=false` to geocoder-go's `packgen`, substantially reducing the SQLite pack size when named-road results are not needed. It affects only the geocoder pack; routing PBF and PMTiles generation remain unchanged. The selected value is stored with the dataset and returned by dataset listings.
 
 Coordinates are WGS84 longitude/latitude. The service chooses the smallest Geofabrik extract whose published envelope covers the box, downloads it, and invokes `osmium extract`. The optional `id` becomes the stable dataset/file name.
 
@@ -149,6 +151,7 @@ curl -X POST http://localhost:8080/api/v1/datasets \
   -H "Content-Type: application/json" \
   -d '{
     "id":"vienna",
+    "excludeRoads":true,
     "bbox":{"minLongitude":16.17,"minLatitude":48.10,"maxLongitude":16.58,"maxLatitude":48.33}
   }'
 ```
