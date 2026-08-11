@@ -22,6 +22,8 @@ services:
     build:
       context: .
       dockerfile: assistive/router/Dockerfile
+    labels:
+      live.gametec.atlas.geodata-consumer: router
     volumes:
       - router-data:/data
       - geodata:/pbf:ro
@@ -43,6 +45,8 @@ services:
     read_only: true
     cap_drop:
       - ALL
+    labels:
+      live.gametec.atlas.geodata-consumer: geocoder
     security_opt:
       - no-new-privileges:true
     volumes:
@@ -60,10 +64,14 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+      - label=disable
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
+    group_add:
+      - "${CONTAINER_SOCKET_GID:-0}"
     volumes:
       - geodata:/data
+      - "${CONTAINER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock"
     restart: unless-stopped
 
   api:

@@ -37,6 +37,18 @@ type testRunner struct {
 	failJava bool
 }
 
+type testReloader struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (r *testReloader) Restart(context.Context) error {
+	r.mu.Lock()
+	r.calls++
+	r.mu.Unlock()
+	return nil
+}
+
 func (r *testRunner) Run(_ context.Context, name string, args ...string) error {
 	r.mu.Lock()
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
@@ -145,6 +157,41 @@ func TestFullPipelineMergesAndRebuildsMap(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "map.pmtiles")); err != nil {
 		t.Fatalf("map was not rebuilt: %v", err)
+	}
+}
+
+func TestReloadWaitsUntilNoOtherJobsAreActive(t *testing.T) {
+	dataStore, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloader := &testReloader{}
+	manager := NewManager(config.Config{ReloadTimeout: time.Second}, dataStore, testCatalog{}, &testRunner{}, reloader)
+
+	queued := model.Job{
+		ID: "queued", State: model.JobQueued, Stage: "queued", CreatedAt: time.Now().UTC(),
+	}
+	if err := dataStore.PutJob(queued); err != nil {
+		t.Fatal(err)
+	}
+	manager.reloadServicesWhenIdle(true)
+	if reloader.calls != 0 {
+		t.Fatalf("reloader called with an active job")
+	}
+
+	queued.State = model.JobFailed
+	queued.Stage = "failed"
+	if err := dataStore.PutJob(queued); err != nil {
+		t.Fatal(err)
+	}
+	manager.reloadServicesWhenIdle(false)
+	if reloader.calls != 1 {
+		t.Fatalf("reloader calls = %d, want 1", reloader.calls)
+	}
+
+	manager.reloadServicesWhenIdle(false)
+	if reloader.calls != 1 {
+		t.Fatalf("reloader ran again without another successful operation")
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -20,12 +21,17 @@ import (
 
 	"github.com/GameTec-live/atlas/apps/geodataAPI/internal/catalog"
 	"github.com/GameTec-live/atlas/apps/geodataAPI/internal/config"
+	"github.com/GameTec-live/atlas/apps/geodataAPI/internal/containers"
 	"github.com/GameTec-live/atlas/apps/geodataAPI/internal/model"
 	"github.com/GameTec-live/atlas/apps/geodataAPI/internal/store"
 )
 
 type CommandRunner interface {
 	Run(context.Context, string, ...string) error
+}
+
+type ServiceReloader interface {
+	Restart(context.Context) error
 }
 
 type execRunner struct{}
@@ -64,31 +70,40 @@ func (w *limitedWriter) Write(content []byte) (int, error) {
 }
 
 type Manager struct {
-	cfg     config.Config
-	store   *store.Store
-	catalog catalog.Catalog
-	runner  CommandRunner
-	client  *http.Client
+	cfg      config.Config
+	store    *store.Store
+	catalog  catalog.Catalog
+	runner   CommandRunner
+	reloader ServiceReloader
+	client   *http.Client
 
-	queue       chan string
-	stop        chan struct{}
-	done        chan struct{}
-	stopOnce    sync.Once
-	enqueueMu   sync.Mutex
-	mu          sync.Mutex
-	cancels     map[string]context.CancelFunc
-	subs        map[chan model.Job]struct{}
-	subscribers sync.Mutex
+	queue         chan string
+	stop          chan struct{}
+	done          chan struct{}
+	stopOnce      sync.Once
+	enqueueMu     sync.Mutex
+	reloadPending bool
+	mu            sync.Mutex
+	cancels       map[string]context.CancelFunc
+	subs          map[chan model.Job]struct{}
+	subscribers   sync.Mutex
 }
 
-func NewManager(cfg config.Config, dataStore *store.Store, regionCatalog catalog.Catalog, runner CommandRunner) *Manager {
+func NewManager(cfg config.Config, dataStore *store.Store, regionCatalog catalog.Catalog, runner CommandRunner, reloaders ...ServiceReloader) *Manager {
 	if runner == nil {
 		runner = execRunner{}
 	}
+	var reloader ServiceReloader
+	if len(reloaders) > 0 {
+		reloader = reloaders[0]
+	} else if cfg.ContainerSocket != "" {
+		reloader = containers.NewClient(cfg.ContainerSocket, cfg.ReloadTimeout)
+	}
 	return &Manager{
 		cfg: cfg, store: dataStore, catalog: regionCatalog, runner: runner,
-		client: &http.Client{Timeout: cfg.HTTPTimeout},
-		queue:  make(chan string, 100), stop: make(chan struct{}), done: make(chan struct{}),
+		reloader: reloader,
+		client:   &http.Client{Timeout: cfg.HTTPTimeout},
+		queue:    make(chan string, 100), stop: make(chan struct{}), done: make(chan struct{}),
 		cancels: make(map[string]context.CancelFunc), subs: make(map[chan model.Job]struct{}),
 	}
 }
@@ -287,6 +302,24 @@ func (m *Manager) execute(job model.Job) {
 		job.Progress = 1
 	}
 	_ = m.saveAndPublish(job)
+	m.reloadServicesWhenIdle(err == nil)
+}
+
+func (m *Manager) reloadServicesWhenIdle(success bool) {
+	m.enqueueMu.Lock()
+	defer m.enqueueMu.Unlock()
+	if success {
+		m.reloadPending = true
+	}
+	if !m.reloadPending || m.reloader == nil || len(m.Jobs(true)) != 0 {
+		return
+	}
+	m.reloadPending = false
+	ctx, cancel := context.WithTimeout(context.Background(), m.cfg.ReloadTimeout)
+	defer cancel()
+	if err := m.reloader.Restart(ctx); err != nil {
+		slog.Warn("could not reload geodata consumers", "error", err)
+	}
 }
 
 func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error) {

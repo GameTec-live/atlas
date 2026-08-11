@@ -11,6 +11,7 @@ A small Gin service that downloads and manages OpenStreetMap data for Atlas. It 
 - Persists installed datasets and job history across restarts.
 - Reports job progress over REST and WebSocket.
 - Deletes dataset-owned files and removes/rebuilds the shared map archive.
+- Reloads the router and geocoder after successful changes when a Docker-compatible runtime socket is available.
 
 Jobs are processed serially. This deliberately prevents two expensive imports from writing `map.pmtiles` at the same time. A dataset is one lifecycle unit: every successful install has its PBF and SQLite files and is included in the shared `map.pmtiles`.
 
@@ -100,6 +101,8 @@ docker build \
 | `GEODATA_CATALOG_URL` | Geofabrik `index-v1.json` | Region catalog URL |
 | `GEODATA_CATALOG_TTL` | `24h` | In-memory catalog lifetime; seconds or Go duration |
 | `GEODATA_HTTP_TIMEOUT` | `24h` | PBF download timeout |
+| `GEODATA_CONTAINER_SOCKET` | `/var/run/docker.sock` | Optional Docker-compatible Unix socket; reload is disabled when it does not exist |
+| `GEODATA_RELOAD_TIMEOUT` | `30s` | Total timeout for container discovery and restart |
 | `GEODATA_OSMIUM` | `osmium` | osmium executable name/path |
 | `GEODATA_PACKGEN` | `packgen` | geocoder-go pack generator name/path |
 | `GEODATA_JAVA` | `java` | Java executable name/path |
@@ -177,6 +180,8 @@ Deletion is also a job. It first builds a replacement `map.pmtiles` from the rem
 - The manifest is `data/.geodata/state.json`. Do not edit it while the service is running.
 - On restart, jobs that were queued or running are retained in history as failed/interrupted; partially built files live only under `.geodata/tmp` or use a `.part` suffix.
 - The manifest retains the newest 100 completed, failed, or cancelled jobs. Queued and running jobs are always retained in addition to that history limit.
+- Successful installs and deletions mark the consumer services for reload. Once no queued or running jobs remain, the service uses the mounted Docker-compatible socket to restart containers labeled `live.gametec.atlas.geodata-consumer=router` or `live.gametec.atlas.geodata-consumer=geocoder`. A missing socket disables this behavior; discovery or restart errors are logged and do not change the completed job result.
+- The example Compose file mounts `${CONTAINER_SOCKET_PATH:-/var/run/docker.sock}`. This works with Docker and Podman's Docker-compatible API; set `CONTAINER_SOCKET_PATH` to a different host socket when needed. Podman's required `label=disable` security option is included. Because the API remains non-root, set `CONTAINER_SOCKET_GID` to the socket's numeric group ID if its group is not `0` (for example, `stat -c '%g' /var/run/docker.sock`). Mounting a container-runtime socket grants powerful control over the host and should only be used for this internal service on a trusted host.
 - OpenStreetMap-derived output remains subject to ODbL attribution requirements.
 
 ## Development

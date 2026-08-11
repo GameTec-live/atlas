@@ -197,7 +197,7 @@ export const geodata = new Elysia({
             response: GeodataModel.jobsResponse,
         },
     )
-    .ws("/jobs/live/ws", {
+    .ws("/jobs/live", {
         open(ws) {
             const upstream = new WebSocket(GEODATA_WEBSOCKET_URL);
             websocketConnections.set(ws.raw, upstream);

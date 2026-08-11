@@ -7,6 +7,7 @@ WORKDIR /workspace
 # Install from manifests first so dependency layers remain cached when only application source changes.
 COPY package.json bun.lock ./
 COPY apps/api/package.json ./apps/api/package.json
+COPY apps/geodataAPI/package.json ./apps/geodataAPI/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY mobile/package.json ./mobile/package.json
 COPY packages/biome/package.json ./packages/biome/package.json
