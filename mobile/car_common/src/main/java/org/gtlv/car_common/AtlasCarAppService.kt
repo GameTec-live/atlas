@@ -7,6 +7,8 @@ import androidx.car.app.ScreenManager
 import androidx.car.app.Session
 import androidx.car.app.SessionInfo
 import androidx.car.app.validation.HostValidator
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import org.gtlv.car_common.screen.DispatcherMainScreen
 import org.gtlv.car_common.screen.DriverMainScreen
 import org.gtlv.car_common.screen.WaitingScreen
@@ -14,6 +16,8 @@ import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.shift.ShiftSessionState
 import org.gtlv.core.shift.ShiftSessionProvider
 import org.gtlv.core.settings.ServerSettingsProvider
+import org.gtlv.core.location.CarLocationProvider
+import org.gtlv.core.location.CarLocationProviderRegistry
 
 class AtlasCarAppService : CarAppService() {
 
@@ -26,8 +30,13 @@ class AtlasCarAppService : CarAppService() {
     }
 }
 
-class AtlasSession : Session() {
+class AtlasSession : Session(), DefaultLifecycleObserver {
+    private var carLocationProvider: CarLocationProvider? = null
+    private var carLocationProviderRegistry: CarLocationProviderRegistry? = null
+
     override fun onCreateScreen(intent: Intent): Screen {
+        connectCarLocationProvider()
+
         val shiftSessionManager =
             (carContext.applicationContext as? ShiftSessionProvider)
                 ?.shiftSessionManager
@@ -56,5 +65,42 @@ class AtlasSession : Session() {
                 carContext.getCarService(ScreenManager::class.java).push(roleScreen)
             },
         )
+    }
+
+    override fun onStart(owner: LifecycleOwner) {
+        carLocationProvider?.start()
+    }
+
+    override fun onStop(owner: LifecycleOwner) {
+        carLocationProvider?.stop()
+    }
+
+    override fun onDestroy(owner: LifecycleOwner) {
+        val provider = carLocationProvider
+
+        if (provider != null) {
+            provider.stop()
+            carLocationProviderRegistry
+                ?.unregisterCarLocationProvider(provider)
+        }
+
+        carLocationProvider = null
+        carLocationProviderRegistry = null
+        lifecycle.removeObserver(this)
+    }
+
+    private fun connectCarLocationProvider() {
+        if (carLocationProvider != null) return
+
+        val registry = carContext.applicationContext
+            as? CarLocationProviderRegistry
+            ?: return
+
+        val provider = CarLocationProvider(carContext)
+
+        carLocationProviderRegistry = registry
+        carLocationProvider = provider
+        registry.registerCarLocationProvider(provider)
+        lifecycle.addObserver(this)
     }
 }

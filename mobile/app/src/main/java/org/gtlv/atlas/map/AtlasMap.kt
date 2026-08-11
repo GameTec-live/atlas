@@ -88,10 +88,6 @@ internal fun AtlasMap(
         mutableDoubleStateOf(0.0)
     }
 
-    var hasCenteredOnFirstLocation by rememberSaveable {
-        mutableStateOf(false)
-    }
-
     val initialCameraPosition = CameraPosition.Builder()
         .target(
             LatLng(
@@ -150,10 +146,7 @@ internal fun AtlasMap(
                     map.locationComponent
                         .isLocationComponentEnabled = true
 
-                    /*
-                     * NONE prevents location updates from continuously
-                     * moving the camera.
-                     */
+                    // Manual following keeps pan and zoom gestures enabled.
                     map.locationComponent.cameraMode =
                         CameraMode.NONE
 
@@ -192,10 +185,7 @@ internal fun AtlasMap(
     val availableLocation =
         (locationState as? LocationState.Available)?.location
 
-    /*
-     * Every valid location updates the puck. Only the first valid
-     * location moves the camera automatically.
-     */
+    // Every valid update moves both the location puck and the camera.
     LaunchedEffect(
         readyMap,
         availableLocation
@@ -210,10 +200,7 @@ internal fun AtlasMap(
             )
         }
 
-        if (!hasCenteredOnFirstLocation) {
-            hasCenteredOnFirstLocation = true
-            map.centerOnLocation(location)
-        }
+        map.followLocation(location)
     }
 
     /*
@@ -371,4 +358,17 @@ private fun rememberMapViewWithLifecycle(
     }
 
     return mapView
+}
+
+private fun MapLibreMap.followLocation(
+    location: AtlasLocation
+) {
+    animateCamera(
+        CameraUpdateFactory.newLatLng(
+            LatLng(
+                location.latitude,
+                location.longitude
+            )
+        )
+    )
 }
