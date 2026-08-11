@@ -16,31 +16,38 @@ export const shortenAddress = (address: string, maxLength: number) => {
         .trimEnd()}…`;
 };
 
+const addressOrCoordinates = (
+    result: PromiseSettledResult<string | undefined>,
+    coordinates: [number, number],
+) =>
+    shortenAddress(
+        result.status === "fulfilled" && result.value
+            ? result.value
+            : `${coordinates[0]}, ${coordinates[1]}`,
+        NOTIFICATION_ADDRESS_MAX_LENGTH,
+    );
+
 export const sendAssignmentNotification = async (
     server: Bun.Server<unknown> | null,
     assignedJob: typeof job.$inferSelect,
 ) => {
     if (!server || !assignedJob.assignedDriverId) return;
 
-    const [from, to] = await Promise.all([
+    const [fromResult, toResult] = await Promise.allSettled([
         reverseGeocode(assignedJob.from),
         assignedJob.to ? reverseGeocode(assignedJob.to) : undefined,
     ]);
-
-    if (!from || (assignedJob.to && !to)) {
-        throw new Error("Reverse geocoding returned no address");
-    }
+    const from = addressOrCoordinates(fromResult, assignedJob.from);
+    const to = assignedJob.to
+        ? addressOrCoordinates(toResult, assignedJob.to)
+        : undefined;
 
     notify(
         server,
         {
             jobId: assignedJob.id,
-            from: shortenAddress(from, NOTIFICATION_ADDRESS_MAX_LENGTH),
-            ...(to
-                ? {
-                      to: shortenAddress(to, NOTIFICATION_ADDRESS_MAX_LENGTH),
-                  }
-                : {}),
+            from,
+            ...(to ? { to } : {}),
             ...(assignedJob.note ? { note: assignedJob.note } : {}),
         },
         assignedJob.assignedDriverId,

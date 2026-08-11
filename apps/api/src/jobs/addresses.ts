@@ -14,7 +14,7 @@ export const withReverseGeocodedAddresses = async <T extends JobLocations>(
         const pending = addresses.get(key);
         if (pending) return pending;
 
-        const address = reverseGeocode(coordinates);
+        const address = reverseGeocode(coordinates).catch(() => undefined);
         addresses.set(key, address);
         return address;
     };
@@ -28,8 +28,12 @@ export const withReverseGeocodedAddresses = async <T extends JobLocations>(
 
             return {
                 ...job,
-                fromAddress: fromAddress ?? null,
-                toAddress: toAddress ?? null,
+                ...(fromAddress ? { fromAddress } : {}),
+                ...(job.to === null
+                    ? { toAddress: null }
+                    : toAddress
+                      ? { toAddress }
+                      : {}),
             };
         }),
     );

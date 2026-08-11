@@ -370,13 +370,35 @@ describe("GET /jobs/assigned", () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
-    it("returns 500 when an address cannot be reverse geocoded", async () => {
+    it("returns jobs and omits only an address whose geocoder request fails", async () => {
         getSessionMock.mockResolvedValue(session);
         fetchMock.mockRejectedValueOnce(new Error("geocoder unavailable"));
 
         const response = await request();
 
-        expect(response.status).toBe(500);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([
+            {
+                ...serializedJob,
+                toAddress: serializedJobWithAddresses.toAddress,
+            },
+        ]);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns jobs and omits only an address from a malformed geocoder response", async () => {
+        getSessionMock.mockResolvedValue(session);
+        fetchMock.mockResolvedValueOnce(Response.json({ invalid: true }));
+
+        const response = await request();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([
+            {
+                ...serializedJob,
+                toAddress: serializedJobWithAddresses.toAddress,
+            },
+        ]);
     });
 
     it("returns 500 when the job lookup fails", async () => {
@@ -1752,6 +1774,50 @@ describe("assignment notifications", () => {
         expect(notification).toEqual({
             jobId: assignedJob.id,
             from: `${"A".repeat(NOTIFICATION_ADDRESS_MAX_LENGTH - 1)}…`,
+            to: "Schönbrunner Straße 1, Wien",
+            note: assignedJob.note,
+        });
+    });
+
+    it("uses destination coordinates and still publishes when destination geocoding fails", async () => {
+        fetchMock
+            .mockResolvedValueOnce(
+                Response.json(geocoderResult("Stephansplatz 1, Wien")),
+            )
+            .mockRejectedValueOnce(new Error("geocoder unavailable"));
+        const publishMock = mock((_topic: string, _message: string) => 1);
+        const server = {
+            publish: publishMock,
+        } as unknown as Bun.Server<unknown>;
+
+        await sendAssignmentNotification(server, assignedJob);
+
+        expect(publishMock).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(String(publishMock.mock.calls[0]?.[1]))).toEqual({
+            jobId: assignedJob.id,
+            from: "Stephansplatz 1, Wien",
+            to: "48.1947, 16.3122",
+            note: assignedJob.note,
+        });
+    });
+
+    it("uses pickup coordinates and still publishes when pickup geocoding fails", async () => {
+        fetchMock
+            .mockRejectedValueOnce(new Error("geocoder unavailable"))
+            .mockResolvedValueOnce(
+                Response.json(geocoderResult("Schönbrunner Straße 1, Wien")),
+            );
+        const publishMock = mock((_topic: string, _message: string) => 1);
+        const server = {
+            publish: publishMock,
+        } as unknown as Bun.Server<unknown>;
+
+        await sendAssignmentNotification(server, assignedJob);
+
+        expect(publishMock).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(String(publishMock.mock.calls[0]?.[1]))).toEqual({
+            jobId: assignedJob.id,
+            from: "48.2082, 16.3738",
             to: "Schönbrunner Straße 1, Wien",
             note: assignedJob.note,
         });
