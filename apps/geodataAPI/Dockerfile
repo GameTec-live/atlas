@@ -107,6 +107,8 @@ ENV GIN_MODE=release \
     GEODATA_JAVA=/usr/bin/java \
     GEODATA_PLANETILER_JAR=/opt/planetiler/planetiler.jar \
     GEODATA_PLANETILER_ARGS="--download-dir=/data/.geodata/planetiler/sources --tmpdir=/data/.geodata/planetiler/tmp" \
+    SQLITE_TMPDIR=/data/.geodata/tmp \
+    TMPDIR=/data/.geodata/tmp \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -Djava.io.tmpdir=/data/.geodata/tmp"
 
 VOLUME ["/data"]

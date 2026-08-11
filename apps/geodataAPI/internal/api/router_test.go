@@ -70,7 +70,7 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 	cfg := config.Config{DataDir: dataDir, HTTPTimeout: time.Second, OsmiumBinary: "osmium", PackgenBinary: "packgen", JavaBinary: "java", PlanetilerJar: "planetiler.jar"}
 	regionCatalog := fakeCatalog{region: model.Region{
 		ID: "austria", Name: "Austria", PBFURL: pbf.URL, CountryCodes: []string{"AT"},
-		SizeBytes: &model.EstimatedDatasetSize{PBF: 8, GeocoderEstimate: 24, MapEstimate: 12, TotalEstimate: 44},
+		SizeBytes: &model.EstimatedDatasetSize{PBF: 8, GeocoderEstimate: 24, MapEstimate: 12, TotalEstimate: 44, TemporaryConversionEstimate: 80, PeakEstimate: 124},
 	}}
 	manager := jobs.NewManager(cfg, dataStore, regionCatalog, fakeRunner{})
 	manager.Start()

@@ -44,6 +44,7 @@ const (
 	geocoderSizeRatio  = 3
 	mapSizeNumerator   = 3
 	mapSizeDenominator = 2
+	temporarySizeRatio = 10
 )
 
 func NewGeofabrik(url string, ttl time.Duration, client *http.Client) *Geofabrik {
@@ -144,11 +145,15 @@ func (g *Geofabrik) pbfSize(ctx context.Context, pbfURL string) (int64, bool) {
 func estimateDatasetSize(pbfBytes int64) *model.EstimatedDatasetSize {
 	geocoderBytes := pbfBytes * geocoderSizeRatio
 	mapBytes := pbfBytes * mapSizeNumerator / mapSizeDenominator
+	totalBytes := pbfBytes + geocoderBytes + mapBytes
+	temporaryBytes := pbfBytes * temporarySizeRatio
 	return &model.EstimatedDatasetSize{
-		PBF:              pbfBytes,
-		GeocoderEstimate: geocoderBytes,
-		MapEstimate:      mapBytes,
-		TotalEstimate:    pbfBytes + geocoderBytes + mapBytes,
+		PBF:                         pbfBytes,
+		GeocoderEstimate:            geocoderBytes,
+		MapEstimate:                 mapBytes,
+		TotalEstimate:               totalBytes,
+		TemporaryConversionEstimate: temporaryBytes,
+		PeakEstimate:                totalBytes + temporaryBytes,
 	}
 }
 

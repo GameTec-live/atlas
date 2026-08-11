@@ -33,10 +33,12 @@ type Region struct {
 }
 
 type EstimatedDatasetSize struct {
-	PBF              int64 `json:"pbf"`
-	GeocoderEstimate int64 `json:"geocoder_estimate"`
-	MapEstimate      int64 `json:"map_estimate"`
-	TotalEstimate    int64 `json:"total_estimate"`
+	PBF                         int64 `json:"pbf"`
+	GeocoderEstimate            int64 `json:"geocoder_estimate"`
+	MapEstimate                 int64 `json:"map_estimate"`
+	TotalEstimate               int64 `json:"total_estimate"`
+	TemporaryConversionEstimate int64 `json:"temporary_conversion_estimate"`
+	PeakEstimate                int64 `json:"peak_estimate"`
 }
 
 type DiskSpace struct {

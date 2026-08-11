@@ -70,7 +70,7 @@ docker run --rm \
   atlas-geodata-api
 ```
 
-The mounted host directory must be writable by UID/GID `65532`. The root filesystem can remain read-only because all downloads, build intermediates, persistent state, and final artifacts are written beneath `/data`. The image has a built-in `/healthz` healthcheck implemented by the API binary, so no `curl` or shell is included.
+The mounted host directory must be writable by UID/GID `65532`. The root filesystem can remain read-only because all downloads, build intermediates, persistent state, and final artifacts are written beneath `/data`. `SQLITE_TMPDIR` and `TMPDIR` default to `/data/.geodata/tmp`, keeping large packgen staging files off the intentionally small `/tmp` tmpfs. The image has a built-in `/healthz` healthcheck implemented by the API binary, so no `curl` or shell is included.
 
 For large map builds, set an explicit memory limit. Java uses up to 75% of the container limit by default:
 
@@ -132,9 +132,9 @@ GET /api/v1/datasets
 
 Datasets have a `ready` state when their PBF, SQLite pack, and shared PMTiles archive exist, and `degraded` when a managed file has disappeared outside this service.
 
-Catalog entries include `size_bytes.pbf`, obtained from the download server's `Content-Length`, plus `geocoder_estimate`, `map_estimate`, and `total_estimate`. The estimates are intentionally conservative heuristics (3x the PBF for the road-inclusive geocoder pack and 1.5x for PMTiles); generated sizes vary with the contents of each extract. PBF sizes are fetched concurrently and cached for the catalog TTL. If a source does not expose its size, `size_bytes` is omitted for that entry.
+Catalog entries include `size_bytes.pbf`, obtained from the download server's `Content-Length`, plus `geocoder_estimate`, `map_estimate`, `total_estimate`, `temporary_conversion_estimate`, and `peak_estimate`. The estimates are intentionally conservative heuristics: 3x the PBF for the road-inclusive geocoder pack, 1.5x for PMTiles, and 10x for temporary SQLite and Planetiler conversion data. `total_estimate` is final storage, while `peak_estimate` adds the temporary conversion allowance. Actual requirements vary with extract contents and enabled features. PBF sizes are fetched concurrently and cached for the catalog TTL. If a source does not expose its size, `size_bytes` is omitted for that entry.
 
-Both catalog and dataset list responses include `disk_space.free_bytes` and `disk_space.total_bytes` for the filesystem containing the `data` directory when the operating system exposes that information. Installed dataset sizes are measured from their actual artifacts and include a calculated `size_bytes.total` in the simplified API.
+Both catalog and dataset list responses include `disk_space.free_bytes` and `disk_space.total_bytes` for the filesystem containing the `data` directory when the operating system exposes that information. Installed dataset sizes are measured from their actual artifacts and include calculated `size_bytes.total`, `temporary_conversion_estimate`, and `peak_estimate` values in the simplified API.
 
 ### Install a dataset
 

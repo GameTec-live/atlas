@@ -31,6 +31,8 @@ const estimatedDatasetSize = t.Object({
     geocoder_estimate: t.Integer({ minimum: 0 }),
     map_estimate: t.Integer({ minimum: 0 }),
     total_estimate: t.Integer({ minimum: 0 }),
+    temporary_conversion_estimate: t.Integer({ minimum: 0 }),
+    peak_estimate: t.Integer({ minimum: 0 }),
 });
 
 const catalogItem = t.Object({
@@ -72,6 +74,8 @@ const dataset = t.Object({
         geocoder: t.Optional(t.Integer({ minimum: 0 })),
         map: t.Optional(t.Integer({ minimum: 0 })),
         total: t.Integer({ minimum: 0 }),
+        temporary_conversion_estimate: t.Optional(t.Integer({ minimum: 0 })),
+        peak_estimate: t.Optional(t.Integer({ minimum: 0 })),
     }),
     installed_at: t.String(),
 });

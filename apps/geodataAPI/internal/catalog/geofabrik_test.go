@@ -41,7 +41,7 @@ func TestGeofabrikListFindAndCovering(t *testing.T) {
 	if len(items) != 1 || items[0].ID != "austria" {
 		t.Fatalf("unexpected list: %#v", items)
 	}
-	if size := items[0].SizeBytes; size == nil || size.PBF != 1000 || size.GeocoderEstimate != 3000 || size.MapEstimate != 1500 || size.TotalEstimate != 5500 {
+	if size := items[0].SizeBytes; size == nil || size.PBF != 1000 || size.GeocoderEstimate != 3000 || size.MapEstimate != 1500 || size.TotalEstimate != 5500 || size.TemporaryConversionEstimate != 10000 || size.PeakEstimate != 15500 {
 		t.Fatalf("unexpected size estimate: %#v", size)
 	}
 	if _, err := catalog.List(context.Background(), "aus", "europe"); err != nil {

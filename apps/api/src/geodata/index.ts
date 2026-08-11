@@ -14,6 +14,7 @@ import {
 } from "./model";
 
 export const GEODATA_TIMEOUT_MS = 30_000;
+const TEMPORARY_CONVERSION_RATIO = 10;
 
 const GEODATA_URL = env.GEODATA_URL.replace(/\/+$/, "");
 const GEODATA_WEBSOCKET_URL = `${GEODATA_URL.replace(/^http/, "ws")}/api/v1/jobs/ws`;
@@ -86,6 +87,9 @@ function simplifyDataset(dataset: UpstreamDataset) {
     const pbf = size("pbf");
     const geocoder = size("geocoder");
     const map = size("map");
+    const total = (pbf ?? 0) + (geocoder ?? 0) + (map ?? 0);
+    const temporaryConversionEstimate =
+        pbf === undefined ? undefined : pbf * TEMPORARY_CONVERSION_RATIO;
     return {
         id: dataset.id,
         name: dataset.name,
@@ -99,7 +103,12 @@ function simplifyDataset(dataset: UpstreamDataset) {
             pbf,
             geocoder,
             map,
-            total: (pbf ?? 0) + (geocoder ?? 0) + (map ?? 0),
+            total,
+            temporary_conversion_estimate: temporaryConversionEstimate,
+            peak_estimate:
+                temporaryConversionEstimate === undefined
+                    ? undefined
+                    : total + temporaryConversionEstimate,
         },
         installed_at: dataset.installed_at,
     };
