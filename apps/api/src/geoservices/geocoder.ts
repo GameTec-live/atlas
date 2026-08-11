@@ -3,6 +3,7 @@ import { env } from "@/env";
 import { GeoservicesModel } from "./model";
 
 const GEOCODER_URL = env.GEOCODER_URL.replace(/\/+$/, "");
+export const GEOCODER_TIMEOUT_MS = 30_000;
 
 interface ReverseGeocodeOptions {
     radius_m?: number;
@@ -22,7 +23,9 @@ export const requestReverseGeocode = async (
     }
     query.set("limit", String(options.limit ?? 1));
 
-    const response = await fetch(`${GEOCODER_URL}/reverse?${query}`);
+    const response = await fetch(`${GEOCODER_URL}/reverse?${query}`, {
+        signal: AbortSignal.timeout(GEOCODER_TIMEOUT_MS),
+    });
     const result = Value.Decode(
         GeoservicesModel.reverseGeocoderResponse,
         await response.json(),

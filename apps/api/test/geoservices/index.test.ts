@@ -22,6 +22,7 @@ mock.module("@/env", () => ({
 
 const { config } = await import("@/src/config");
 const { geoservices } = await import("@/src/geoservices");
+const { GEOCODER_TIMEOUT_MS } = await import("@/src/geoservices/geocoder");
 const app = new Elysia().use(geoservices);
 
 const originalFetch = globalThis.fetch;
@@ -241,7 +242,10 @@ describe("GET /geoservices/resolve", () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(fetchMock).toHaveBeenCalledWith(
             `${GEOCODER_URL}/geocode?q=${encodeURIComponent(address)}`,
-            { method: "GET" },
+            {
+                method: "GET",
+                signal: expect.any(AbortSignal),
+            },
         );
     });
 
@@ -262,7 +266,10 @@ describe("GET /geoservices/resolve", () => {
         ]);
         expect(fetchMock).toHaveBeenCalledWith(
             `${GEOCODER_URL}/geocode?q=Vienna%20Central%20Depot%20%2F%20Gate%202`,
-            { method: "GET" },
+            {
+                method: "GET",
+                signal: expect.any(AbortSignal),
+            },
         );
     });
 
@@ -326,7 +333,10 @@ describe("GET /geoservices/resolve", () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
         expect(fetchMock).toHaveBeenLastCalledWith(
             `${GEOCODER_URL}/geocode?q=New%20address`,
-            { method: "GET" },
+            {
+                method: "GET",
+                signal: expect.any(AbortSignal),
+            },
         );
     });
 
@@ -474,6 +484,9 @@ describe("GET /geoservices/reverse", () => {
         expect(await response.json()).toEqual(reverseSuccessResponse);
         expect(fetchMock).toHaveBeenCalledWith(
             `${GEOCODER_URL}/reverse?lat=48.2082&lon=16.3738&radius_m=750&limit=2`,
+            {
+                signal: expect.any(AbortSignal),
+            },
         );
     });
 
@@ -489,7 +502,14 @@ describe("GET /geoservices/reverse", () => {
         expect(response.status).toBe(200);
         expect(fetchMock).toHaveBeenCalledWith(
             `${GEOCODER_URL}/reverse?lat=48.2082&lon=16.3738&limit=1`,
+            {
+                signal: expect.any(AbortSignal),
+            },
         );
+    });
+
+    it("limits geocoder requests to 30 seconds", () => {
+        expect(GEOCODER_TIMEOUT_MS).toBe(30_000);
     });
 
     it.each([
