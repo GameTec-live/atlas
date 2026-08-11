@@ -114,7 +114,7 @@ internal fun RequiredLocationPermissionGate(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(locationProvider) {
         permissionGranted = context.hasLocationPermission()
 
         if (permissionGranted) {
@@ -139,8 +139,7 @@ internal fun RequiredLocationPermissionGate(
 
     DisposableEffect(
         lifecycleOwner,
-        hasRequestedPermission,
-        requestInFlight
+        locationProvider
     ) {
         val observer =
             LifecycleEventObserver { _, event ->

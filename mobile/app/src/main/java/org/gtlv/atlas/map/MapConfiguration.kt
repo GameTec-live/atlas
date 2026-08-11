@@ -7,7 +7,7 @@ internal object MapConfiguration {
      * Replace only the base URL when the reverse proxy is ready.
      */
     private const val MAP_SERVER_BASE_URL =
-        "http://192.168.1.200:1026"
+        "https://atlas.gametec-live.com/map"
 
     const val STYLE_URL =
         "$MAP_SERVER_BASE_URL/style/liberty"

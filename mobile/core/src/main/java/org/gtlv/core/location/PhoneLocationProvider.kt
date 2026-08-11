@@ -1,10 +1,10 @@
-package org.gtlv.atlas.location
+package org.gtlv.core.location
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Looper
+import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationAvailability
@@ -16,8 +16,6 @@ import com.google.android.gms.location.Priority
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.gtlv.core.location.LocationProvider
-import org.gtlv.core.location.LocationState
 
 class PhoneLocationProvider(
     context: Context
@@ -61,6 +59,7 @@ class PhoneLocationProvider(
         }
     }
 
+    @RequiresPermission(anyOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     override fun start() {
         if (started) return
 
