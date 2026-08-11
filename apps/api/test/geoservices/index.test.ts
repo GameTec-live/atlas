@@ -64,6 +64,11 @@ const successResponse = {
     ],
 };
 
+const reverseSuccessResponse = {
+    count: successResponse.count,
+    results: successResponse.results,
+};
+
 const errorResponse = {
     error: {
         code: "NO_RESULTS",
@@ -157,6 +162,26 @@ const routeRequest = (
     return app.handle(
         new Request(url.toString(), {
             headers: { authorization: "Bearer test-token" },
+        }),
+    );
+};
+
+const reverseRequest = (
+    query: Partial<
+        Record<"lat" | "lon" | "radius_m" | "limit", string | number>
+    >,
+    authenticated = true,
+) => {
+    const url = new URL("http://localhost/geoservices/reverse");
+    for (const [key, value] of Object.entries(query)) {
+        url.searchParams.set(key, String(value));
+    }
+
+    return app.handle(
+        new Request(url.toString(), {
+            headers: authenticated
+                ? { authorization: "Bearer test-token" }
+                : undefined,
         }),
     );
 };
@@ -409,6 +434,95 @@ describe("GET /geoservices/resolve", () => {
 
         expect((await request("lru-filler-0")).status).toBe(200);
         expect(fetchMock).toHaveBeenCalledTimes(callsBeforeCacheHit + 2);
+    });
+});
+
+describe("GET /geoservices/reverse", () => {
+    beforeEach(() => {
+        resetAuthMocks();
+        resetDbMocks();
+        fetchMock.mockReset();
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+    });
+
+    afterAll(() => {
+        globalThis.fetch = originalFetch;
+    });
+
+    it("returns 401 without a Better Auth session", async () => {
+        const response = await reverseRequest(
+            { lat: 48.2082, lon: 16.3738 },
+            false,
+        );
+
+        expect(response.status).toBe(401);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("reverse geocodes coordinates and forwards the optional search controls", async () => {
+        getSessionMock.mockResolvedValue(session);
+        respondWith(reverseSuccessResponse);
+
+        const response = await reverseRequest({
+            lat: 48.2082,
+            lon: 16.3738,
+            radius_m: 750,
+            limit: 2,
+        });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(reverseSuccessResponse);
+        expect(fetchMock).toHaveBeenCalledWith(
+            `${GEOCODER_URL}/reverse?lat=48.2082&lon=16.3738&radius_m=750&limit=2`,
+        );
+    });
+
+    it("defaults the result limit to one", async () => {
+        getSessionMock.mockResolvedValue(session);
+        respondWith(reverseSuccessResponse);
+
+        const response = await reverseRequest({
+            lat: 48.2082,
+            lon: 16.3738,
+        });
+
+        expect(response.status).toBe(200);
+        expect(fetchMock).toHaveBeenCalledWith(
+            `${GEOCODER_URL}/reverse?lat=48.2082&lon=16.3738&limit=1`,
+        );
+    });
+
+    it.each([
+        ["a missing longitude", { lat: 48.2082 }],
+        ["an out-of-range latitude", { lat: 91, lon: 16.3738 }],
+        ["an out-of-range longitude", { lat: 48.2082, lon: 181 }],
+        ["a negative radius", { lat: 48.2082, lon: 16.3738, radius_m: -1 }],
+        [
+            "an excessive radius",
+            { lat: 48.2082, lon: 16.3738, radius_m: 100_001 },
+        ],
+        ["a zero limit", { lat: 48.2082, lon: 16.3738, limit: 0 }],
+        ["an excessive limit", { lat: 48.2082, lon: 16.3738, limit: 51 }],
+    ])("returns 422 for %s", async (_description, query) => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await reverseRequest(query);
+
+        expect(response.status).toBe(422);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("preserves a schema-valid geocoder error status", async () => {
+        getSessionMock.mockResolvedValue(session);
+        respondWith(errorResponse, { status: 400 });
+
+        const response = await reverseRequest({
+            lat: 48.2082,
+            lon: 16.3738,
+        });
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual(errorResponse);
     });
 });
 

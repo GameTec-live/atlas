@@ -11,7 +11,12 @@ import {
     setDbMockTableRows,
 } from "../mocks/db";
 
-const envMock: { JOBTOKEN?: string; ROUTER_URL: string } = {
+const envMock: {
+    GEOCODER_URL: string;
+    JOBTOKEN?: string;
+    ROUTER_URL: string;
+} = {
+    GEOCODER_URL: "http://geocoder.test",
     ROUTER_URL: "http://router.test",
 };
 
@@ -20,6 +25,12 @@ mock.module("@/env", () => ({
 }));
 
 const { jobs } = await import("@/src/jobs");
+const {
+    NOTIFICATION_ADDRESS_MAX_LENGTH,
+    notifyAssignedDriverInBackground,
+    sendAssignmentNotification,
+    shortenAddress,
+} = await import("@/src/jobs/notifications");
 const { trackCache } = await import("@/src/realtime");
 const app = new Elysia().use(jobs);
 
@@ -48,6 +59,15 @@ const request = (authenticated = true) => {
 
     return app.handle(
         new Request("http://localhost/jobs/assigned", { headers }),
+    );
+};
+
+const currentRequest = (authenticated = true) => {
+    const headers = new Headers();
+    if (authenticated) headers.set("authorization", "Bearer test-token");
+
+    return app.handle(
+        new Request("http://localhost/jobs/current", { headers }),
     );
 };
 
@@ -215,6 +235,17 @@ const serializedJob = {
     updatedAt: exampleJob.updatedAt.toISOString(),
 };
 
+const addressForCoordinates = ([latitude, longitude]: [number, number]) =>
+    `Address at ${latitude}, ${longitude}`;
+
+const serializedJobWithAddresses = {
+    ...serializedJob,
+    fromAddress: addressForCoordinates(serializedJob.from),
+    toAddress: serializedJob.to
+        ? addressForCoordinates(serializedJob.to)
+        : null,
+};
+
 const adminSession = {
     ...session,
     user: {
@@ -229,6 +260,27 @@ beforeEach(() => {
     resetDbMocks();
     trackCache.clear();
     fetchMock.mockReset();
+    fetchMock.mockImplementation(async (input) => {
+        const url = new URL(String(input));
+        if (url.pathname !== "/reverse") {
+            throw new Error("Unexpected routing request");
+        }
+
+        const latitude = Number(url.searchParams.get("lat"));
+        const longitude = Number(url.searchParams.get("lon"));
+        return Response.json({
+            count: 1,
+            results: [
+                {
+                    pack: "austria.sqlite",
+                    kind: "address",
+                    lat: latitude,
+                    lon: longitude,
+                    display_name: addressForCoordinates([latitude, longitude]),
+                },
+            ],
+        });
+    });
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 });
 
@@ -251,9 +303,14 @@ describe("GET /jobs/assigned", () => {
         const response = await request();
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([serializedJob]);
+        expect(await response.json()).toEqual([serializedJobWithAddresses]);
         expect(getSessionMock).toHaveBeenCalledTimes(1);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+            `${envMock.GEOCODER_URL}/reverse?lat=${serializedJob.from[0]}&lon=${serializedJob.from[1]}&limit=1`,
+            `${envMock.GEOCODER_URL}/reverse?lat=${serializedJob.to?.[0]}&lon=${serializedJob.to?.[1]}&limit=1`,
+        ]);
 
         const { sql, values } = getFirstQuery();
         expect(sql).toContain(
@@ -289,6 +346,37 @@ describe("GET /jobs/assigned", () => {
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual([]);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("de-duplicates shared coordinates while enriching a job list", async () => {
+        getSessionMock.mockResolvedValue(session);
+        const [firstJobRow] = getDbMockTableRows("job");
+        if (!firstJobRow) throw new Error("Expected job fixture data");
+        const secondJobRow = [...firstJobRow];
+        secondJobRow[0] = "411ba9ee-e2aa-42c4-880f-8cda75d2e6ad";
+        setDbMockRows("select", [firstJobRow, secondJobRow]);
+
+        const response = await request();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([
+            serializedJobWithAddresses,
+            {
+                ...serializedJobWithAddresses,
+                id: secondJobRow[0],
+            },
+        ]);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns 500 when an address cannot be reverse geocoded", async () => {
+        getSessionMock.mockResolvedValue(session);
+        fetchMock.mockRejectedValueOnce(new Error("geocoder unavailable"));
+
+        const response = await request();
+
+        expect(response.status).toBe(500);
     });
 
     it("returns 500 when the job lookup fails", async () => {
@@ -301,6 +389,60 @@ describe("GET /jobs/assigned", () => {
 
         expect(response.status).toBe(500);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("GET /jobs/current", () => {
+    it("returns 401 without a session and does not query the database", async () => {
+        const response = await currentRequest(false);
+
+        expect(response.status).toBe(401);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("returns the authenticated user's most recently started incomplete job", async () => {
+        getSessionMock.mockResolvedValue(session);
+        const [currentJobRow] = getDbMockTableRows("job");
+        if (!currentJobRow) throw new Error("Expected job fixture data");
+        const startedAt = "2026-08-11T08:30:00.000Z";
+        currentJobRow[7] = startedAt.slice(0, -1);
+        setDbMockRows("select", [currentJobRow]);
+
+        const response = await currentRequest();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+            ...serializedJobWithAddresses,
+            startedAt,
+        });
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain('"job"."assigned_driver_id" = $1');
+        expect(sql).toContain('"job"."started_at" is not null');
+        expect(sql).toContain('"job"."completed_at" is null');
+        expect(sql).toContain('order by "job"."started_at" desc limit $2');
+        expect(values).toEqual([session.user.id, 1]);
+    });
+
+    it("returns 404 when the user has no started job", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockRows("select", []);
+
+        const response = await currentRequest();
+
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({ error: "No current job" });
+    });
+
+    it("returns 500 when the current job lookup fails", async () => {
+        getSessionMock.mockResolvedValue(session);
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database unavailable"),
+        );
+
+        const response = await currentRequest();
+
+        expect(response.status).toBe(500);
     });
 });
 
@@ -324,7 +466,7 @@ describe("GET /jobs/unassigned", () => {
 
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual([
-            { ...serializedJob, assignedDriverId: null },
+            { ...serializedJobWithAddresses, assignedDriverId: null },
         ]);
         expect(getSessionMock).toHaveBeenCalledTimes(1);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
@@ -363,6 +505,16 @@ describe("GET /jobs/unassigned", () => {
 
 describe("GET /jobs/unassigned-reduced", () => {
     it("allows access without a token when JOBTOKEN is not configured", async () => {
+        setDbMockRows("select", [
+            [
+                serializedJob.id,
+                `(${serializedJob.from.join(",")})`,
+                serializedJob.to ? `(${serializedJob.to.join(",")})` : null,
+                serializedJob.dueDate.slice(0, -1),
+                serializedJob.note,
+            ],
+        ]);
+
         const response = await unassignedReducedRequest();
 
         expect(response.status).toBe(200);
@@ -394,6 +546,8 @@ describe("GET /jobs/unassigned-reduced", () => {
                 to: serializedJob.to,
                 dueDate: serializedJob.dueDate,
                 note: serializedJob.note,
+                fromAddress: serializedJobWithAddresses.fromAddress,
+                toAddress: serializedJobWithAddresses.toAddress,
             },
         ]);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
@@ -414,6 +568,15 @@ describe("GET /jobs/unassigned-reduced", () => {
 
     it("allows access when the authorization header token matches JOBTOKEN", async () => {
         envMock.JOBTOKEN = "reduced-jobs-secret";
+        setDbMockRows("select", [
+            [
+                serializedJob.id,
+                `(${serializedJob.from.join(",")})`,
+                serializedJob.to ? `(${serializedJob.to.join(",")})` : null,
+                serializedJob.dueDate.slice(0, -1),
+                serializedJob.note,
+            ],
+        ]);
 
         const response = await unassignedReducedRequest("reduced-jobs-secret");
 
@@ -1528,6 +1691,89 @@ describe("POST /jobs/:id/assign", () => {
     });
 });
 
+describe("assignment notifications", () => {
+    const geocoderResult = (displayName: string) => ({
+        count: 1,
+        results: [
+            {
+                pack: "austria.sqlite",
+                kind: "address",
+                lat: 48.2,
+                lon: 16.3,
+                display_name: displayName,
+                distance_m: 5,
+            },
+        ],
+    });
+
+    const [baseJob] = exampleData.job;
+    if (!baseJob) throw new Error("Expected job fixture data");
+    const assignedJob = {
+        ...baseJob,
+        assignedDriverId: "driver-2",
+        from: [48.2082, 16.3738] as [number, number],
+        to: [48.1947, 16.3122] as [number, number],
+    };
+
+    it("shortens addresses to the requested Unicode character length", () => {
+        expect(shortenAddress("Short address", 20)).toBe("Short address");
+        expect(shortenAddress("Stephansplatz 😀 Vienna", 15)).toBe(
+            "Stephansplatz…",
+        );
+        expect(Array.from(shortenAddress("x".repeat(100), 20))).toHaveLength(
+            20,
+        );
+    });
+
+    it("reverse geocodes both locations and publishes the shortened notification", async () => {
+        const longPickupAddress = "A".repeat(100);
+        fetchMock
+            .mockResolvedValueOnce(
+                Response.json(geocoderResult(longPickupAddress)),
+            )
+            .mockResolvedValueOnce(
+                Response.json(geocoderResult("Schönbrunner Straße 1, Wien")),
+            );
+        const publishMock = mock((_topic: string, _message: string) => 1);
+        const server = {
+            publish: publishMock,
+        } as unknown as Bun.Server<unknown>;
+
+        await sendAssignmentNotification(server, assignedJob);
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+            `${envMock.GEOCODER_URL}/reverse?lat=48.2082&lon=16.3738&limit=1`,
+            `${envMock.GEOCODER_URL}/reverse?lat=48.1947&lon=16.3122&limit=1`,
+        ]);
+        expect(publishMock).toHaveBeenCalledTimes(1);
+        expect(publishMock.mock.calls[0]?.[0]).toBe("api:ws:notify:driver-2");
+        const notification = JSON.parse(String(publishMock.mock.calls[0]?.[1]));
+        expect(notification).toEqual({
+            jobId: assignedJob.id,
+            from: `${"A".repeat(NOTIFICATION_ADDRESS_MAX_LENGTH - 1)}…`,
+            to: "Schönbrunner Straße 1, Wien",
+            note: assignedJob.note,
+        });
+    });
+
+    it("starts reverse geocoding without waiting for it to finish", () => {
+        fetchMock.mockImplementation(
+            () => new Promise<Response>(() => undefined),
+        );
+        const publishMock = mock((_topic: string, _message: string) => 1);
+        const server = {
+            publish: publishMock,
+        } as unknown as Bun.Server<unknown>;
+
+        const result = notifyAssignedDriverInBackground(server, assignedJob);
+
+        expect(result).toBeUndefined();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(publishMock).not.toHaveBeenCalled();
+    });
+});
+
 describe("POST /jobs/:id/start", () => {
     beforeEach(() => {
         setDbMockRowCount("update", 1);
@@ -1982,11 +2228,29 @@ describe("GET /jobs/:id", () => {
         const response = await getJobRequest();
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual(serializedJob);
+        expect(await response.json()).toEqual(serializedJobWithAddresses);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
         const { sql, values } = getFirstQuery();
         expect(sql).toContain('from "job" where "job"."id" = $1 limit $2');
         expect(values).toEqual([jobId, 1]);
+    });
+
+    it("returns a null destination address when the job has no destination", async () => {
+        getSessionMock.mockResolvedValue(session);
+        const [jobRow] = getDbMockTableRows("job");
+        if (!jobRow) throw new Error("Expected job fixture data");
+        jobRow[4] = null;
+        setDbMockRows("select", [jobRow]);
+
+        const response = await getJobRequest();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+            ...serializedJobWithAddresses,
+            to: null,
+            toAddress: null,
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("returns 404 when the job does not exist", async () => {
@@ -2049,7 +2313,7 @@ describe("GET /jobs/all", () => {
         const response = await allJobsRequest(filter);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([serializedJob]);
+        expect(await response.json()).toEqual([serializedJobWithAddresses]);
         expect(getSessionMock).toHaveBeenCalledTimes(1);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
@@ -2065,7 +2329,7 @@ describe("GET /jobs/all", () => {
         const response = await allJobsRequest("assigned");
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([serializedJob]);
+        expect(await response.json()).toEqual([serializedJobWithAddresses]);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
         const { sql, values } = getFirstQuery();
@@ -2087,7 +2351,7 @@ describe("GET /jobs/all", () => {
 
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual([
-            { ...serializedJob, assignedDriverId: null },
+            { ...serializedJobWithAddresses, assignedDriverId: null },
         ]);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 

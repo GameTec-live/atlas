@@ -38,6 +38,14 @@ const geocoderErrorResponse = t.Object({
     }),
 });
 
+const reverseGeocoderResponse = t.Union([
+    t.Object({
+        count: t.Integer({ minimum: 0 }),
+        results: t.Array(geocoderResult),
+    }),
+    geocoderErrorResponse,
+]);
+
 const routeLocation = t.Object({
     type: t.Union([
         t.Literal("break"),
@@ -245,6 +253,13 @@ export const GeoservicesModel = {
         }),
     }),
     geocoderResponse: t.Union([geocoderSuccessResponse, geocoderErrorResponse]),
+    reverseQuery: t.Object({
+        lat: t.Number({ minimum: -90, maximum: 90 }),
+        lon: t.Number({ minimum: -180, maximum: 180 }),
+        radius_m: t.Optional(t.Number({ minimum: 0, maximum: 100_000 })),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: 50 })),
+    }),
+    reverseGeocoderResponse,
     routeQuery: t.Object({
         fromlat: t.Number({ minimum: -90, maximum: 90 }),
         fromlon: t.Number({ minimum: -180, maximum: 180 }),

@@ -6,11 +6,16 @@ import { db } from "../db";
 import { job, user } from "../db/schema";
 import { trackCache } from "../realtime/cache";
 import {
+    withReverseGeocodedAddress,
+    withReverseGeocodedAddresses,
+} from "./addresses";
+import {
     type CandidateTarget,
     calculateDriverCandidate,
     rankDriverCandidates,
 } from "./candidates";
 import { JobModel } from "./model";
+import { notifyAssignedDriverInBackground } from "./notifications";
 
 const calculateCandidates = async (target: CandidateTarget) => {
     const trackedDrivers = [...trackCache.entries()];
@@ -79,7 +84,33 @@ export const jobs = new Elysia({
                 .from(job)
                 .where(eq(job.assignedDriverId, user.id))
                 .orderBy(asc(job.dueDate), asc(job.startedAt));
-            return jobs;
+            return withReverseGeocodedAddresses(jobs);
+        },
+        {
+            auth: true,
+        },
+    )
+    .get(
+        "/current",
+        async ({ user }) => {
+            const [currentJob] = await db
+                .select()
+                .from(job)
+                .where(
+                    and(
+                        eq(job.assignedDriverId, user.id),
+                        isNotNull(job.startedAt),
+                        isNull(job.completedAt),
+                    ),
+                )
+                .orderBy(desc(job.startedAt))
+                .limit(1);
+
+            if (!currentJob) {
+                return status(404, { error: "No current job" });
+            }
+
+            return withReverseGeocodedAddress(currentJob);
         },
         {
             auth: true,
@@ -93,7 +124,7 @@ export const jobs = new Elysia({
                 .from(job)
                 .where(isNull(job.assignedDriverId))
                 .orderBy(asc(job.dueDate), asc(job.createdAt));
-            return jobs;
+            return withReverseGeocodedAddresses(jobs);
         },
         {
             auth: true,
@@ -114,7 +145,7 @@ export const jobs = new Elysia({
                     .from(job)
                     .where(isNull(job.assignedDriverId))
                     .orderBy(asc(job.dueDate), asc(job.createdAt));
-                return jobs;
+                return withReverseGeocodedAddresses(jobs);
             }
 
             return status(401, { error: "Unauthorized" });
@@ -193,7 +224,7 @@ export const jobs = new Elysia({
     )
     .post(
         "/:id/assign",
-        async ({ params, body, user }) => {
+        async ({ params, body, user, server }) => {
             const [updatedJob] = await db
                 .update(job)
                 .set({
@@ -213,6 +244,8 @@ export const jobs = new Elysia({
             if (!updatedJob) {
                 return status(404, { error: "Job not found" });
             }
+
+            notifyAssignedDriverInBackground(server, updatedJob);
 
             return updatedJob;
         },
@@ -336,7 +369,7 @@ export const jobs = new Elysia({
                 return status(404, { error: "Job not found" });
             }
 
-            return foundJob;
+            return withReverseGeocodedAddress(foundJob);
         },
         {
             params: t.Object({
@@ -359,7 +392,7 @@ export const jobs = new Elysia({
                           ? isNull(job.assignedDriverId)
                           : undefined,
                 );
-            return jobs;
+            return withReverseGeocodedAddresses(jobs);
         },
         {
             query: t.Object({
