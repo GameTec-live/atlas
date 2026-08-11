@@ -32,14 +32,19 @@ func (c testCatalog) Covering(context.Context, model.Bounds) (model.Region, erro
 }
 
 type testRunner struct {
-	mu    sync.Mutex
-	calls []string
+	mu       sync.Mutex
+	calls    []string
+	failJava bool
 }
 
 func (r *testRunner) Run(_ context.Context, name string, args ...string) error {
 	r.mu.Lock()
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	fail := r.failJava && name == "java"
 	r.mu.Unlock()
+	if fail {
+		return fmt.Errorf("test map build failed")
+	}
 
 	var output string
 	for index, argument := range args {
@@ -54,6 +59,12 @@ func (r *testRunner) Run(_ context.Context, name string, args ...string) error {
 		return fmt.Errorf("test command has no output argument")
 	}
 	return os.WriteFile(output, []byte(name+" output"), 0o644)
+}
+
+func (r *testRunner) setFailJava(fail bool) {
+	r.mu.Lock()
+	r.failJava = fail
+	r.mu.Unlock()
 }
 
 func TestFullPipelineMergesAndRebuildsMap(t *testing.T) {
@@ -77,7 +88,7 @@ func TestFullPipelineMergesAndRebuildsMap(t *testing.T) {
 	manager.Start()
 	defer manager.Stop()
 
-	first, err := manager.StartByName(context.Background(), "one", nil)
+	first, err := manager.Install(context.Background(), "one", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +101,7 @@ func TestFullPipelineMergesAndRebuildsMap(t *testing.T) {
 		}
 	}
 
-	second, err := manager.StartByName(context.Background(), "two", nil)
+	second, err := manager.Install(context.Background(), "two", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,6 +114,24 @@ func TestFullPipelineMergesAndRebuildsMap(t *testing.T) {
 	if !strings.Contains(calls, "osmium merge") {
 		t.Fatalf("second install did not merge PBFs:\n%s", calls)
 	}
+
+	runner.setFailJava(true)
+	failedDeletion, err := manager.Delete("one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job := waitJob(t, manager, failedDeletion.ID); job.State != model.JobFailed {
+		t.Fatalf("deletion should fail before removing synchronized data: %#v", job)
+	}
+	if _, found := dataStore.Dataset("one"); !found {
+		t.Fatal("failed map rebuild removed the dataset")
+	}
+	for _, path := range []string{"one.osm.pbf", "one.sqlite", "map.pmtiles"} {
+		if _, err := os.Stat(filepath.Join(root, path)); err != nil {
+			t.Fatalf("failed map rebuild removed %s: %v", path, err)
+		}
+	}
+	runner.setFailJava(false)
 
 	deletion, err := manager.Delete("one")
 	if err != nil {

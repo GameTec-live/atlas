@@ -5,14 +5,14 @@ A small Gin service that downloads and manages OpenStreetMap data for Atlas. It 
 ## What it does
 
 - Lists the current [Geofabrik](https://download.geofabrik.de/) download catalog, with name and parent filters.
-- Installs a named Geofabrik extract or a custom bounding-box extract.
-- Generates [geocoder-go](https://github.com/GameTec-live/geocoder-go) SQLite packs with `packgen`.
+- Installs a named Geofabrik extract or a custom bounding-box dataset.
+- Generates a [geocoder-go](https://github.com/GameTec-live/geocoder-go) SQLite pack for every dataset with `packgen`.
 - Merges installed PBFs with [osmium](https://osmcode.org/osmium-tool/manual.html) and builds the single PMTiles archive with [Planetiler](https://github.com/onthegomap/planetiler).
 - Persists installed datasets and job history across restarts.
 - Reports job progress over REST and WebSocket.
 - Deletes dataset-owned files and removes/rebuilds the shared map archive.
 
-Jobs are processed serially. This deliberately prevents two expensive imports from writing `map.pmtiles` at the same time. All final artifacts are moved into place only after their build succeeds.
+Jobs are processed serially. This deliberately prevents two expensive imports from writing `map.pmtiles` at the same time. A dataset is one lifecycle unit: every successful install has its PBF and SQLite files and is included in the shared `map.pmtiles`.
 
 ## Requirements
 
@@ -21,7 +21,7 @@ Jobs are processed serially. This deliberately prevents two expensive imports fr
 - the `packgen` binary from geocoder-go for SQLite output
 - Java and a Planetiler JAR for PMTiles output
 
-The service can manage PBF-only downloads without `packgen`, Java, or Planetiler. Send `"products":["pbf"]` in that case. If `products` is omitted, all three products are requested and the job fails clearly if a required processor is unavailable.
+All processors are required. An install fails without registering the dataset if its PBF download, SQLite conversion, or PMTiles build fails.
 
 ## Run
 
@@ -117,62 +117,58 @@ go run .
 
 ## API
 
-All errors use `{"error":{"code":"...","message":"..."}}`. Download and delete calls return `202 Accepted` and a job. Follow the `Location` response header or subscribe to the WebSocket.
+All errors use `{"error":{"code":"...","message":"..."}}`. Install and delete calls return `202 Accepted` and a job. Follow the `Location` response header or subscribe to the WebSocket.
 
-### Options and state
+### Catalog and datasets
 
 ```http
 GET /healthz
-GET /api/v1/options?q=austria&parent=europe
-GET /api/v1/options/products
-GET /api/v1/installed
+GET /api/v1/catalog?q=austria&parent=europe
+GET /api/v1/datasets
 ```
 
-`/options/products` shows whether `osmium`, `packgen`, Java, and the configured Planetiler JAR are currently available. Installed datasets have a `ready` state when every managed artifact exists and `degraded` when a file has disappeared outside this service.
+Datasets have a `ready` state when their PBF, SQLite pack, and shared PMTiles archive exist, and `degraded` when a managed file has disappeared outside this service.
 
-### Start by name
+### Install a dataset
 
-The name can be a Geofabrik ID or its display name.
+Use the same endpoint for either source type. A name can be a Geofabrik ID or display name.
 
 ```sh
-curl -X POST http://localhost:8080/api/v1/downloads/name \
+curl -X POST http://localhost:8080/api/v1/datasets \
   -H "Content-Type: application/json" \
-  -d '{"name":"austria","products":["pbf","geocoder","map"]}'
+  -d '{"name":"austria"}'
 ```
-
-### Start by bounding box
 
 Coordinates are WGS84 longitude/latitude. The service chooses the smallest Geofabrik extract whose published envelope covers the box, downloads it, and invokes `osmium extract`. The optional `id` becomes the stable dataset/file name.
 
 ```sh
-curl -X POST http://localhost:8080/api/v1/downloads/bbox \
+curl -X POST http://localhost:8080/api/v1/datasets \
   -H "Content-Type: application/json" \
   -d '{
     "id":"vienna",
-    "bbox":{"west":16.17,"south":48.10,"east":16.58,"north":48.33},
-    "products":["pbf","geocoder","map"]
+    "bbox":{"minLongitude":16.17,"minLatitude":48.10,"maxLongitude":16.58,"maxLatitude":48.33}
   }'
 ```
 
 ### Jobs and live progress
 
 ```http
-GET    /api/v1/downloads
-GET    /api/v1/downloads?active=true
-GET    /api/v1/downloads/{job-id}
-DELETE /api/v1/downloads/{job-id}
-WS     /api/v1/downloads/ws
+GET    /api/v1/jobs
+GET    /api/v1/jobs?active=true
+GET    /api/v1/jobs/{job-id}
+DELETE /api/v1/jobs/{job-id}
+WS     /api/v1/jobs/ws
 ```
 
 The WebSocket first emits `{"type":"snapshot","jobs":[...]}`, followed by `{"type":"job","job":{...}}` updates. `progress` ranges from `0` to `1`; exact byte counters are included while downloading when the upstream server supplies a content length.
 
-### Delete installed data
+### Delete a dataset
 
 ```http
-DELETE /api/v1/data/{dataset-id}
+DELETE /api/v1/datasets/{dataset-id}
 ```
 
-Deletion is also a job. It removes the dataset PBF and SQLite pack. Because `map.pmtiles` is shared, it is removed immediately and rebuilt from remaining PBFs when Planetiler is configured. This guarantees that deleted geography is never left in the served map archive.
+Deletion is also a job. It first builds a replacement `map.pmtiles` from the remaining datasets, then removes the dataset PBF and SQLite pack and commits the replacement map. If the rebuild fails, the original dataset and map remain available.
 
 ## Operational notes
 
@@ -180,6 +176,7 @@ Deletion is also a job. It removes the dataset PBF and SQLite pack. Because `map
 - `osmium merge` expects normally sorted extracts. Geofabrik snapshots are suitable, but avoid combining snapshots from substantially different dates when they overlap.
 - The manifest is `data/.geodata/state.json`. Do not edit it while the service is running.
 - On restart, jobs that were queued or running are retained in history as failed/interrupted; partially built files live only under `.geodata/tmp` or use a `.part` suffix.
+- The manifest retains the newest 100 completed, failed, or cancelled jobs. Queued and running jobs are always retained in addition to that history limit.
 - OpenStreetMap-derived output remains subject to ODbL attribution requirements.
 
 ## Development

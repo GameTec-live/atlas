@@ -88,10 +88,10 @@ func (g *Geofabrik) Covering(ctx context.Context, bounds model.Bounds) (model.Re
 	for _, region := range g.regions {
 		envelope, ok := g.envelopes[region.ID]
 		shape, hasShape := g.geometries[region.ID]
-		if !ok || !hasShape || envelope.West > bounds.West || envelope.South > bounds.South || envelope.East < bounds.East || envelope.North < bounds.North || !shape.covers(bounds) {
+		if !ok || !hasShape || envelope.MinLongitude > bounds.MinLongitude || envelope.MinLatitude > bounds.MinLatitude || envelope.MaxLongitude < bounds.MaxLongitude || envelope.MaxLatitude < bounds.MaxLatitude || !shape.covers(bounds) {
 			continue
 		}
-		area := (envelope.East - envelope.West) * (envelope.North - envelope.South)
+		area := (envelope.MaxLongitude - envelope.MinLongitude) * (envelope.MaxLatitude - envelope.MinLatitude)
 		if area < bestArea {
 			bestArea = area
 			best = region
@@ -241,9 +241,9 @@ func parsePolygon(items []any) (polygon, bool) {
 
 func (g geometry) covers(bounds model.Bounds) bool {
 	checks := []point{
-		{bounds.West, bounds.South}, {bounds.West, bounds.North},
-		{bounds.East, bounds.South}, {bounds.East, bounds.North},
-		{(bounds.West + bounds.East) / 2, (bounds.South + bounds.North) / 2},
+		{bounds.MinLongitude, bounds.MinLatitude}, {bounds.MinLongitude, bounds.MaxLatitude},
+		{bounds.MaxLongitude, bounds.MinLatitude}, {bounds.MaxLongitude, bounds.MaxLatitude},
+		{(bounds.MinLongitude + bounds.MaxLongitude) / 2, (bounds.MinLatitude + bounds.MaxLatitude) / 2},
 	}
 	for _, check := range checks {
 		contained := false
@@ -300,7 +300,7 @@ func pointOnSegment(candidate, a, b point) bool {
 }
 
 func geometryEnvelope(coordinates any) (model.Bounds, bool) {
-	bounds := model.Bounds{West: math.Inf(1), South: math.Inf(1), East: math.Inf(-1), North: math.Inf(-1)}
+	bounds := model.Bounds{MinLongitude: math.Inf(1), MinLatitude: math.Inf(1), MaxLongitude: math.Inf(-1), MaxLatitude: math.Inf(-1)}
 	var found bool
 	var visit func(any)
 	visit = func(value any) {
@@ -312,10 +312,10 @@ func geometryEnvelope(coordinates any) (model.Bounds, bool) {
 			lon, lonOK := items[0].(float64)
 			lat, latOK := items[1].(float64)
 			if lonOK && latOK {
-				bounds.West = math.Min(bounds.West, lon)
-				bounds.South = math.Min(bounds.South, lat)
-				bounds.East = math.Max(bounds.East, lon)
-				bounds.North = math.Max(bounds.North, lat)
+				bounds.MinLongitude = math.Min(bounds.MinLongitude, lon)
+				bounds.MinLatitude = math.Min(bounds.MinLatitude, lat)
+				bounds.MaxLongitude = math.Max(bounds.MaxLongitude, lon)
+				bounds.MaxLatitude = math.Max(bounds.MaxLatitude, lat)
 				found = true
 				return
 			}

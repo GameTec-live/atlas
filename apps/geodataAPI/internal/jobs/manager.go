@@ -107,20 +107,26 @@ func (m *Manager) Stop() {
 	})
 }
 
-func (m *Manager) StartByName(ctx context.Context, name string, products []model.Product) (model.Job, error) {
-	region, err := m.catalog.Find(ctx, name)
-	if err != nil {
-		return model.Job{}, err
+func (m *Manager) Install(ctx context.Context, name, id string, bounds *model.Bounds) (model.Job, error) {
+	if bounds == nil {
+		if strings.TrimSpace(name) == "" {
+			return model.Job{}, errors.New("name is required when bbox is omitted")
+		}
+		region, err := m.catalog.Find(ctx, name)
+		if err != nil {
+			return model.Job{}, err
+		}
+		request := model.JobRequest{Name: region.Name, DatasetID: slug(region.ID), Region: &region}
+		return m.enqueue("install", request)
 	}
-	request := model.JobRequest{Name: region.Name, DatasetID: slug(region.ID), Products: normalizeProducts(products), Region: &region}
-	return m.enqueue("install", request)
-}
 
-func (m *Manager) StartByBounds(ctx context.Context, id string, bounds model.Bounds, products []model.Product) (model.Job, error) {
-	if !bounds.Valid() {
-		return model.Job{}, errors.New("bbox must have west < east and south < north")
+	if strings.TrimSpace(name) != "" {
+		return model.Job{}, errors.New("name and bbox are mutually exclusive")
 	}
-	region, err := m.catalog.Covering(ctx, bounds)
+	if !bounds.Valid() {
+		return model.Job{}, errors.New("bbox must have minLongitude < maxLongitude and minLatitude < maxLatitude")
+	}
+	region, err := m.catalog.Covering(ctx, *bounds)
 	if err != nil {
 		return model.Job{}, err
 	}
@@ -131,7 +137,7 @@ func (m *Manager) StartByBounds(ctx context.Context, id string, bounds model.Bou
 	if id == "" {
 		return model.Job{}, errors.New("id must contain at least one letter or number")
 	}
-	request := model.JobRequest{Name: id, DatasetID: id, Bounds: &bounds, Products: normalizeProducts(products), Region: &region}
+	request := model.JobRequest{Name: id, DatasetID: id, Bounds: bounds, Region: &region}
 	return m.enqueue("install", request)
 }
 
@@ -140,7 +146,7 @@ func (m *Manager) Delete(datasetID string) (model.Job, error) {
 	if _, ok := m.store.Dataset(datasetID); !ok {
 		return model.Job{}, fmt.Errorf("dataset %q not found", datasetID)
 	}
-	return m.enqueue("delete", model.JobRequest{DatasetID: datasetID, DeleteData: true})
+	return m.enqueue("delete", model.JobRequest{DatasetID: datasetID})
 }
 
 func (m *Manager) Cancel(jobID string) (model.Job, error) {
@@ -318,7 +324,7 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 		job.Stage = "extracting_bbox"
 		job.Progress = 0.52
 		_ = m.saveAndPublish(*job)
-		bbox := fmt.Sprintf("%g,%g,%g,%g", request.Bounds.West, request.Bounds.South, request.Bounds.East, request.Bounds.North)
+		bbox := fmt.Sprintf("%g,%g,%g,%g", request.Bounds.MinLongitude, request.Bounds.MinLatitude, request.Bounds.MaxLongitude, request.Bounds.MaxLatitude)
 		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, "extract", "--bbox", bbox, "--set-bounds", "--overwrite", "--output", finalPBF, downloadTarget); err != nil {
 			return fmt.Errorf("extract bounding box with osmium: %w", err)
 		}
@@ -327,50 +333,45 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	}
 
 	artifacts := make([]model.Artifact, 0, 3)
-	pbfArtifact, err := m.store.Artifact(model.ProductPBF, request.DatasetID+".osm.pbf")
+	pbfArtifact, err := m.store.Artifact(model.ArtifactPBF, request.DatasetID+".osm.pbf")
 	if err != nil {
 		return err
 	}
 	artifacts = append(artifacts, pbfArtifact)
 
-	if hasProduct(request.Products, model.ProductGeocoder) {
-		job.Stage = "building_geocoder"
-		job.Progress = 0.65
-		_ = m.saveAndPublish(*job)
-		relative := request.DatasetID + ".sqlite"
-		final := finalGeocoder
-		temporary := filepath.Join(workDir, request.DatasetID+".sqlite.building")
-		args := []string{"build", "--source", "openstreetmap", "--output", temporary}
-		if len(request.Region.CountryCodes) > 0 {
-			args = append(args, "--country", request.Region.CountryCodes[0])
-		}
-		args = append(args, finalPBF)
-		if err := m.runner.Run(ctx, m.cfg.PackgenBinary, args...); err != nil {
-			return fmt.Errorf("build geocoder pack: %w", err)
-		}
-		if err := replace(temporary, final); err != nil {
-			return fmt.Errorf("commit geocoder pack: %w", err)
-		}
-		artifact, err := m.store.Artifact(model.ProductGeocoder, relative)
-		if err != nil {
-			return err
-		}
-		artifacts = append(artifacts, artifact)
+	job.Stage = "building_geocoder"
+	job.Progress = 0.65
+	_ = m.saveAndPublish(*job)
+	relative := request.DatasetID + ".sqlite"
+	temporary := filepath.Join(workDir, request.DatasetID+".sqlite.building")
+	args := []string{"build", "--source", "openstreetmap", "--output", temporary}
+	if len(request.Region.CountryCodes) > 0 {
+		args = append(args, "--country", request.Region.CountryCodes[0])
 	}
+	args = append(args, finalPBF)
+	if err := m.runner.Run(ctx, m.cfg.PackgenBinary, args...); err != nil {
+		return fmt.Errorf("build geocoder pack: %w", err)
+	}
+	if err := replace(temporary, finalGeocoder); err != nil {
+		return fmt.Errorf("commit geocoder pack: %w", err)
+	}
+	geocoderArtifact, err := m.store.Artifact(model.ArtifactGeocoder, relative)
+	if err != nil {
+		return err
+	}
+	artifacts = append(artifacts, geocoderArtifact)
 
-	if hasProduct(request.Products, model.ProductMap) {
-		job.Stage = "building_map"
-		job.Progress = 0.82
-		_ = m.saveAndPublish(*job)
-		if err := m.buildMap(ctx, workDir, finalPBF); err != nil {
-			return err
-		}
-		artifact, err := m.store.Artifact(model.ProductMap, "map.pmtiles")
-		if err != nil {
-			return err
-		}
-		artifacts = append(artifacts, artifact)
+	job.Stage = "building_map"
+	job.Progress = 0.82
+	_ = m.saveAndPublish(*job)
+	if err := m.buildMap(ctx, workDir, finalPBF); err != nil {
+		return err
 	}
+	mapArtifact, err := m.store.Artifact(model.ArtifactMap, "map.pmtiles")
+	if err != nil {
+		return err
+	}
+	artifacts = append(artifacts, mapArtifact)
 
 	countryCode := ""
 	if len(request.Region.CountryCodes) > 0 {
@@ -379,7 +380,7 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	dataset := model.Dataset{
 		ID: request.DatasetID, Name: request.Name, SourceURL: request.Region.PBFURL,
 		SourceRegion: request.Region.ID, CountryCode: countryCode, Bounds: request.Bounds,
-		Products: request.Products, Artifacts: artifacts, InstalledAt: time.Now().UTC(),
+		Artifacts: artifacts, InstalledAt: time.Now().UTC(),
 	}
 	if request.Bounds == nil {
 		dataset.SourceType = "name"
@@ -397,11 +398,36 @@ func (m *Manager) runDelete(ctx context.Context, job *model.Job) error {
 	if !ok {
 		return fmt.Errorf("dataset %q not found", job.DatasetID)
 	}
+
+	remaining := make([]model.Dataset, 0)
+	for _, candidate := range m.store.Datasets() {
+		if candidate.ID != dataset.ID {
+			remaining = append(remaining, candidate)
+		}
+	}
+	pbfs := datasetPBFs(m.store.Root(), remaining)
+	var replacementMap string
+	if len(pbfs) > 0 {
+		job.Stage = "rebuilding_map"
+		job.Progress = 0.25
+		_ = m.saveAndPublish(*job)
+		workDir := filepath.Join(m.store.TempDir(), job.ID)
+		if err := os.MkdirAll(workDir, 0o755); err != nil {
+			return err
+		}
+		defer os.RemoveAll(workDir)
+		var err error
+		replacementMap, err = m.generateMap(ctx, workDir, pbfs)
+		if err != nil {
+			return err
+		}
+	}
+
 	job.Stage = "deleting_files"
-	job.Progress = 0.25
+	job.Progress = 0.85
 	_ = m.saveAndPublish(*job)
 	for _, artifact := range dataset.Artifacts {
-		if artifact.Kind == model.ProductMap {
+		if artifact.Kind == model.ArtifactMap {
 			continue
 		}
 		if err := os.Remove(filepath.Join(m.store.Root(), filepath.FromSlash(artifact.Path))); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -413,29 +439,16 @@ func (m *Manager) runDelete(ctx context.Context, job *model.Job) error {
 	}
 
 	mapPath := filepath.Join(m.store.Root(), "map.pmtiles")
-	if err := os.Remove(mapPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	remaining := m.store.Datasets()
-	pbfs := datasetPBFs(m.store.Root(), remaining)
 	if len(pbfs) == 0 {
+		if err := os.Remove(mapPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 		return nil
 	}
-	if strings.TrimSpace(m.cfg.PlanetilerJar) == "" {
-		job.Stage = "map_removed_processor_not_configured"
-		job.Progress = 0.9
-		_ = m.saveAndPublish(*job)
-		return nil
+	if err := replace(replacementMap, mapPath); err != nil {
+		return fmt.Errorf("commit map.pmtiles: %w", err)
 	}
-	job.Stage = "rebuilding_map"
-	job.Progress = 0.55
-	_ = m.saveAndPublish(*job)
-	workDir := filepath.Join(m.store.TempDir(), job.ID)
-	if err := os.MkdirAll(workDir, 0o755); err != nil {
-		return err
-	}
-	defer os.RemoveAll(workDir)
-	return m.buildMapFromPaths(ctx, workDir, pbfs)
+	return nil
 }
 
 func (m *Manager) download(ctx context.Context, sourceURL, destination string, job *model.Job) error {
@@ -503,23 +516,9 @@ func (m *Manager) buildMap(ctx context.Context, workDir, candidatePBF string) er
 }
 
 func (m *Manager) buildMapFromPaths(ctx context.Context, workDir string, pbfs []string) error {
-	if strings.TrimSpace(m.cfg.PlanetilerJar) == "" {
-		return errors.New("map generation requested but GEODATA_PLANETILER_JAR is not configured")
-	}
-	sort.Strings(pbfs)
-	input := pbfs[0]
-	if len(pbfs) > 1 {
-		input = filepath.Join(workDir, "combined.osm.pbf")
-		args := append([]string{"merge", "--overwrite", "--output", input}, pbfs...)
-		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, args...); err != nil {
-			return fmt.Errorf("merge PBF files with osmium: %w", err)
-		}
-	}
-	temporary := filepath.Join(workDir, "map.pmtiles")
-	args := []string{"-jar", m.cfg.PlanetilerJar, "--download", "--osm-path=" + input, "--output=" + temporary, "--force"}
-	args = append(args, m.cfg.PlanetilerArgs...)
-	if err := m.runner.Run(ctx, m.cfg.JavaBinary, args...); err != nil {
-		return fmt.Errorf("build PMTiles with Planetiler: %w", err)
+	temporary, err := m.generateMap(ctx, workDir, pbfs)
+	if err != nil {
+		return err
 	}
 	if err := replace(temporary, filepath.Join(m.store.Root(), "map.pmtiles")); err != nil {
 		return fmt.Errorf("commit map.pmtiles: %w", err)
@@ -527,11 +526,33 @@ func (m *Manager) buildMapFromPaths(ctx context.Context, workDir string, pbfs []
 	return nil
 }
 
+func (m *Manager) generateMap(ctx context.Context, workDir string, pbfs []string) (string, error) {
+	if strings.TrimSpace(m.cfg.PlanetilerJar) == "" {
+		return "", errors.New("map generation requested but GEODATA_PLANETILER_JAR is not configured")
+	}
+	sort.Strings(pbfs)
+	input := pbfs[0]
+	if len(pbfs) > 1 {
+		input = filepath.Join(workDir, "combined.osm.pbf")
+		args := append([]string{"merge", "--overwrite", "--output", input}, pbfs...)
+		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, args...); err != nil {
+			return "", fmt.Errorf("merge PBF files with osmium: %w", err)
+		}
+	}
+	temporary := filepath.Join(workDir, "map.pmtiles")
+	args := []string{"-jar", m.cfg.PlanetilerJar, "--download", "--osm-path=" + input, "--output=" + temporary, "--force"}
+	args = append(args, m.cfg.PlanetilerArgs...)
+	if err := m.runner.Run(ctx, m.cfg.JavaBinary, args...); err != nil {
+		return "", fmt.Errorf("build PMTiles with Planetiler: %w", err)
+	}
+	return temporary, nil
+}
+
 func datasetPBFs(root string, datasets []model.Dataset) []string {
 	var paths []string
 	for _, dataset := range datasets {
 		for _, artifact := range dataset.Artifacts {
-			if artifact.Kind == model.ProductPBF {
+			if artifact.Kind == model.ArtifactPBF {
 				path := filepath.Join(root, filepath.FromSlash(artifact.Path))
 				if _, err := os.Stat(path); err == nil {
 					paths = append(paths, path)
@@ -555,30 +576,6 @@ func (m *Manager) saveAndPublish(job model.Job) error {
 	}
 	m.subscribers.Unlock()
 	return nil
-}
-
-func normalizeProducts(products []model.Product) []model.Product {
-	if len(products) == 0 {
-		return []model.Product{model.ProductPBF, model.ProductGeocoder, model.ProductMap}
-	}
-	seen := map[model.Product]bool{model.ProductPBF: true}
-	result := []model.Product{model.ProductPBF}
-	for _, product := range products {
-		if (product == model.ProductGeocoder || product == model.ProductMap) && !seen[product] {
-			seen[product] = true
-			result = append(result, product)
-		}
-	}
-	return result
-}
-
-func hasProduct(products []model.Product, wanted model.Product) bool {
-	for _, product := range products {
-		if product == wanted {
-			return true
-		}
-	}
-	return false
 }
 
 func shortID() string {

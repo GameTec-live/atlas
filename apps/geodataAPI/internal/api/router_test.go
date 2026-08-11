@@ -32,6 +32,24 @@ func (f fakeCatalog) Covering(context.Context, model.Bounds) (model.Region, erro
 	return f.region, nil
 }
 
+type fakeRunner struct{}
+
+func (fakeRunner) Run(_ context.Context, name string, args ...string) error {
+	var output string
+	for index, argument := range args {
+		if argument == "--output" && index+1 < len(args) {
+			output = args[index+1]
+		}
+		if strings.HasPrefix(argument, "--output=") {
+			output = strings.TrimPrefix(argument, "--output=")
+		}
+	}
+	if output == "" {
+		return nil
+	}
+	return os.WriteFile(output, []byte(name+" output"), 0o644)
+}
+
 func TestDownloadListWebsocketAndDelete(t *testing.T) {
 	pbf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Length", "8")
@@ -44,15 +62,15 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := config.Config{DataDir: dataDir, HTTPTimeout: time.Second, OsmiumBinary: "osmium", PackgenBinary: "packgen", JavaBinary: "java"}
+	cfg := config.Config{DataDir: dataDir, HTTPTimeout: time.Second, OsmiumBinary: "osmium", PackgenBinary: "packgen", JavaBinary: "java", PlanetilerJar: "planetiler.jar"}
 	regionCatalog := fakeCatalog{region: model.Region{ID: "austria", Name: "Austria", PBFURL: pbf.URL, CountryCodes: []string{"AT"}}}
-	manager := jobs.NewManager(cfg, dataStore, regionCatalog, nil)
+	manager := jobs.NewManager(cfg, dataStore, regionCatalog, fakeRunner{})
 	manager.Start()
 	defer manager.Stop()
-	server := httptest.NewServer(api.NewRouter(manager, regionCatalog, dataStore, cfg))
+	server := httptest.NewServer(api.NewRouter(manager, regionCatalog, dataStore))
 	defer server.Close()
 
-	response := requestJSON(t, http.MethodPost, server.URL+"/api/v1/downloads/name", `{"name":"austria","products":["pbf"]}`)
+	response := requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets", `{"name":"austria"}`)
 	if response.StatusCode != http.StatusAccepted {
 		t.Fatalf("start status: %d %s", response.StatusCode, readBody(response))
 	}
@@ -67,23 +85,32 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 	if err != nil || string(content) != "test-pbf" {
 		t.Fatalf("unexpected PBF %q, %v", content, err)
 	}
+	for _, required := range []string{"austria.sqlite", "map.pmtiles"} {
+		if _, err := os.Stat(filepath.Join(dataDir, required)); err != nil {
+			t.Fatalf("missing synchronized artifact %q: %v", required, err)
+		}
+	}
 	for _, unwanted := range []string{"pbf", "geocoder"} {
 		if _, err := os.Stat(filepath.Join(dataDir, unwanted)); !os.IsNotExist(err) {
 			t.Fatalf("unexpected data subdirectory %q: %v", unwanted, err)
 		}
 	}
-	response = requestJSON(t, http.MethodGet, server.URL+"/api/v1/installed", "")
+	response = requestJSON(t, http.MethodGet, server.URL+"/api/v1/datasets", "")
 	var installed struct {
-		Count int `json:"count"`
+		Items []model.Dataset `json:"items"`
+		Count int             `json:"count"`
 	}
 	decode(t, response, &installed)
 	if installed.Count != 1 {
 		t.Fatalf("installed count = %d", installed.Count)
 	}
+	if len(installed.Items) != 1 || len(installed.Items[0].Artifacts) != 3 {
+		t.Fatalf("dataset is not synchronized across all formats: %#v", installed.Items)
+	}
 
 	wsURL, _ := url.Parse(server.URL)
 	wsURL.Scheme = "ws"
-	wsURL.Path = "/api/v1/downloads/ws"
+	wsURL.Path = "/api/v1/jobs/ws"
 	connection, _, err := websocket.DefaultDialer.Dial(wsURL.String(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +127,7 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 		t.Fatalf("unexpected websocket snapshot: %#v", snapshot)
 	}
 
-	response = requestJSON(t, http.MethodDelete, server.URL+"/api/v1/data/austria", "")
+	response = requestJSON(t, http.MethodDelete, server.URL+"/api/v1/datasets/austria", "")
 	if response.StatusCode != http.StatusAccepted {
 		t.Fatalf("delete status: %d %s", response.StatusCode, readBody(response))
 	}
@@ -125,10 +152,10 @@ func TestBBoxValidation(t *testing.T) {
 	manager := jobs.NewManager(cfg, dataStore, regionCatalog, nil)
 	manager.Start()
 	defer manager.Stop()
-	server := httptest.NewServer(api.NewRouter(manager, regionCatalog, dataStore, cfg))
+	server := httptest.NewServer(api.NewRouter(manager, regionCatalog, dataStore))
 	defer server.Close()
 
-	response := requestJSON(t, http.MethodPost, server.URL+"/api/v1/downloads/bbox", `{"bbox":{"west":17,"south":49,"east":16,"north":48},"products":["pbf"]}`)
+	response := requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets", `{"bbox":{"minLongitude":17,"minLatitude":49,"maxLongitude":16,"maxLatitude":48}}`)
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, body = %s", response.StatusCode, readBody(response))
 	}

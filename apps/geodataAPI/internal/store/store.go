@@ -20,6 +20,8 @@ type Store struct {
 	state     model.State
 }
 
+const maxJobHistory = 100
+
 func Open(root string) (*Store, error) {
 	for _, directory := range []string{root, filepath.Join(root, ".geodata"), filepath.Join(root, ".geodata", "tmp")} {
 		if err := os.MkdirAll(directory, 0o755); err != nil {
@@ -104,6 +106,7 @@ func (s *Store) PutJob(job model.Job) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.Jobs[job.ID] = job
+	s.pruneJobHistoryLocked()
 	return s.saveLocked()
 }
 
@@ -122,13 +125,38 @@ func (s *Store) MarkInterruptedJobs() error {
 			changed = true
 		}
 	}
+	if s.pruneJobHistoryLocked() {
+		changed = true
+	}
 	if !changed {
 		return nil
 	}
 	return s.saveLocked()
 }
 
-func (s *Store) Artifact(kind model.Product, relativePath string) (model.Artifact, error) {
+func (s *Store) pruneJobHistoryLocked() bool {
+	completed := make([]model.Job, 0, len(s.state.Jobs))
+	for _, job := range s.state.Jobs {
+		if job.State != model.JobQueued && job.State != model.JobRunning {
+			completed = append(completed, job)
+		}
+	}
+	if len(completed) <= maxJobHistory {
+		return false
+	}
+	sort.Slice(completed, func(i, j int) bool {
+		if completed[i].CreatedAt.Equal(completed[j].CreatedAt) {
+			return completed[i].ID > completed[j].ID
+		}
+		return completed[i].CreatedAt.After(completed[j].CreatedAt)
+	})
+	for _, job := range completed[maxJobHistory:] {
+		delete(s.state.Jobs, job.ID)
+	}
+	return true
+}
+
+func (s *Store) Artifact(kind model.ArtifactKind, relativePath string) (model.Artifact, error) {
 	info, err := os.Stat(filepath.Join(s.root, filepath.FromSlash(relativePath)))
 	if err != nil {
 		return model.Artifact{}, err

@@ -3,23 +3,23 @@ package model
 import "time"
 
 type Bounds struct {
-	West  float64 `json:"west" binding:"gte=-180,lte=180"`
-	South float64 `json:"south" binding:"gte=-90,lte=90"`
-	East  float64 `json:"east" binding:"gte=-180,lte=180"`
-	North float64 `json:"north" binding:"gte=-90,lte=90"`
+	MinLongitude float64 `json:"minLongitude" binding:"gte=-180,lte=180"`
+	MinLatitude  float64 `json:"minLatitude" binding:"gte=-90,lte=90"`
+	MaxLongitude float64 `json:"maxLongitude" binding:"gte=-180,lte=180"`
+	MaxLatitude  float64 `json:"maxLatitude" binding:"gte=-90,lte=90"`
 }
 
 func (b Bounds) Valid() bool {
-	return b.West >= -180 && b.East <= 180 && b.South >= -90 && b.North <= 90 &&
-		b.West < b.East && b.South < b.North
+	return b.MinLongitude >= -180 && b.MaxLongitude <= 180 && b.MinLatitude >= -90 && b.MaxLatitude <= 90 &&
+		b.MinLongitude < b.MaxLongitude && b.MinLatitude < b.MaxLatitude
 }
 
-type Product string
+type ArtifactKind string
 
 const (
-	ProductPBF      Product = "pbf"
-	ProductGeocoder Product = "geocoder"
-	ProductMap      Product = "map"
+	ArtifactPBF      ArtifactKind = "pbf"
+	ArtifactGeocoder ArtifactKind = "geocoder"
+	ArtifactMap      ArtifactKind = "map"
 )
 
 type Region struct {
@@ -32,10 +32,10 @@ type Region struct {
 }
 
 type Artifact struct {
-	Kind       Product   `json:"kind"`
-	Path       string    `json:"path"`
-	Size       int64     `json:"size_bytes"`
-	ModifiedAt time.Time `json:"modified_at"`
+	Kind       ArtifactKind `json:"kind"`
+	Path       string       `json:"path"`
+	Size       int64        `json:"size_bytes"`
+	ModifiedAt time.Time    `json:"modified_at"`
 }
 
 type Dataset struct {
@@ -47,7 +47,6 @@ type Dataset struct {
 	SourceURL    string     `json:"source_url"`
 	CountryCode  string     `json:"country_code,omitempty"`
 	Bounds       *Bounds    `json:"bounds,omitempty"`
-	Products     []Product  `json:"products"`
 	Artifacts    []Artifact `json:"artifacts"`
 	InstalledAt  time.Time  `json:"installed_at"`
 }
@@ -79,12 +78,10 @@ type Job struct {
 }
 
 type JobRequest struct {
-	Name       string    `json:"name,omitempty"`
-	DatasetID  string    `json:"dataset_id,omitempty"`
-	Bounds     *Bounds   `json:"bbox,omitempty"`
-	Products   []Product `json:"products,omitempty"`
-	Region     *Region   `json:"region,omitempty"`
-	DeleteData bool      `json:"delete_data,omitempty"`
+	Name      string  `json:"name,omitempty"`
+	DatasetID string  `json:"dataset_id,omitempty"`
+	Bounds    *Bounds `json:"bbox,omitempty"`
+	Region    *Region `json:"region,omitempty"`
 }
 
 type State struct {

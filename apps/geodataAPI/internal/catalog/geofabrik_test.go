@@ -36,7 +36,7 @@ func TestGeofabrikListFindAndCovering(t *testing.T) {
 	if err != nil || region.CountryCodes[0] != "AT" {
 		t.Fatalf("unexpected find: %#v, %v", region, err)
 	}
-	region, err = catalog.Covering(context.Background(), model.Bounds{West: 16, South: 48, East: 16.5, North: 48.5})
+	region, err = catalog.Covering(context.Background(), model.Bounds{MinLongitude: 16, MinLatitude: 48, MaxLongitude: 16.5, MaxLatitude: 48.5})
 	if err != nil || region.ID != "austria" {
 		t.Fatalf("unexpected covering region: %#v, %v", region, err)
 	}
@@ -56,10 +56,10 @@ func TestGeometryCoversHonorsHoles(t *testing.T) {
 	if !ok {
 		t.Fatal("geometry was not parsed")
 	}
-	if !shape.covers(model.Bounds{West: 1, South: 1, East: 2, North: 2}) {
+	if !shape.covers(model.Bounds{MinLongitude: 1, MinLatitude: 1, MaxLongitude: 2, MaxLatitude: 2}) {
 		t.Fatal("ordinary interior bounds should be covered")
 	}
-	if shape.covers(model.Bounds{West: 4.5, South: 4.5, East: 5.5, North: 5.5}) {
+	if shape.covers(model.Bounds{MinLongitude: 4.5, MinLatitude: 4.5, MaxLongitude: 5.5, MaxLatitude: 5.5}) {
 		t.Fatal("bounds inside a polygon hole must not be covered")
 	}
 }

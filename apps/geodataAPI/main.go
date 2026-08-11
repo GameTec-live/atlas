@@ -45,7 +45,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           api.NewRouter(manager, regionCatalog, dataStore, cfg),
+		Handler:           api.NewRouter(manager, regionCatalog, dataStore),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}

@@ -80,6 +80,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:?BETTER_AUTH_URL is required}
       DATABASE_URL: "postgres://atlas:atlas@db:5432/atlas"
+      GEODATA_URL: "http://geodata-api:8080"
       GEOCODER_URL: "http://geocoder:8080"
       ROUTER_URL: "http://router:8002"
       JOBTOKEN: ${JOBTOKEN:?JOBTOKEN is required}
