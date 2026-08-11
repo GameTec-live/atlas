@@ -10,8 +10,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -33,6 +35,14 @@ type CommandRunner interface {
 type ServiceReloader interface {
 	Restart(context.Context) error
 }
+
+type sourceVersion struct {
+	ETag         string
+	LastModified string
+}
+
+var ErrDatasetNotFound = errors.New("dataset not found")
+var ErrInvalidInstallSource = errors.New("invalid install source")
 
 type execRunner struct{}
 
@@ -122,21 +132,31 @@ func (m *Manager) Stop() {
 	})
 }
 
-func (m *Manager) Install(ctx context.Context, name, id string, bounds *model.Bounds, excludeRoads bool) (model.Job, error) {
+func (m *Manager) Install(ctx context.Context, id, sourceURL string, bounds *model.Bounds, excludeRoads bool) (model.Job, error) {
 	if bounds == nil {
-		if strings.TrimSpace(name) == "" {
-			return model.Job{}, errors.New("name is required when bbox is omitted")
+		if strings.TrimSpace(sourceURL) != "" {
+			region, err := customRegion(sourceURL)
+			if err != nil {
+				return model.Job{}, err
+			}
+			request := model.JobRequest{
+				Name: region.Name, DatasetID: region.ID, SourceType: "url", Region: &region, ExcludeRoads: excludeRoads,
+			}
+			return m.enqueue("install", request)
 		}
-		region, err := m.catalog.Find(ctx, name)
+		if strings.TrimSpace(id) == "" {
+			return model.Job{}, fmt.Errorf("%w: id is required when url and bbox are omitted", ErrInvalidInstallSource)
+		}
+		region, err := m.catalog.Find(ctx, id)
 		if err != nil {
 			return model.Job{}, err
 		}
-		request := model.JobRequest{Name: region.Name, DatasetID: slug(region.ID), Region: &region, ExcludeRoads: excludeRoads}
+		request := model.JobRequest{Name: region.Name, DatasetID: slug(region.ID), SourceType: "catalog", Region: &region, ExcludeRoads: excludeRoads}
 		return m.enqueue("install", request)
 	}
 
-	if strings.TrimSpace(name) != "" {
-		return model.Job{}, errors.New("name and bbox are mutually exclusive")
+	if strings.TrimSpace(sourceURL) != "" {
+		return model.Job{}, fmt.Errorf("%w: url and bbox are mutually exclusive", ErrInvalidInstallSource)
 	}
 	if !bounds.Valid() {
 		return model.Job{}, errors.New("bbox must have minLongitude < maxLongitude and minLatitude < maxLatitude")
@@ -152,16 +172,49 @@ func (m *Manager) Install(ctx context.Context, name, id string, bounds *model.Bo
 	if id == "" {
 		return model.Job{}, errors.New("id must contain at least one letter or number")
 	}
-	request := model.JobRequest{Name: id, DatasetID: id, Bounds: bounds, Region: &region, ExcludeRoads: excludeRoads}
+	request := model.JobRequest{Name: id, DatasetID: id, SourceType: "bbox", Bounds: bounds, Region: &region, ExcludeRoads: excludeRoads}
 	return m.enqueue("install", request)
+}
+
+func customRegion(rawURL string) (model.Region, error) {
+	rawURL = strings.TrimSpace(rawURL)
+	parsed, err := url.Parse(rawURL)
+	if err != nil || (!strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https")) || parsed.Host == "" || parsed.Fragment != "" {
+		return model.Region{}, fmt.Errorf("%w: url must be an absolute HTTP or HTTPS URL without a fragment", ErrInvalidInstallSource)
+	}
+	filename := path.Base(parsed.Path)
+	lowerName := strings.ToLower(filename)
+	if !strings.HasSuffix(lowerName, ".pbf") {
+		return model.Region{}, fmt.Errorf("%w: url path must end in .pbf", ErrInvalidInstallSource)
+	}
+	name := filename[:len(filename)-len(".pbf")]
+	if strings.HasSuffix(strings.ToLower(name), ".osm") {
+		name = name[:len(name)-len(".osm")]
+	}
+	if strings.HasSuffix(strings.ToLower(name), "-latest") {
+		name = name[:len(name)-len("-latest")]
+	}
+	id := slug(name)
+	if id == "" {
+		return model.Region{}, fmt.Errorf("%w: PBF filename must contain at least one letter or number", ErrInvalidInstallSource)
+	}
+	return model.Region{ID: id, Name: id, PBFURL: parsed.String()}, nil
 }
 
 func (m *Manager) Delete(datasetID string) (model.Job, error) {
 	datasetID = slug(datasetID)
 	if _, ok := m.store.Dataset(datasetID); !ok {
-		return model.Job{}, fmt.Errorf("dataset %q not found", datasetID)
+		return model.Job{}, fmt.Errorf("%w: %q", ErrDatasetNotFound, datasetID)
 	}
 	return m.enqueue("delete", model.JobRequest{DatasetID: datasetID})
+}
+
+func (m *Manager) Update(datasetID string) (model.Job, error) {
+	datasetID = slug(datasetID)
+	if _, ok := m.store.Dataset(datasetID); !ok {
+		return model.Job{}, fmt.Errorf("%w: %q", ErrDatasetNotFound, datasetID)
+	}
+	return m.enqueue("update", model.JobRequest{DatasetID: datasetID})
 }
 
 func (m *Manager) Cancel(jobID string) (model.Job, error) {
@@ -281,10 +334,15 @@ func (m *Manager) execute(job model.Job) {
 	_ = m.saveAndPublish(job)
 
 	var err error
+	changed := false
 	if job.Operation == "delete" {
 		err = m.runDelete(ctx, &job)
+		changed = err == nil
+	} else if job.Operation == "update" {
+		changed, err = m.runUpdate(ctx, &job)
 	} else {
 		err = m.runInstall(ctx, &job)
+		changed = err == nil
 	}
 	finished := time.Now().UTC()
 	job.FinishedAt = &finished
@@ -298,11 +356,15 @@ func (m *Manager) execute(job model.Job) {
 		job.Error = err.Error()
 	} else {
 		job.State = model.JobCompleted
-		job.Stage = "completed"
+		if job.Operation == "update" && !changed {
+			job.Stage = "up_to_date"
+		} else {
+			job.Stage = "completed"
+		}
 		job.Progress = 1
 	}
 	_ = m.saveAndPublish(job)
-	m.reloadServicesWhenIdle(err == nil)
+	m.reloadServicesWhenIdle(err == nil && changed)
 }
 
 func (m *Manager) reloadServicesWhenIdle(success bool) {
@@ -348,7 +410,8 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	job.Stage = "downloading_pbf"
 	job.Progress = 0.02
 	_ = m.saveAndPublish(*job)
-	if err := m.download(ctx, request.Region.PBFURL, downloadTarget, job); err != nil {
+	version, _, err := m.download(ctx, request.Region.PBFURL, downloadTarget, job, sourceVersion{})
+	if err != nil {
 		_ = os.Remove(downloadTarget)
 		return err
 	}
@@ -377,16 +440,12 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	_ = m.saveAndPublish(*job)
 	relative := request.DatasetID + ".sqlite"
 	temporary := filepath.Join(workDir, request.DatasetID+".sqlite.building")
-	args := []string{"build", "--source", "openstreetmap", "--output", temporary}
+	countryCode := ""
 	if len(request.Region.CountryCodes) > 0 {
-		args = append(args, "--country", request.Region.CountryCodes[0])
+		countryCode = request.Region.CountryCodes[0]
 	}
-	if request.ExcludeRoads {
-		args = append(args, "--include-roads=false")
-	}
-	args = append(args, finalPBF)
-	if err := m.runner.Run(ctx, m.cfg.PackgenBinary, args...); err != nil {
-		return fmt.Errorf("build geocoder pack: %w", err)
+	if err := m.buildGeocoder(ctx, finalPBF, temporary, countryCode, request.ExcludeRoads); err != nil {
+		return err
 	}
 	if err := replace(temporary, finalGeocoder); err != nil {
 		return fmt.Errorf("commit geocoder pack: %w", err)
@@ -409,24 +468,137 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	}
 	artifacts = append(artifacts, mapArtifact)
 
-	countryCode := ""
-	if len(request.Region.CountryCodes) > 0 {
-		countryCode = request.Region.CountryCodes[0]
-	}
+	now := time.Now().UTC()
 	dataset := model.Dataset{
 		ID: request.DatasetID, Name: request.Name, SourceURL: request.Region.PBFURL,
 		SourceRegion: request.Region.ID, CountryCode: countryCode, Bounds: request.Bounds,
-		ExcludeRoads: request.ExcludeRoads, Artifacts: artifacts, InstalledAt: time.Now().UTC(),
+		ExcludeRoads: request.ExcludeRoads, SourceETag: version.ETag, SourceLastModified: version.LastModified,
+		LastCheckedAt: &now, UpdatedAt: &now, Artifacts: artifacts, InstalledAt: now,
 	}
-	if request.Bounds == nil {
-		dataset.SourceType = "name"
-	} else {
-		dataset.SourceType = "bbox"
+	dataset.SourceType = request.SourceType
+	if dataset.SourceType == "" {
+		if request.Bounds == nil {
+			dataset.SourceType = "catalog"
+		} else {
+			dataset.SourceType = "bbox"
+		}
+	}
+	if dataset.SourceType == "url" {
+		dataset.SourceRegion = ""
 	}
 	if err := m.store.PutDataset(dataset); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (m *Manager) runUpdate(ctx context.Context, job *model.Job) (bool, error) {
+	dataset, ok := m.store.Dataset(job.DatasetID)
+	if !ok {
+		return false, fmt.Errorf("dataset %q not found", job.DatasetID)
+	}
+	workDir := filepath.Join(m.store.TempDir(), job.ID)
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		return false, err
+	}
+	defer os.RemoveAll(workDir)
+
+	job.Stage = "checking_update"
+	job.Progress = 0.02
+	_ = m.saveAndPublish(*job)
+	downloadTarget := filepath.Join(workDir, "updated.osm.pbf")
+	if dataset.Bounds != nil {
+		downloadTarget = filepath.Join(workDir, "source.osm.pbf")
+	}
+	version, changed, err := m.download(ctx, dataset.SourceURL, downloadTarget, job, sourceVersion{
+		ETag: dataset.SourceETag, LastModified: dataset.SourceLastModified,
+	})
+	if err != nil {
+		return false, err
+	}
+	now := time.Now().UTC()
+	if !changed {
+		dataset.LastCheckedAt = &now
+		if err := m.store.PutDataset(dataset); err != nil {
+			return false, err
+		}
+		job.Stage = "up_to_date"
+		job.Progress = 1
+		_ = m.saveAndPublish(*job)
+		return false, nil
+	}
+
+	candidatePBF := downloadTarget
+	if dataset.Bounds != nil {
+		job.Stage = "extracting_bbox"
+		job.Progress = 0.52
+		_ = m.saveAndPublish(*job)
+		candidatePBF = filepath.Join(workDir, dataset.ID+".osm.pbf")
+		bbox := fmt.Sprintf("%g,%g,%g,%g", dataset.Bounds.MinLongitude, dataset.Bounds.MinLatitude, dataset.Bounds.MaxLongitude, dataset.Bounds.MaxLatitude)
+		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, "extract", "--bbox", bbox, "--set-bounds", "--overwrite", "--output", candidatePBF, downloadTarget); err != nil {
+			return false, fmt.Errorf("extract bounding box with osmium: %w", err)
+		}
+	}
+
+	job.Stage = "building_geocoder"
+	job.Progress = 0.65
+	_ = m.saveAndPublish(*job)
+	candidateGeocoder := filepath.Join(workDir, dataset.ID+".sqlite")
+	if err := m.buildGeocoder(ctx, candidatePBF, candidateGeocoder, dataset.CountryCode, dataset.ExcludeRoads); err != nil {
+		return false, err
+	}
+
+	job.Stage = "building_map"
+	job.Progress = 0.82
+	_ = m.saveAndPublish(*job)
+	pbfs := datasetPBFsExcept(m.store.Root(), m.store.Datasets(), dataset.ID)
+	pbfs = append(pbfs, candidatePBF)
+	candidateMap, err := m.generateMap(ctx, workDir, pbfs)
+	if err != nil {
+		return false, err
+	}
+
+	job.Stage = "committing"
+	job.Progress = 0.95
+	_ = m.saveAndPublish(*job)
+	transaction, err := applyFileReplacements(workDir, []fileReplacement{
+		{candidate: candidatePBF, destination: filepath.Join(m.store.Root(), dataset.ID+".osm.pbf")},
+		{candidate: candidateGeocoder, destination: filepath.Join(m.store.Root(), dataset.ID+".sqlite")},
+		{candidate: candidateMap, destination: filepath.Join(m.store.Root(), "map.pmtiles")},
+	})
+	if err != nil {
+		return false, fmt.Errorf("commit updated artifacts: %w", err)
+	}
+
+	artifacts := make([]model.Artifact, 0, 3)
+	for _, item := range []struct {
+		kind model.ArtifactKind
+		path string
+	}{
+		{model.ArtifactPBF, dataset.ID + ".osm.pbf"},
+		{model.ArtifactGeocoder, dataset.ID + ".sqlite"},
+		{model.ArtifactMap, "map.pmtiles"},
+	} {
+		artifact, artifactErr := m.store.Artifact(item.kind, item.path)
+		if artifactErr != nil {
+			return false, errors.Join(artifactErr, transaction.Rollback())
+		}
+		artifacts = append(artifacts, artifact)
+	}
+
+	original := dataset
+	dataset.Artifacts = artifacts
+	dataset.SourceETag = version.ETag
+	dataset.SourceLastModified = version.LastModified
+	dataset.LastCheckedAt = &now
+	dataset.UpdatedAt = &now
+	if err := m.store.PutDataset(dataset); err != nil {
+		rollbackErr := transaction.Rollback()
+		restoreErr := m.store.PutDataset(original)
+		return false, errors.Join(err, rollbackErr, restoreErr)
+	}
+	transaction.Commit()
+	return true, nil
 }
 
 func (m *Manager) runDelete(ctx context.Context, job *model.Job) error {
@@ -487,24 +659,35 @@ func (m *Manager) runDelete(ctx context.Context, job *model.Job) error {
 	return nil
 }
 
-func (m *Manager) download(ctx context.Context, sourceURL, destination string, job *model.Job) error {
+func (m *Manager) download(ctx context.Context, sourceURL, destination string, job *model.Job, current sourceVersion) (sourceVersion, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
 	if err != nil {
-		return err
+		return sourceVersion{}, false, err
 	}
 	req.Header.Set("User-Agent", "atlas-geodata-api/1.0")
+	if current.ETag != "" {
+		req.Header.Set("If-None-Match", current.ETag)
+	}
+	if current.LastModified != "" {
+		req.Header.Set("If-Modified-Since", current.LastModified)
+	}
 	resp, err := m.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("download PBF: %w", err)
+		return sourceVersion{}, false, fmt.Errorf("download PBF: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotModified {
+		return current, false, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, resp.Body)
-		return fmt.Errorf("download PBF: HTTP %d", resp.StatusCode)
+		return sourceVersion{}, false, fmt.Errorf("download PBF: HTTP %d", resp.StatusCode)
 	}
+	job.Stage = "downloading_pbf"
+	_ = m.saveAndPublish(*job)
 	file, err := os.Create(destination)
 	if err != nil {
-		return err
+		return sourceVersion{}, false, err
 	}
 	defer file.Close()
 
@@ -515,7 +698,7 @@ func (m *Manager) download(ctx context.Context, sourceURL, destination string, j
 		count, readErr := resp.Body.Read(buffer)
 		if count > 0 {
 			if _, err := file.Write(buffer[:count]); err != nil {
-				return err
+				return sourceVersion{}, false, err
 			}
 			job.BytesDone += int64(count)
 			if time.Since(lastUpdate) >= 500*time.Millisecond {
@@ -530,10 +713,31 @@ func (m *Manager) download(ctx context.Context, sourceURL, destination string, j
 			break
 		}
 		if readErr != nil {
-			return readErr
+			return sourceVersion{}, false, readErr
 		}
 	}
-	return file.Sync()
+	if err := file.Sync(); err != nil {
+		return sourceVersion{}, false, err
+	}
+	return sourceVersion{
+		ETag:         resp.Header.Get("ETag"),
+		LastModified: resp.Header.Get("Last-Modified"),
+	}, true, nil
+}
+
+func (m *Manager) buildGeocoder(ctx context.Context, pbfPath, output, countryCode string, excludeRoads bool) error {
+	args := []string{"build", "--source", "openstreetmap", "--output", output}
+	if countryCode != "" {
+		args = append(args, "--country", countryCode)
+	}
+	if excludeRoads {
+		args = append(args, "--include-roads=false")
+	}
+	args = append(args, pbfPath)
+	if err := m.runner.Run(ctx, m.cfg.PackgenBinary, args...); err != nil {
+		return fmt.Errorf("build geocoder pack: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) buildMap(ctx context.Context, workDir, candidatePBF string) error {
@@ -597,6 +801,80 @@ func datasetPBFs(root string, datasets []model.Dataset) []string {
 		}
 	}
 	return paths
+}
+
+func datasetPBFsExcept(root string, datasets []model.Dataset, excludedID string) []string {
+	filtered := make([]model.Dataset, 0, len(datasets))
+	for _, dataset := range datasets {
+		if dataset.ID != excludedID {
+			filtered = append(filtered, dataset)
+		}
+	}
+	return datasetPBFs(root, filtered)
+}
+
+type fileReplacement struct {
+	candidate   string
+	destination string
+}
+
+type replacedFile struct {
+	destination string
+	backup      string
+	hadOriginal bool
+}
+
+type fileTransaction struct {
+	files []replacedFile
+}
+
+func applyFileReplacements(workDir string, replacements []fileReplacement) (*fileTransaction, error) {
+	transaction := &fileTransaction{files: make([]replacedFile, 0, len(replacements))}
+	for index, replacement := range replacements {
+		entry := replacedFile{
+			destination: replacement.destination,
+			backup:      filepath.Join(workDir, fmt.Sprintf("backup-%d", index)),
+		}
+		if _, err := os.Stat(replacement.destination); err == nil {
+			entry.hadOriginal = true
+			if err := os.Rename(replacement.destination, entry.backup); err != nil {
+				return nil, errors.Join(err, transaction.Rollback())
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, errors.Join(err, transaction.Rollback())
+		}
+		transaction.files = append(transaction.files, entry)
+		if err := os.Rename(replacement.candidate, replacement.destination); err != nil {
+			return nil, errors.Join(err, transaction.Rollback())
+		}
+	}
+	return transaction, nil
+}
+
+func (transaction *fileTransaction) Rollback() error {
+	var rollbackErr error
+	for index := len(transaction.files) - 1; index >= 0; index-- {
+		entry := transaction.files[index]
+		if err := os.Remove(entry.destination); err != nil && !errors.Is(err, os.ErrNotExist) {
+			rollbackErr = errors.Join(rollbackErr, err)
+		}
+		if entry.hadOriginal {
+			if err := os.Rename(entry.backup, entry.destination); err != nil {
+				rollbackErr = errors.Join(rollbackErr, err)
+			}
+		}
+	}
+	transaction.files = nil
+	return rollbackErr
+}
+
+func (transaction *fileTransaction) Commit() {
+	for _, entry := range transaction.files {
+		if entry.hadOriginal {
+			_ = os.Remove(entry.backup)
+		}
+	}
+	transaction.files = nil
 }
 
 func (m *Manager) saveAndPublish(job model.Job) error {

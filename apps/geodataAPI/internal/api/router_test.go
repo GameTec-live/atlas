@@ -51,7 +51,12 @@ func (fakeRunner) Run(_ context.Context, name string, args ...string) error {
 }
 
 func TestDownloadListWebsocketAndDelete(t *testing.T) {
-	pbf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	pbf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.Header().Set("ETag", `"test-v1"`)
+		if request.Header.Get("If-None-Match") == `"test-v1"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
 		w.Header().Set("Content-Length", "8")
 		_, _ = w.Write([]byte("test-pbf"))
 	}))
@@ -63,14 +68,31 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Config{DataDir: dataDir, HTTPTimeout: time.Second, OsmiumBinary: "osmium", PackgenBinary: "packgen", JavaBinary: "java", PlanetilerJar: "planetiler.jar"}
-	regionCatalog := fakeCatalog{region: model.Region{ID: "austria", Name: "Austria", PBFURL: pbf.URL, CountryCodes: []string{"AT"}}}
+	regionCatalog := fakeCatalog{region: model.Region{
+		ID: "austria", Name: "Austria", PBFURL: pbf.URL, CountryCodes: []string{"AT"},
+		SizeBytes: &model.EstimatedDatasetSize{PBF: 8, GeocoderEstimate: 24, MapEstimate: 12, TotalEstimate: 44},
+	}}
 	manager := jobs.NewManager(cfg, dataStore, regionCatalog, fakeRunner{})
 	manager.Start()
 	defer manager.Stop()
 	server := httptest.NewServer(api.NewRouter(manager, regionCatalog, dataStore))
 	defer server.Close()
 
-	response := requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets", `{"name":"austria","excludeRoads":true}`)
+	response := requestJSON(t, http.MethodGet, server.URL+"/api/v1/catalog", "")
+	var available struct {
+		Items     []model.Region   `json:"items"`
+		Count     int              `json:"count"`
+		DiskSpace *model.DiskSpace `json:"disk_space"`
+	}
+	decode(t, response, &available)
+	if available.Count != 1 || available.Items[0].SizeBytes == nil || available.Items[0].SizeBytes.TotalEstimate != 44 {
+		t.Fatalf("catalog sizes missing: %#v", available)
+	}
+	if available.DiskSpace == nil || available.DiskSpace.FreeBytes == 0 {
+		t.Fatalf("catalog disk space missing: %#v", available.DiskSpace)
+	}
+
+	response = requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets", `{"id":"austria","excludeRoads":true}`)
 	if response.StatusCode != http.StatusAccepted {
 		t.Fatalf("start status: %d %s", response.StatusCode, readBody(response))
 	}
@@ -100,8 +122,9 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 	}
 	response = requestJSON(t, http.MethodGet, server.URL+"/api/v1/datasets", "")
 	var installed struct {
-		Items []model.Dataset `json:"items"`
-		Count int             `json:"count"`
+		Items     []model.Dataset  `json:"items"`
+		Count     int              `json:"count"`
+		DiskSpace *model.DiskSpace `json:"disk_space"`
 	}
 	decode(t, response, &installed)
 	if installed.Count != 1 {
@@ -112,6 +135,18 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 	}
 	if !installed.Items[0].ExcludeRoads {
 		t.Fatal("installed dataset does not report excluded roads")
+	}
+	if installed.DiskSpace == nil || installed.DiskSpace.FreeBytes == 0 {
+		t.Fatalf("dataset disk space missing: %#v", installed.DiskSpace)
+	}
+	response = requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets/austria/update", "")
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("update status: %d %s", response.StatusCode, readBody(response))
+	}
+	var update model.Job
+	decode(t, response, &update)
+	if job := waitForJob(t, manager, update.ID); job.State != model.JobCompleted || job.Stage != "up_to_date" {
+		t.Fatalf("unchanged update failed: %#v", job)
 	}
 
 	wsURL, _ := url.Parse(server.URL)
@@ -145,6 +180,30 @@ func TestDownloadListWebsocketAndDelete(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dataDir, "austria.osm.pbf")); !os.IsNotExist(err) {
 		t.Fatalf("PBF still exists: %v", err)
 	}
+
+	customURL := pbf.URL + "/custom-latest.osm.pbf?token=test"
+	response = requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets", `{"url":"`+customURL+`","excludeRoads":true}`)
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("custom URL install status: %d %s", response.StatusCode, readBody(response))
+	}
+	var customInstall model.Job
+	decode(t, response, &customInstall)
+	if job := waitForJob(t, manager, customInstall.ID); job.State != model.JobCompleted {
+		t.Fatalf("custom URL install failed: %#v", job)
+	}
+	custom, found := dataStore.Dataset("custom")
+	if !found || custom.SourceType != "url" || custom.SourceURL != customURL || custom.SourceRegion != "" {
+		t.Fatalf("custom URL source was not retained: %#v", custom)
+	}
+	response = requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets/custom/update", "")
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("custom URL update status: %d %s", response.StatusCode, readBody(response))
+	}
+	var customUpdate model.Job
+	decode(t, response, &customUpdate)
+	if job := waitForJob(t, manager, customUpdate.ID); job.State != model.JobCompleted || job.Stage != "up_to_date" {
+		t.Fatalf("custom URL update failed: %#v", job)
+	}
 }
 
 func TestBBoxValidation(t *testing.T) {
@@ -164,6 +223,18 @@ func TestBBoxValidation(t *testing.T) {
 	response := requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets", `{"bbox":{"minLongitude":17,"minLatitude":49,"maxLongitude":16,"maxLatitude":48}}`)
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, body = %s", response.StatusCode, readBody(response))
+	}
+	response = requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets", `{"id":"world","url":"https://example.invalid/world.osm.pbf"}`)
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("multiple source status = %d, body = %s", response.StatusCode, readBody(response))
+	}
+	response = requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets", `{"url":"file:///tmp/world.osm.pbf"}`)
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid URL status = %d, body = %s", response.StatusCode, readBody(response))
+	}
+	response = requestJSON(t, http.MethodPost, server.URL+"/api/v1/datasets/missing/update", "")
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing update status = %d, body = %s", response.StatusCode, readBody(response))
 	}
 }
 

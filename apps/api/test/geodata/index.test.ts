@@ -85,6 +85,11 @@ const publicJob = {
     created_at: job.created_at,
 };
 
+const updateJob = {
+    ...job,
+    operation: "update",
+};
+
 const request = (path: string, method = "GET", body?: unknown) => {
     const headers = new Headers({ authorization: "Bearer admin-token" });
     if (body !== undefined) headers.set("content-type", "application/json");
@@ -141,9 +146,16 @@ describe("geodata API", () => {
                     country_codes: ["AT"],
                     pbf_url:
                         "https://download.geofabrik.de/europe/austria-latest.osm.pbf",
+                    size_bytes: {
+                        pbf: 100,
+                        geocoder_estimate: 300,
+                        map_estimate: 150,
+                        total_estimate: 550,
+                    },
                 },
             ],
             count: 1,
+            disk_space: { free_bytes: 10_000, total_bytes: 20_000 },
         };
         fetchMock.mockResolvedValueOnce(Response.json(upstreamResult));
 
@@ -158,9 +170,16 @@ describe("geodata API", () => {
                     id: "europe/austria",
                     name: "Austria",
                     parent: "europe",
+                    size_bytes: {
+                        pbf: 100,
+                        geocoder_estimate: 300,
+                        map_estimate: 150,
+                        total_estimate: 550,
+                    },
                 },
             ],
             count: 1,
+            disk_space: { free_bytes: 10_000, total_bytes: 20_000 },
         });
         expect(fetchMock.mock.calls[0]?.[0]).toBe(
             `${GEODATA_URL}/api/v1/catalog?q=lower+austria&parent=europe`,
@@ -183,7 +202,7 @@ describe("geodata API", () => {
         expect(await response.json()).toEqual(error);
     });
 
-    it("forwards named dataset installs and preserves upstream errors", async () => {
+    it("forwards catalog and custom URL installs", async () => {
         getSessionMock.mockResolvedValue(adminSession);
         const error = {
             error: {
@@ -191,10 +210,12 @@ describe("geodata API", () => {
                 message: "dataset already installed",
             },
         };
-        fetchMock.mockResolvedValueOnce(Response.json(error, { status: 409 }));
+        fetchMock
+            .mockResolvedValueOnce(Response.json(error, { status: 409 }))
+            .mockResolvedValueOnce(Response.json(job, { status: 202 }));
 
         const response = await request("/datasets", "POST", {
-            name: "austria",
+            id: "austria",
             excludeRoads: true,
         });
 
@@ -206,8 +227,22 @@ describe("geodata API", () => {
         expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
             method: "POST",
             body: JSON.stringify({
-                name: "austria",
+                id: "austria",
                 excludeRoads: true,
+            }),
+        });
+
+        const customResponse = await request("/datasets", "POST", {
+            url: "https://geo.example/custom.osm.pbf",
+            excludeRoads: false,
+        });
+        expect(customResponse.status).toBe(202);
+        expect(await customResponse.json()).toEqual(publicJob);
+        expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+            method: "POST",
+            body: JSON.stringify({
+                url: "https://geo.example/custom.osm.pbf",
+                excludeRoads: false,
             }),
         });
     });
@@ -251,12 +286,16 @@ describe("geodata API", () => {
                         id: "austria",
                         name: "Austria",
                         state: "ready",
-                        source_type: "name",
+                        source_type: "catalog",
                         source_region: "europe/austria",
                         source_url:
                             "https://download.geofabrik.de/europe/austria-latest.osm.pbf",
                         country_code: "AT",
                         exclude_roads: true,
+                        source_etag: '"source-v1"',
+                        source_last_modified: "Tue, 11 Aug 2026 10:00:00 GMT",
+                        last_checked_at: "2026-08-11T10:03:00Z",
+                        updated_at: "2026-08-11T10:03:00Z",
                         artifacts: [
                             {
                                 kind: "pbf",
@@ -281,6 +320,7 @@ describe("geodata API", () => {
                     },
                 ],
                 count: 1,
+                disk_space: { free_bytes: 9_400, total_bytes: 20_000 },
             }),
         );
 
@@ -293,20 +333,29 @@ describe("geodata API", () => {
                     id: "austria",
                     name: "Austria",
                     state: "ready",
-                    source_type: "name",
+                    source_type: "catalog",
                     excludeRoads: true,
-                    size_bytes: { pbf: 100, geocoder: 200, map: 300 },
+                    last_checked_at: "2026-08-11T10:03:00Z",
+                    updated_at: "2026-08-11T10:03:00Z",
+                    size_bytes: {
+                        pbf: 100,
+                        geocoder: 200,
+                        map: 300,
+                        total: 600,
+                    },
                     installed_at: "2026-08-11T10:03:00Z",
                 },
             ],
             count: 1,
+            disk_space: { free_bytes: 9_400, total_bytes: 20_000 },
         });
     });
 
-    it("forwards active job filters and dataset deletion", async () => {
+    it("forwards active job filters, dataset updates, and deletion", async () => {
         getSessionMock.mockResolvedValue(adminSession);
         fetchMock
             .mockResolvedValueOnce(Response.json({ items: [job], count: 1 }))
+            .mockResolvedValueOnce(Response.json(updateJob, { status: 202 }))
             .mockResolvedValueOnce(Response.json(job, { status: 202 }));
 
         expect((await request("/jobs?active=true")).status).toBe(200);
@@ -314,11 +363,21 @@ describe("geodata API", () => {
             `${GEODATA_URL}/api/v1/jobs?active=true`,
         );
 
-        expect((await request("/datasets/austria", "DELETE")).status).toBe(202);
+        expect((await request("/datasets/austria/update", "POST")).status).toBe(
+            202,
+        );
         expect(fetchMock.mock.calls[1]?.[0]).toBe(
-            `${GEODATA_URL}/api/v1/datasets/austria`,
+            `${GEODATA_URL}/api/v1/datasets/austria/update`,
         );
         expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+            method: "POST",
+        });
+
+        expect((await request("/datasets/austria", "DELETE")).status).toBe(202);
+        expect(fetchMock.mock.calls[2]?.[0]).toBe(
+            `${GEODATA_URL}/api/v1/datasets/austria`,
+        );
+        expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
             method: "DELETE",
         });
     });

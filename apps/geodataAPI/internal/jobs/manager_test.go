@@ -49,6 +49,12 @@ func (r *testReloader) Restart(context.Context) error {
 	return nil
 }
 
+func (r *testReloader) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.calls
+}
+
 func (r *testRunner) Run(_ context.Context, name string, args ...string) error {
 	r.mu.Lock()
 	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
@@ -167,6 +173,122 @@ func TestFullPipelineMergesAndRebuildsMap(t *testing.T) {
 	}
 }
 
+func TestUpdateChecksValidatorsAndReplacesArtifactsSafely(t *testing.T) {
+	var sourceMu sync.Mutex
+	sourceVersion := 1
+	pbf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		sourceMu.Lock()
+		version := sourceVersion
+		sourceMu.Unlock()
+		etag := fmt.Sprintf(`"version-%d"`, version)
+		w.Header().Set("ETag", etag)
+		w.Header().Set("Last-Modified", fmt.Sprintf("Tue, %02d Aug 2026 10:00:00 GMT", version))
+		if request.Header.Get("If-None-Match") == etag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		_, _ = fmt.Fprintf(w, "pbf-version-%d", version)
+	}))
+	defer pbf.Close()
+
+	root := t.TempDir()
+	dataStore, err := store.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	regionCatalog := testCatalog{regions: map[string]model.Region{
+		"one": {ID: "one", Name: "One", PBFURL: pbf.URL, CountryCodes: []string{"AT"}},
+	}}
+	runner := &testRunner{}
+	reloader := &testReloader{}
+	cfg := config.Config{DataDir: root, HTTPTimeout: time.Second, OsmiumBinary: "osmium", PackgenBinary: "packgen", JavaBinary: "java", PlanetilerJar: "planetiler.jar"}
+	manager := NewManager(cfg, dataStore, regionCatalog, runner, reloader)
+	manager.Start()
+	defer manager.Stop()
+
+	install, err := manager.Install(context.Background(), "one", "", nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job := waitJob(t, manager, install.ID); job.State != model.JobCompleted {
+		t.Fatalf("install: %#v", job)
+	}
+	waitReloadCalls(t, reloader, 1)
+	installed, _ := dataStore.Dataset("one")
+	if installed.SourceETag != `"version-1"` {
+		t.Fatalf("initial source ETag = %q", installed.SourceETag)
+	}
+
+	check, err := manager.Update("one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job := waitJob(t, manager, check.ID); job.State != model.JobCompleted || job.Stage != "up_to_date" {
+		t.Fatalf("unchanged update: %#v", job)
+	}
+	if calls := reloader.count(); calls != 1 {
+		t.Fatalf("unchanged update reloaded consumers: %d calls", calls)
+	}
+
+	sourceMu.Lock()
+	sourceVersion = 2
+	sourceMu.Unlock()
+	update, err := manager.Update("one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job := waitJob(t, manager, update.ID); job.State != model.JobCompleted || job.Stage != "completed" {
+		t.Fatalf("changed update: %#v", job)
+	}
+	waitReloadCalls(t, reloader, 2)
+	content, err := os.ReadFile(filepath.Join(root, "one.osm.pbf"))
+	if err != nil || string(content) != "pbf-version-2" {
+		t.Fatalf("updated PBF = %q, %v", content, err)
+	}
+	updated, _ := dataStore.Dataset("one")
+	if updated.SourceETag != `"version-2"` || updated.UpdatedAt == nil || updated.LastCheckedAt == nil {
+		t.Fatalf("updated source metadata: %#v", updated)
+	}
+	runner.mu.Lock()
+	calls := strings.Join(runner.calls, "\n")
+	runner.mu.Unlock()
+	if strings.Count(calls, "--include-roads=false") != 2 {
+		t.Fatalf("update did not preserve excludeRoads:\n%s", calls)
+	}
+
+	before := make(map[string][]byte)
+	for _, name := range []string{"one.osm.pbf", "one.sqlite", "map.pmtiles"} {
+		before[name], err = os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	sourceMu.Lock()
+	sourceVersion = 3
+	sourceMu.Unlock()
+	runner.setFailJava(true)
+	failed, err := manager.Update("one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job := waitJob(t, manager, failed.ID); job.State != model.JobFailed {
+		t.Fatalf("failed update: %#v", job)
+	}
+	for name, expected := range before {
+		content, readErr := os.ReadFile(filepath.Join(root, name))
+		if readErr != nil || string(content) != string(expected) {
+			t.Fatalf("failed update changed %s: %q, %v", name, content, readErr)
+		}
+	}
+	afterFailure, _ := dataStore.Dataset("one")
+	if afterFailure.SourceETag != `"version-2"` {
+		t.Fatalf("failed update changed source metadata: %#v", afterFailure)
+	}
+	if calls := reloader.count(); calls != 2 {
+		t.Fatalf("failed update reloaded consumers: %d calls", calls)
+	}
+}
+
 func TestReloadWaitsUntilNoOtherJobsAreActive(t *testing.T) {
 	dataStore, err := store.Open(t.TempDir())
 	if err != nil {
@@ -202,6 +324,37 @@ func TestReloadWaitsUntilNoOtherJobsAreActive(t *testing.T) {
 	}
 }
 
+func TestFileReplacementsRollbackAfterPartialCommit(t *testing.T) {
+	root := t.TempDir()
+	workDir := filepath.Join(root, "work")
+	if err := os.Mkdir(workDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	first := filepath.Join(root, "first")
+	second := filepath.Join(root, "second")
+	candidate := filepath.Join(workDir, "candidate-first")
+	for path, content := range map[string]string{
+		first: "old-first", second: "old-second", candidate: "new-first",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := applyFileReplacements(workDir, []fileReplacement{
+		{candidate: candidate, destination: first},
+		{candidate: filepath.Join(workDir, "missing"), destination: second},
+	})
+	if err == nil {
+		t.Fatal("partial replacement unexpectedly succeeded")
+	}
+	for path, expected := range map[string]string{first: "old-first", second: "old-second"} {
+		content, readErr := os.ReadFile(path)
+		if readErr != nil || string(content) != expected {
+			t.Fatalf("rollback left %s as %q, %v", path, content, readErr)
+		}
+	}
+}
+
 func waitJob(t *testing.T, manager *Manager, id string) model.Job {
 	t.Helper()
 	deadline := time.Now().Add(3 * time.Second)
@@ -214,4 +367,16 @@ func waitJob(t *testing.T, manager *Manager, id string) model.Job {
 	}
 	t.Fatalf("job %s did not finish", id)
 	return model.Job{}
+}
+
+func waitReloadCalls(t *testing.T, reloader *testReloader, expected int) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if reloader.count() == expected {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("reloader calls = %d, want %d", reloader.count(), expected)
 }

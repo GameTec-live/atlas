@@ -46,6 +46,10 @@ func Open(root string) (*Store, error) {
 func (s *Store) Root() string    { return s.root }
 func (s *Store) TempDir() string { return filepath.Join(s.root, ".geodata", "tmp") }
 
+func (s *Store) DiskSpace() (model.DiskSpace, error) {
+	return diskSpace(s.root)
+}
+
 func (s *Store) Datasets() []model.Dataset {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

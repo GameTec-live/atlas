@@ -5,7 +5,7 @@ A small Gin service that downloads and manages OpenStreetMap data for Atlas. It 
 ## What it does
 
 - Lists the current [Geofabrik](https://download.geofabrik.de/) download catalog, with name and parent filters.
-- Installs a named Geofabrik extract or a custom bounding-box dataset.
+- Installs a catalog extract, a custom PBF URL, or a bounding-box dataset.
 - Generates a [geocoder-go](https://github.com/GameTec-live/geocoder-go) SQLite pack for every dataset with `packgen`.
 - Merges installed PBFs with [osmium](https://osmcode.org/osmium-tool/manual.html) and builds the single PMTiles archive with [Planetiler](https://github.com/onthegomap/planetiler).
 - Persists installed datasets and job history across restarts.
@@ -132,14 +132,26 @@ GET /api/v1/datasets
 
 Datasets have a `ready` state when their PBF, SQLite pack, and shared PMTiles archive exist, and `degraded` when a managed file has disappeared outside this service.
 
+Catalog entries include `size_bytes.pbf`, obtained from the download server's `Content-Length`, plus `geocoder_estimate`, `map_estimate`, and `total_estimate`. The estimates are intentionally conservative heuristics (3x the PBF for the road-inclusive geocoder pack and 1.5x for PMTiles); generated sizes vary with the contents of each extract. PBF sizes are fetched concurrently and cached for the catalog TTL. If a source does not expose its size, `size_bytes` is omitted for that entry.
+
+Both catalog and dataset list responses include `disk_space.free_bytes` and `disk_space.total_bytes` for the filesystem containing the `data` directory when the operating system exposes that information. Installed dataset sizes are measured from their actual artifacts and include a calculated `size_bytes.total` in the simplified API.
+
 ### Install a dataset
 
-Use the same endpoint for either source type. A name can be a Geofabrik ID or display name.
+Use the same endpoint for catalog, custom URL, and bounding-box sources. Catalog installs use the ID returned by `GET /api/v1/catalog`.
 
 ```sh
 curl -X POST http://localhost:8080/api/v1/datasets \
   -H "Content-Type: application/json" \
-  -d '{"name":"austria","excludeRoads":true}'
+  -d '{"id":"austria","excludeRoads":true}'
+```
+
+A custom source accepts an absolute HTTP or HTTPS URL whose path ends in `.pbf`. Its dataset ID is derived from the filename: for example, `custom-latest.osm.pbf` becomes `custom`. The URL and source type are stored with the dataset, so the normal update endpoint can check and replace it later.
+
+```sh
+curl -X POST http://localhost:8080/api/v1/datasets \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://geo.example/custom-latest.osm.pbf","excludeRoads":false}'
 ```
 
 `excludeRoads` defaults to `false`. Set it to `true` to pass `--include-roads=false` to geocoder-go's `packgen`, substantially reducing the SQLite pack size when named-road results are not needed. It affects only the geocoder pack; routing PBF and PMTiles generation remain unchanged. The selected value is stored with the dataset and returned by dataset listings.
@@ -167,6 +179,16 @@ WS     /api/v1/jobs/ws
 ```
 
 The WebSocket first emits `{"type":"snapshot","jobs":[...]}`, followed by `{"type":"job","job":{...}}` updates. `progress` ranges from `0` to `1`; exact byte counters are included while downloading when the upstream server supplies a content length.
+
+### Update a dataset
+
+```http
+POST /api/v1/datasets/{dataset-id}/update
+```
+
+Update requests return `202 Accepted` with an asynchronous `update` job. The service sends the source's stored `ETag` and `Last-Modified` validators with a conditional request. If the source returns `304 Not Modified`, the job completes with stage `up_to_date` without rebuilding files or restarting consumers. If validators are unavailable, the source is downloaded and rebuilt.
+
+Updates preserve the dataset's bounding box and `excludeRoads` setting. The new PBF, SQLite pack, and combined `map.pmtiles` are built under `.geodata/tmp`; the installed files are replaced only after all processing succeeds. A conversion or commit failure keeps the previous artifacts and dataset metadata.
 
 ### Delete a dataset
 

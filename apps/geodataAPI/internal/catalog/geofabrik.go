@@ -30,7 +30,21 @@ type Geofabrik struct {
 	regions    []model.Region
 	envelopes  map[string]model.Bounds
 	geometries map[string]geometry
+	sizes      map[string]cachedSize
 }
+
+type cachedSize struct {
+	bytes     int64
+	fetchedAt time.Time
+}
+
+const (
+	sizeWorkers        = 12
+	sizeLookupTimeout  = 10 * time.Second
+	geocoderSizeRatio  = 3
+	mapSizeNumerator   = 3
+	mapSizeDenominator = 2
+)
 
 func NewGeofabrik(url string, ttl time.Duration, client *http.Client) *Geofabrik {
 	if client == nil {
@@ -47,7 +61,6 @@ func (g *Geofabrik) List(ctx context.Context, query, parent string) ([]model.Reg
 	parent = strings.ToLower(strings.TrimSpace(parent))
 
 	g.mu.Lock()
-	defer g.mu.Unlock()
 	result := make([]model.Region, 0, len(g.regions))
 	for _, region := range g.regions {
 		if parent != "" && strings.ToLower(region.Parent) != parent {
@@ -58,7 +71,85 @@ func (g *Geofabrik) List(ctx context.Context, query, parent string) ([]model.Reg
 		}
 		result = append(result, region)
 	}
+	g.mu.Unlock()
+	g.addSizes(ctx, result)
 	return result, nil
+}
+
+func (g *Geofabrik) addSizes(ctx context.Context, regions []model.Region) {
+	if len(regions) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, sizeLookupTimeout)
+	defer cancel()
+	workers := min(sizeWorkers, len(regions))
+	indices := make(chan int)
+	var wait sync.WaitGroup
+	wait.Add(workers)
+	for range workers {
+		go func() {
+			defer wait.Done()
+			for index := range indices {
+				if size, ok := g.pbfSize(ctx, regions[index].PBFURL); ok {
+					regions[index].SizeBytes = estimateDatasetSize(size)
+				}
+			}
+		}()
+	}
+	for index := range regions {
+		select {
+		case indices <- index:
+		case <-ctx.Done():
+			close(indices)
+			wait.Wait()
+			return
+		}
+	}
+	close(indices)
+	wait.Wait()
+}
+
+func (g *Geofabrik) pbfSize(ctx context.Context, pbfURL string) (int64, bool) {
+	g.mu.Lock()
+	cached, ok := g.sizes[pbfURL]
+	if ok && time.Since(cached.fetchedAt) < g.ttl {
+		g.mu.Unlock()
+		return cached.bytes, true
+	}
+	g.mu.Unlock()
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodHead, pbfURL, nil)
+	if err != nil {
+		return 0, false
+	}
+	request.Header.Set("User-Agent", "atlas-geodata-api/1.0")
+	response, err := g.client.Do(request)
+	if err != nil {
+		return 0, false
+	}
+	response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices || response.ContentLength < 0 {
+		return 0, false
+	}
+
+	g.mu.Lock()
+	if g.sizes == nil {
+		g.sizes = make(map[string]cachedSize)
+	}
+	g.sizes[pbfURL] = cachedSize{bytes: response.ContentLength, fetchedAt: time.Now()}
+	g.mu.Unlock()
+	return response.ContentLength, true
+}
+
+func estimateDatasetSize(pbfBytes int64) *model.EstimatedDatasetSize {
+	geocoderBytes := pbfBytes * geocoderSizeRatio
+	mapBytes := pbfBytes * mapSizeNumerator / mapSizeDenominator
+	return &model.EstimatedDatasetSize{
+		PBF:              pbfBytes,
+		GeocoderEstimate: geocoderBytes,
+		MapEstimate:      mapBytes,
+		TotalEstimate:    pbfBytes + geocoderBytes + mapBytes,
+	}
 }
 
 func (g *Geofabrik) Find(ctx context.Context, name string) (model.Region, error) {

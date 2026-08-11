@@ -66,3 +66,17 @@ func TestJobHistoryNeverPrunesActiveJobs(t *testing.T) {
 		t.Fatalf("job count = %d, want 100 completed plus 2 active", len(jobs))
 	}
 }
+
+func TestDiskSpaceReportsDataVolumeCapacity(t *testing.T) {
+	dataStore, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	space, err := dataStore.DiskSpace()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if space.TotalBytes == 0 || space.FreeBytes > space.TotalBytes {
+		t.Fatalf("unexpected disk space: %#v", space)
+	}
+}

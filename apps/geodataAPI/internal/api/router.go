@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -31,6 +32,7 @@ func NewRouter(manager *jobs.Manager, regionCatalog catalog.Catalog, dataStore *
 	api.GET("/catalog", h.listCatalog)
 	api.GET("/datasets", h.listDatasets)
 	api.POST("/datasets", h.installDataset)
+	api.POST("/datasets/:id/update", h.updateDataset)
 	api.DELETE("/datasets/:id", h.deleteDataset)
 	api.GET("/jobs", h.listJobs)
 	api.GET("/jobs/ws", h.jobsWebsocket)
@@ -46,17 +48,25 @@ func (h *handler) listCatalog(c *gin.Context) {
 		fail(c, http.StatusBadGateway, "catalog_unavailable", err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": regions, "count": len(regions)})
+	h.listResponse(c, regions, len(regions))
 }
 
 func (h *handler) listDatasets(c *gin.Context) {
 	datasets := h.store.Datasets()
-	c.JSON(http.StatusOK, gin.H{"items": datasets, "count": len(datasets)})
+	h.listResponse(c, datasets, len(datasets))
+}
+
+func (h *handler) listResponse(c *gin.Context, items any, count int) {
+	response := gin.H{"items": items, "count": count}
+	if diskSpace, err := h.store.DiskSpace(); err == nil {
+		response["disk_space"] = diskSpace
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 type installRequest struct {
-	Name         string        `json:"name"`
 	ID           string        `json:"id"`
+	URL          string        `json:"url"`
 	BBox         *model.Bounds `json:"bbox"`
 	ExcludeRoads bool          `json:"excludeRoads"`
 }
@@ -67,23 +77,24 @@ func (h *handler) installDataset(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	hasName := strings.TrimSpace(request.Name) != ""
+	hasID := strings.TrimSpace(request.ID) != ""
+	hasURL := strings.TrimSpace(request.URL) != ""
 	hasBBox := request.BBox != nil
-	if hasName == hasBBox {
-		fail(c, http.StatusBadRequest, "invalid_source", "provide exactly one of name or bbox")
-		return
-	}
-	if hasName && strings.TrimSpace(request.ID) != "" {
-		fail(c, http.StatusBadRequest, "invalid_id", "id is only supported with bbox")
+	if (!hasBBox && hasID == hasURL) || (hasBBox && hasURL) {
+		fail(c, http.StatusBadRequest, "invalid_source", "provide exactly one of catalog id, url, or bbox")
 		return
 	}
 	if hasBBox && !request.BBox.Valid() {
 		fail(c, http.StatusBadRequest, "invalid_bbox", "bbox must have minLongitude < maxLongitude and minLatitude < maxLatitude")
 		return
 	}
-	job, err := h.manager.Install(c.Request.Context(), request.Name, request.ID, request.BBox, request.ExcludeRoads)
+	job, err := h.manager.Install(c.Request.Context(), request.ID, request.URL, request.BBox, request.ExcludeRoads)
 	if err != nil {
-		fail(c, http.StatusConflict, "cannot_install_dataset", err.Error())
+		status := http.StatusConflict
+		if errors.Is(err, jobs.ErrInvalidInstallSource) {
+			status = http.StatusBadRequest
+		}
+		fail(c, status, "cannot_install_dataset", err.Error())
 		return
 	}
 	c.Header("Location", "/api/v1/jobs/"+job.ID)
@@ -118,6 +129,20 @@ func (h *handler) deleteDataset(c *gin.Context) {
 	job, err := h.manager.Delete(c.Param("id"))
 	if err != nil {
 		fail(c, http.StatusNotFound, "cannot_delete", err.Error())
+		return
+	}
+	c.Header("Location", "/api/v1/jobs/"+job.ID)
+	c.JSON(http.StatusAccepted, job)
+}
+
+func (h *handler) updateDataset(c *gin.Context) {
+	job, err := h.manager.Update(c.Param("id"))
+	if err != nil {
+		status := http.StatusConflict
+		if errors.Is(err, jobs.ErrDatasetNotFound) {
+			status = http.StatusNotFound
+		}
+		fail(c, status, "cannot_update", err.Error())
 		return
 	}
 	c.Header("Location", "/api/v1/jobs/"+job.ID)

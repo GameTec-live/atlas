@@ -41,18 +41,20 @@ async function requestGeodata<T extends TSchema>(
 
 function installRequest(body: InstallBody): RequestInit {
     const payload =
-        "name" in body
-            ? { name: body.name, excludeRoads: body.excludeRoads ?? false }
-            : {
-                  id: body.id,
-                  excludeRoads: body.excludeRoads ?? false,
-                  bbox: {
-                      minLongitude: body.minLongitude,
-                      minLatitude: body.minLatitude,
-                      maxLongitude: body.maxLongitude,
-                      maxLatitude: body.maxLatitude,
-                  },
-              };
+        "url" in body
+            ? { url: body.url, excludeRoads: body.excludeRoads ?? false }
+            : "minLongitude" in body
+              ? {
+                    id: body.id,
+                    excludeRoads: body.excludeRoads ?? false,
+                    bbox: {
+                        minLongitude: body.minLongitude,
+                        minLatitude: body.minLatitude,
+                        maxLongitude: body.maxLongitude,
+                        maxLatitude: body.maxLatitude,
+                    },
+                }
+              : { id: body.id, excludeRoads: body.excludeRoads ?? false };
     return {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -63,13 +65,17 @@ function installRequest(body: InstallBody): RequestInit {
 function simplifyCatalog(response: UpstreamCatalogResponse) {
     if ("error" in response) return response;
     return {
-        items: response.items.map(({ id, name, parent, bounds }) => ({
-            id,
-            name,
-            parent,
-            bounds,
-        })),
+        items: response.items.map(
+            ({ id, name, parent, bounds, size_bytes }) => ({
+                id,
+                name,
+                parent,
+                bounds,
+                size_bytes,
+            }),
+        ),
         count: response.count,
+        disk_space: response.disk_space,
     };
 }
 
@@ -77,6 +83,9 @@ function simplifyDataset(dataset: UpstreamDataset) {
     const size = (kind: "pbf" | "geocoder" | "map") =>
         dataset.artifacts.find((artifact) => artifact.kind === kind)
             ?.size_bytes;
+    const pbf = size("pbf");
+    const geocoder = size("geocoder");
+    const map = size("map");
     return {
         id: dataset.id,
         name: dataset.name,
@@ -84,10 +93,13 @@ function simplifyDataset(dataset: UpstreamDataset) {
         source_type: dataset.source_type,
         bounds: dataset.bounds,
         excludeRoads: dataset.exclude_roads,
+        last_checked_at: dataset.last_checked_at,
+        updated_at: dataset.updated_at,
         size_bytes: {
-            pbf: size("pbf"),
-            geocoder: size("geocoder"),
-            map: size("map"),
+            pbf,
+            geocoder,
+            map,
+            total: (pbf ?? 0) + (geocoder ?? 0) + (map ?? 0),
         },
         installed_at: dataset.installed_at,
     };
@@ -154,6 +166,7 @@ export const geodata = new Elysia({
             return {
                 items: result.items.map(simplifyDataset),
                 count: result.count,
+                disk_space: result.disk_space,
             };
         },
         {
@@ -199,7 +212,38 @@ export const geodata = new Elysia({
             response: GeodataModel.jobsResponse,
         },
     )
-    .ws("/jobs/live", {
+    .get(
+        "/jobs/:id",
+        async ({ params, set }) => {
+            const { status, result } = await requestGeodata(
+                `/jobs/${encodeURIComponent(params.id)}`,
+                GeodataModel.upstream.jobResponse,
+            );
+            set.status = status;
+            return simplifyJobResponse(result);
+        },
+        {
+            admin: true,
+            response: GeodataModel.jobResponse,
+        },
+    )
+    .delete(
+        "/jobs/:id",
+        async ({ params, set }) => {
+            const { status, result } = await requestGeodata(
+                `/jobs/${encodeURIComponent(params.id)}`,
+                GeodataModel.upstream.jobResponse,
+                { method: "DELETE" },
+            );
+            set.status = status;
+            return simplifyJobResponse(result);
+        },
+        {
+            admin: true,
+            response: GeodataModel.jobResponse,
+        },
+    )
+    .ws("/jobs/live/ws", {
         open(ws) {
             const upstream = new WebSocket(GEODATA_WEBSOCKET_URL);
             websocketConnections.set(ws.raw, upstream);
@@ -241,37 +285,6 @@ export const geodata = new Elysia({
         admin: true,
         response: GeodataModel.jobUpdate,
     })
-    .get(
-        "/jobs/:id",
-        async ({ params, set }) => {
-            const { status, result } = await requestGeodata(
-                `/jobs/${encodeURIComponent(params.id)}`,
-                GeodataModel.upstream.jobResponse,
-            );
-            set.status = status;
-            return simplifyJobResponse(result);
-        },
-        {
-            admin: true,
-            response: GeodataModel.jobResponse,
-        },
-    )
-    .delete(
-        "/jobs/:id",
-        async ({ params, set }) => {
-            const { status, result } = await requestGeodata(
-                `/jobs/${encodeURIComponent(params.id)}`,
-                GeodataModel.upstream.jobResponse,
-                { method: "DELETE" },
-            );
-            set.status = status;
-            return simplifyJobResponse(result);
-        },
-        {
-            admin: true,
-            response: GeodataModel.jobResponse,
-        },
-    )
     .delete(
         "/datasets/:id",
         async ({ params, set }) => {
@@ -279,6 +292,22 @@ export const geodata = new Elysia({
                 `/datasets/${encodeURIComponent(params.id)}`,
                 GeodataModel.upstream.jobResponse,
                 { method: "DELETE" },
+            );
+            set.status = status;
+            return simplifyJobResponse(result);
+        },
+        {
+            admin: true,
+            response: GeodataModel.jobResponse,
+        },
+    )
+    .post(
+        "/datasets/:id/update",
+        async ({ params, set }) => {
+            const { status, result } = await requestGeodata(
+                `/datasets/${encodeURIComponent(params.id)}/update`,
+                GeodataModel.upstream.jobResponse,
+                { method: "POST" },
             );
             set.status = status;
             return simplifyJobResponse(result);

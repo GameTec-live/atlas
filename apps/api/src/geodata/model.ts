@@ -21,11 +21,24 @@ const errorResponse = t.Object({
     }),
 });
 
+const diskSpace = t.Object({
+    free_bytes: t.Integer({ minimum: 0 }),
+    total_bytes: t.Integer({ minimum: 0 }),
+});
+
+const estimatedDatasetSize = t.Object({
+    pbf: t.Integer({ minimum: 0 }),
+    geocoder_estimate: t.Integer({ minimum: 0 }),
+    map_estimate: t.Integer({ minimum: 0 }),
+    total_estimate: t.Integer({ minimum: 0 }),
+});
+
 const catalogItem = t.Object({
     id: t.String(),
     name: t.String(),
     parent: t.Optional(t.String()),
     bounds: t.Optional(bounds),
+    size_bytes: t.Optional(estimatedDatasetSize),
 });
 
 const upstreamRegion = t.Object({
@@ -45,13 +58,20 @@ const dataset = t.Object({
     id: t.String(),
     name: t.String(),
     state: t.Union([t.Literal("ready"), t.Literal("degraded")]),
-    source_type: t.Union([t.Literal("name"), t.Literal("bbox")]),
+    source_type: t.Union([
+        t.Literal("catalog"),
+        t.Literal("url"),
+        t.Literal("bbox"),
+    ]),
     bounds: t.Optional(bounds),
     excludeRoads: t.Boolean(),
+    last_checked_at: t.Optional(t.String()),
+    updated_at: t.Optional(t.String()),
     size_bytes: t.Object({
         pbf: t.Optional(t.Integer({ minimum: 0 })),
         geocoder: t.Optional(t.Integer({ minimum: 0 })),
         map: t.Optional(t.Integer({ minimum: 0 })),
+        total: t.Integer({ minimum: 0 }),
     }),
     installed_at: t.String(),
 });
@@ -66,6 +86,10 @@ const upstreamDataset = t.Object({
     country_code: t.Optional(t.String()),
     bounds: t.Optional(bounds),
     exclude_roads: t.Boolean(),
+    source_etag: t.Optional(t.String()),
+    source_last_modified: t.Optional(t.String()),
+    last_checked_at: t.Optional(t.String()),
+    updated_at: t.Optional(t.String()),
     artifacts: t.Array(upstreamArtifact),
     installed_at: t.String(),
 });
@@ -80,7 +104,11 @@ const jobState = t.Union([
 
 const job = t.Object({
     id: t.String(),
-    operation: t.Union([t.Literal("install"), t.Literal("delete")]),
+    operation: t.Union([
+        t.Literal("install"),
+        t.Literal("update"),
+        t.Literal("delete"),
+    ]),
     dataset_id: t.String(),
     state: jobState,
     stage: t.String(),
@@ -94,6 +122,7 @@ const job = t.Object({
 const upstreamJobRequest = t.Object({
     name: t.Optional(t.String()),
     dataset_id: t.Optional(t.String()),
+    source_type: t.Optional(t.String()),
     bbox: t.Optional(bounds),
     excludeRoads: t.Boolean(),
     region: t.Optional(upstreamRegion),
@@ -131,8 +160,13 @@ const upstreamJobUpdate = t.Union([
     }),
 ]);
 
-const namedInstall = t.Object({
-    name: t.String({ minLength: 1 }),
+const catalogInstall = t.Object({
+    id: t.String({ minLength: 1 }),
+    excludeRoads: t.Optional(t.Boolean()),
+});
+
+const urlInstall = t.Object({
+    url: t.String({ minLength: 1 }),
     excludeRoads: t.Optional(t.Boolean()),
 });
 
@@ -154,14 +188,16 @@ export const GeodataModel = {
         t.Object({
             items: t.Array(catalogItem),
             count: t.Integer({ minimum: 0 }),
+            disk_space: t.Optional(diskSpace),
         }),
         errorResponse,
     ]),
     datasetsResponse: t.Object({
         items: t.Array(dataset),
         count: t.Integer({ minimum: 0 }),
+        disk_space: t.Optional(diskSpace),
     }),
-    installBody: t.Union([namedInstall, boundedInstall]),
+    installBody: t.Union([catalogInstall, urlInstall, boundedInstall]),
     jobsQuery: t.Object({
         active: t.Optional(t.Boolean()),
     }),
@@ -176,12 +212,14 @@ export const GeodataModel = {
             t.Object({
                 items: t.Array(upstreamRegion),
                 count: t.Integer({ minimum: 0 }),
+                disk_space: t.Optional(diskSpace),
             }),
             errorResponse,
         ]),
         datasetsResponse: t.Object({
             items: t.Array(upstreamDataset),
             count: t.Integer({ minimum: 0 }),
+            disk_space: t.Optional(diskSpace),
         }),
         jobsResponse: t.Object({
             items: t.Array(upstreamJob),

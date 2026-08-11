@@ -2,8 +2,10 @@ package catalog
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,15 +14,22 @@ import (
 
 func TestGeofabrikListFindAndCovering(t *testing.T) {
 	t.Parallel()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	var headRequests atomic.Int32
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodHead {
+			headRequests.Add(1)
+			w.Header().Set("Content-Length", "1000")
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
+		_, _ = fmt.Fprintf(w, `{
   "type":"FeatureCollection",
   "features":[
-    {"properties":{"id":"europe","name":"Europe","urls":{"pbf":"https://example/europe.pbf"}},"geometry":{"type":"Polygon","coordinates":[[[-20,30],[50,30],[50,75],[-20,75],[-20,30]]]}},
-    {"properties":{"id":"austria","parent":"europe","name":"Austria","iso3166-1:alpha2":["AT"],"urls":{"pbf":"https://example/austria.pbf"}},"geometry":{"type":"Polygon","coordinates":[[[9,46],[18,46],[18,50],[9,50],[9,46]]]}}
+    {"properties":{"id":"europe","name":"Europe","urls":{"pbf":"%s/europe.pbf"}},"geometry":{"type":"Polygon","coordinates":[[[-20,30],[50,30],[50,75],[-20,75],[-20,30]]]}},
+    {"properties":{"id":"austria","parent":"europe","name":"Austria","iso3166-1:alpha2":["AT"],"urls":{"pbf":"%s/austria.pbf"}},"geometry":{"type":"Polygon","coordinates":[[[9,46],[18,46],[18,50],[9,50],[9,46]]]}}
   ]
-}`))
+}`, server.URL, server.URL)
 	}))
 	defer server.Close()
 
@@ -31,6 +40,15 @@ func TestGeofabrikListFindAndCovering(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].ID != "austria" {
 		t.Fatalf("unexpected list: %#v", items)
+	}
+	if size := items[0].SizeBytes; size == nil || size.PBF != 1000 || size.GeocoderEstimate != 3000 || size.MapEstimate != 1500 || size.TotalEstimate != 5500 {
+		t.Fatalf("unexpected size estimate: %#v", size)
+	}
+	if _, err := catalog.List(context.Background(), "aus", "europe"); err != nil {
+		t.Fatal(err)
+	}
+	if headRequests.Load() != 1 {
+		t.Fatalf("PBF size was not cached: %d HEAD requests", headRequests.Load())
 	}
 	region, err := catalog.Find(context.Background(), "AUSTRIA")
 	if err != nil || region.CountryCodes[0] != "AT" {

@@ -23,12 +23,25 @@ const (
 )
 
 type Region struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Parent       string   `json:"parent,omitempty"`
-	CountryCodes []string `json:"country_codes,omitempty"`
-	PBFURL       string   `json:"pbf_url"`
-	Bounds       *Bounds  `json:"bounds,omitempty"`
+	ID           string                `json:"id"`
+	Name         string                `json:"name"`
+	Parent       string                `json:"parent,omitempty"`
+	CountryCodes []string              `json:"country_codes,omitempty"`
+	PBFURL       string                `json:"pbf_url"`
+	Bounds       *Bounds               `json:"bounds,omitempty"`
+	SizeBytes    *EstimatedDatasetSize `json:"size_bytes,omitempty"`
+}
+
+type EstimatedDatasetSize struct {
+	PBF              int64 `json:"pbf"`
+	GeocoderEstimate int64 `json:"geocoder_estimate"`
+	MapEstimate      int64 `json:"map_estimate"`
+	TotalEstimate    int64 `json:"total_estimate"`
+}
+
+type DiskSpace struct {
+	FreeBytes  uint64 `json:"free_bytes"`
+	TotalBytes uint64 `json:"total_bytes"`
 }
 
 type Artifact struct {
@@ -39,17 +52,21 @@ type Artifact struct {
 }
 
 type Dataset struct {
-	ID           string     `json:"id"`
-	Name         string     `json:"name"`
-	State        string     `json:"state"`
-	SourceType   string     `json:"source_type"`
-	SourceRegion string     `json:"source_region,omitempty"`
-	SourceURL    string     `json:"source_url"`
-	CountryCode  string     `json:"country_code,omitempty"`
-	Bounds       *Bounds    `json:"bounds,omitempty"`
-	ExcludeRoads bool       `json:"exclude_roads"`
-	Artifacts    []Artifact `json:"artifacts"`
-	InstalledAt  time.Time  `json:"installed_at"`
+	ID                 string     `json:"id"`
+	Name               string     `json:"name"`
+	State              string     `json:"state"`
+	SourceType         string     `json:"source_type"`
+	SourceRegion       string     `json:"source_region,omitempty"`
+	SourceURL          string     `json:"source_url"`
+	CountryCode        string     `json:"country_code,omitempty"`
+	Bounds             *Bounds    `json:"bounds,omitempty"`
+	ExcludeRoads       bool       `json:"exclude_roads"`
+	SourceETag         string     `json:"source_etag,omitempty"`
+	SourceLastModified string     `json:"source_last_modified,omitempty"`
+	LastCheckedAt      *time.Time `json:"last_checked_at,omitempty"`
+	UpdatedAt          *time.Time `json:"updated_at,omitempty"`
+	Artifacts          []Artifact `json:"artifacts"`
+	InstalledAt        time.Time  `json:"installed_at"`
 }
 
 type JobState string
@@ -81,6 +98,7 @@ type Job struct {
 type JobRequest struct {
 	Name         string  `json:"name,omitempty"`
 	DatasetID    string  `json:"dataset_id,omitempty"`
+	SourceType   string  `json:"source_type,omitempty"`
 	Bounds       *Bounds `json:"bbox,omitempty"`
 	ExcludeRoads bool    `json:"excludeRoads"`
 	Region       *Region `json:"region,omitempty"`
