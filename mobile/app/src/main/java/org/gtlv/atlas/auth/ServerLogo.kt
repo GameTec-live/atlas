@@ -29,7 +29,7 @@ fun ServerLogo(
             .trim()
             .removeSuffix("/")
             .takeIf { it.isNotBlank() }
-            ?.let { "$it/config/logo" }
+            ?.let { "$it/api/config/logo" }
     }
 
     val request = remember(logoUrl) {

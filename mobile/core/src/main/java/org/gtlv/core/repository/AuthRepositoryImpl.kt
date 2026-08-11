@@ -35,7 +35,7 @@ class AuthRepositoryImpl(
             .removeSuffix("/")
 
         val loginUrl =
-            "$serverAddress/api/auth/sign-in/username"
+            "$serverAddress/api/api/auth/sign-in/username"
 
         val requestJson = JSONObject()
             .put("username", username)
@@ -100,7 +100,7 @@ class AuthRepositoryImpl(
                 .removeSuffix("/")
 
             val request = Request.Builder()
-                .url("$serverAddress/api/auth/get-session")
+                .url("$serverAddress/api/api/auth/get-session")
                 .header("Origin", serverAddress)
                 .get()
                 .build()

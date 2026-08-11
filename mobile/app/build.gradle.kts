@@ -68,7 +68,6 @@ dependencies {
     implementation(libs.androidx.material3.adaptive)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.maplibre.sdk)
-    implementation(libs.google.play.services.location)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

@@ -24,13 +24,14 @@ import kotlinx.coroutines.launch
 import org.gtlv.atlas.auth.LoginScreen
 import org.gtlv.atlas.auth.LoginViewModel
 import org.gtlv.atlas.auth.LoginViewModelFactory
+import org.gtlv.atlas.location.RequiredLocationPermissionGate
+import org.gtlv.atlas.navigation.AuthenticatedNavHost
 import org.gtlv.atlas.role.RoleSelectionScreen
 import org.gtlv.atlas.role.RoleSelectionViewModel
 import org.gtlv.atlas.role.RoleSelectionViewModelFactory
 import org.gtlv.atlas.ui.theme.AtlasTheme
 import org.gtlv.core.session.SessionState
 import org.gtlv.core.shift.ShiftSessionState
-import org.gtlv.atlas.navigation.AuthenticatedNavHost
 
 class MainActivity : ComponentActivity() {
 
@@ -145,11 +146,21 @@ class MainActivity : ComponentActivity() {
                             }
 
                             is ShiftSessionState.Active -> {
-                                AuthenticatedNavHost(
-                                    userName = currentSession.userName,
-                                    role = currentShift.session.role,
-                                    onLogout = loginViewModel::logout
-                                )
+                                RequiredLocationPermissionGate(
+                                    locationProvider =
+                                        atlasApplication.locationProvider
+                                ) { locationState ->
+                                    AuthenticatedNavHost(
+                                        userName =
+                                            currentSession.userName,
+                                        role =
+                                            currentShift.session.role,
+                                        locationState =
+                                            locationState,
+                                        onLogout =
+                                            loginViewModel::logout
+                                    )
+                                }
                             }
                         }
                     }

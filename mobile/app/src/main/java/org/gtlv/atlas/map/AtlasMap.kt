@@ -1,5 +1,6 @@
 package org.gtlv.atlas.map
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -10,41 +11,110 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import org.gtlv.atlas.R
+import org.gtlv.atlas.location.toAndroidLocation
+import org.gtlv.core.location.AtlasLocation
+import org.gtlv.core.location.LocationState
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.location.LocationComponentActivationOptions
+import org.maplibre.android.location.LocationComponentOptions
+import org.maplibre.android.location.modes.CameraMode
+import org.maplibre.android.location.modes.RenderMode
+import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 
+@SuppressLint("MissingPermission")
 @Composable
 internal fun AtlasMap(
+    locationState: LocationState,
+    recenterRequestId: Int,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+
+    val defaultMapError =
+        stringResource(R.string.map_load_error)
+
+    val locationDisplayError =
+        stringResource(R.string.map_location_display_error)
+
     var loadState by remember {
         mutableStateOf<MapLoadState>(MapLoadState.Loading)
     }
 
-    val mapView = rememberMapViewWithLifecycle()
+    var readyMap by remember {
+        mutableStateOf<MapLibreMap?>(null)
+    }
+
+    /*
+     * These values preserve the camera after rotation. They are also
+     * updated whenever the user manually moves the map.
+     */
+    var savedLatitude by rememberSaveable {
+        mutableDoubleStateOf(MapConfiguration.INITIAL_LATITUDE)
+    }
+
+    var savedLongitude by rememberSaveable {
+        mutableDoubleStateOf(MapConfiguration.INITIAL_LONGITUDE)
+    }
+
+    var savedZoom by rememberSaveable {
+        mutableDoubleStateOf(MapConfiguration.INITIAL_ZOOM)
+    }
+
+    var savedBearing by rememberSaveable {
+        mutableDoubleStateOf(0.0)
+    }
+
+    var savedTilt by rememberSaveable {
+        mutableDoubleStateOf(0.0)
+    }
+
+    var hasCenteredOnFirstLocation by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    val initialCameraPosition = CameraPosition.Builder()
+        .target(
+            LatLng(
+                savedLatitude,
+                savedLongitude
+            )
+        )
+        .zoom(savedZoom)
+        .bearing(savedBearing)
+        .tilt(savedTilt)
+        .build()
+
+    val mapView = rememberMapViewWithLifecycle(
+        initialCameraPosition = initialCameraPosition
+    )
 
     LaunchedEffect(mapView) {
         loadState = MapLoadState.Loading
+        readyMap = null
 
-        mapView.addOnDidFailLoadingMapListener { message ->
+        mapView.addOnDidFailLoadingMapListener {
             loadState = MapLoadState.Error(
-                message = message.ifBlank {
-                    "The map could not be loaded."
-                }
+                message = defaultMapError
             )
         }
 
@@ -55,10 +125,114 @@ internal fun AtlasMap(
             map.setStyle(
                 Style.Builder()
                     .fromUri(MapConfiguration.STYLE_URL)
-            ) {
+            ) { style ->
+                val activationResult = runCatching {
+                    val componentOptions =
+                        LocationComponentOptions
+                            .builder(context)
+                            .pulseEnabled(true)
+                            .build()
+
+                    val activationOptions =
+                        LocationComponentActivationOptions
+                            .builder(context, style)
+                            .locationComponentOptions(
+                                componentOptions
+                            )
+                            .useDefaultLocationEngine(false)
+                            .build()
+
+                    map.locationComponent
+                        .activateLocationComponent(
+                            activationOptions
+                        )
+
+                    map.locationComponent
+                        .isLocationComponentEnabled = true
+
+                    /*
+                     * NONE prevents location updates from continuously
+                     * moving the camera.
+                     */
+                    map.locationComponent.cameraMode =
+                        CameraMode.NONE
+
+                    map.locationComponent.renderMode =
+                        RenderMode.NORMAL
+                }
+
+                if (activationResult.isFailure) {
+                    loadState = MapLoadState.Error(
+                        message = locationDisplayError
+                    )
+
+                    return@setStyle
+                }
+
+                map.addOnCameraIdleListener {
+                    val camera = map.cameraPosition
+                    val target = camera.target
+
+                    if (target != null) {
+                        savedLatitude = target.latitude
+                        savedLongitude = target.longitude
+                    }
+
+                    savedZoom = camera.zoom
+                    savedBearing = camera.bearing
+                    savedTilt = camera.tilt
+                }
+
+                readyMap = map
                 loadState = MapLoadState.Loaded
             }
         }
+    }
+
+    val availableLocation =
+        (locationState as? LocationState.Available)?.location
+
+    /*
+     * Every valid location updates the puck. Only the first valid
+     * location moves the camera automatically.
+     */
+    LaunchedEffect(
+        readyMap,
+        availableLocation
+    ) {
+        val map = readyMap ?: return@LaunchedEffect
+        val location =
+            availableLocation ?: return@LaunchedEffect
+
+        runCatching {
+            map.locationComponent.forceLocationUpdate(
+                location.toAndroidLocation()
+            )
+        }
+
+        if (!hasCenteredOnFirstLocation) {
+            hasCenteredOnFirstLocation = true
+            map.centerOnLocation(location)
+        }
+    }
+
+    /*
+     * Camera movement caused by the recenter button. Location updates
+     * themselves do not trigger this effect.
+     */
+    LaunchedEffect(
+        readyMap,
+        recenterRequestId
+    ) {
+        if (recenterRequestId == 0) {
+            return@LaunchedEffect
+        }
+
+        val map = readyMap ?: return@LaunchedEffect
+        val location =
+            availableLocation ?: return@LaunchedEffect
+
+        map.centerOnLocation(location)
     }
 
     Box(
@@ -81,7 +255,8 @@ internal fun AtlasMap(
             is MapLoadState.Error -> {
                 Surface(
                     modifier = Modifier.align(Alignment.Center),
-                    color = MaterialTheme.colorScheme.errorContainer,
+                    color =
+                        MaterialTheme.colorScheme.errorContainer,
                     contentColor =
                         MaterialTheme.colorScheme.onErrorContainer
                 ) {
@@ -92,8 +267,24 @@ internal fun AtlasMap(
     }
 }
 
+private fun MapLibreMap.centerOnLocation(
+    location: AtlasLocation
+) {
+    animateCamera(
+        CameraUpdateFactory.newLatLngZoom(
+            LatLng(
+                location.latitude,
+                location.longitude
+            ),
+            MapConfiguration.USER_LOCATION_ZOOM
+        )
+    )
+}
+
 @Composable
-private fun rememberMapViewWithLifecycle(): MapView {
+private fun rememberMapViewWithLifecycle(
+    initialCameraPosition: CameraPosition
+): MapView {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
 
@@ -102,17 +293,7 @@ private fun rememberMapViewWithLifecycle(): MapView {
 
         val options = MapLibreMapOptions
             .createFromAttributes(context)
-            .camera(
-                CameraPosition.Builder()
-                    .target(
-                        LatLng(
-                            MapConfiguration.INITIAL_LATITUDE,
-                            MapConfiguration.INITIAL_LONGITUDE
-                        )
-                    )
-                    .zoom(MapConfiguration.INITIAL_ZOOM)
-                    .build()
-            )
+            .camera(initialCameraPosition)
 
         MapView(context, options)
     }

@@ -25,7 +25,7 @@ class RoleRepositoryImpl(
                 ?: return@withContext RoleAvailabilityResult.Unauthorized
 
             val request = Request.Builder()
-                .url("${requestData.serverAddress}/roles/")
+                .url("${requestData.serverAddress}/api/roles/")
                 .header(
                     "Authorization",
                     "Bearer ${requestData.accessToken}"
@@ -82,7 +82,7 @@ class RoleRepositoryImpl(
         )
 
         val request = Request.Builder()
-            .url("${requestData.serverAddress}/roles/")
+            .url("${requestData.serverAddress}/api/roles/")
             .header(
                 "Authorization",
                 "Bearer ${requestData.accessToken}"
