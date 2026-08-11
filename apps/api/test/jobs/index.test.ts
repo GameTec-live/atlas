@@ -1818,6 +1818,10 @@ describe("assignment notifications", () => {
         to: [48.1947, 16.3122] as [number, number],
     };
 
+    beforeEach(() => {
+        setDbMockRows("select", [[assignedJob.assignedDriverId]]);
+    });
+
     it("shortens addresses to the requested Unicode character length", () => {
         expect(shortenAddress("Short address", 20)).toBe("Short address");
         expect(shortenAddress("Stephansplatz 😀 Vienna", 15)).toBe(
@@ -1902,6 +1906,37 @@ describe("assignment notifications", () => {
             to: "Schönbrunner Straße 1, Wien",
             note: assignedJob.note,
         });
+    });
+
+    it.each([
+        ["reassigned", "driver-3"],
+        ["cancelled", null],
+    ])("suppresses a notification when the job is %s while geocoding is pending", async (_state, currentDriverId) => {
+        const pendingResponses: Array<(response: Response) => void> = [];
+        fetchMock.mockImplementation(
+            () =>
+                new Promise<Response>((resolve) => {
+                    pendingResponses.push(resolve);
+                }),
+        );
+        const publishMock = mock((_topic: string, _message: string) => 1);
+        const server = {
+            publish: publishMock,
+        } as unknown as Bun.Server<unknown>;
+
+        const notification = sendAssignmentNotification(server, assignedJob);
+        expect(pendingResponses).toHaveLength(2);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+
+        setDbMockRows("select", [[currentDriverId]]);
+        for (const resolve of pendingResponses) {
+            resolve(Response.json(geocoderResult("Resolved address")));
+        }
+        await notification;
+
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        expect(getFirstQuery().values).toEqual([assignedJob.id, 1]);
+        expect(publishMock).not.toHaveBeenCalled();
     });
 
     it("starts reverse geocoding without waiting for it to finish", () => {

@@ -1,4 +1,6 @@
-import type { job } from "../db/schema";
+import { eq } from "drizzle-orm";
+import { db } from "../db";
+import { job } from "../db/schema";
 import { reverseGeocode } from "../geoservices/geocoder";
 import { notify } from "../realtime";
 
@@ -41,6 +43,15 @@ export const sendAssignmentNotification = async (
     const to = assignedJob.to
         ? addressOrCoordinates(toResult, assignedJob.to)
         : undefined;
+
+    const [currentAssignment] = await db
+        .select({ assignedDriverId: job.assignedDriverId })
+        .from(job)
+        .where(eq(job.id, assignedJob.id))
+        .limit(1);
+    if (currentAssignment?.assignedDriverId !== assignedJob.assignedDriverId) {
+        return;
+    }
 
     notify(
         server,
