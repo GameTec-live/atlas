@@ -6,11 +6,16 @@ import { db } from "../db";
 import { job, user } from "../db/schema";
 import { trackCache } from "../realtime/cache";
 import {
+    withReverseGeocodedAddress,
+    withReverseGeocodedAddresses,
+} from "./addresses";
+import {
     type CandidateTarget,
     calculateDriverCandidate,
     rankDriverCandidates,
 } from "./candidates";
 import { JobModel } from "./model";
+import { notifyAssignedDriverInBackground } from "./notifications";
 
 const calculateCandidates = async (target: CandidateTarget) => {
     const trackedDrivers = [...trackCache.entries()];
@@ -73,35 +78,70 @@ export const jobs = new Elysia({
     .use(authHandler)
     .get(
         "/assigned",
-        async ({ user }) => {
+        async ({ user, query }) => {
             const jobs = await db
                 .select()
                 .from(job)
                 .where(eq(job.assignedDriverId, user.id))
                 .orderBy(asc(job.dueDate), asc(job.startedAt));
-            return jobs;
+            return query.geocode === undefined
+                ? jobs
+                : withReverseGeocodedAddresses(jobs);
         },
         {
             auth: true,
+            query: JobModel.geocodeQuery,
+        },
+    )
+    .get(
+        "/current",
+        async ({ user, query }) => {
+            const [currentJob] = await db
+                .select()
+                .from(job)
+                .where(
+                    and(
+                        eq(job.assignedDriverId, user.id),
+                        isNotNull(job.startedAt),
+                        isNull(job.completedAt),
+                    ),
+                )
+                .orderBy(desc(job.startedAt))
+                .limit(1);
+
+            if (!currentJob) {
+                return status(404, { error: "No current job" });
+            }
+
+            return query.geocode === undefined
+                ? currentJob
+                : withReverseGeocodedAddress(currentJob);
+        },
+        {
+            auth: true,
+            query: JobModel.geocodeQuery,
         },
     )
     .get(
         "/unassigned",
-        async () => {
+        async ({ query }) => {
             const jobs = await db
                 .select()
                 .from(job)
                 .where(isNull(job.assignedDriverId))
                 .orderBy(asc(job.dueDate), asc(job.createdAt));
-            return jobs;
+            return query.geocode === undefined
+                ? jobs
+                : withReverseGeocodedAddresses(jobs);
         },
         {
             auth: true,
+            query: JobModel.geocodeQuery,
         },
     )
     .get(
         "/unassigned-reduced",
-        async ({ headers }) => {
+        async ({ headers, query }) => {
             if (env.JOBTOKEN === headers.authorization) {
                 const jobs = await db
                     .select({
@@ -114,7 +154,9 @@ export const jobs = new Elysia({
                     .from(job)
                     .where(isNull(job.assignedDriverId))
                     .orderBy(asc(job.dueDate), asc(job.createdAt));
-                return jobs;
+                return query.geocode === undefined
+                    ? jobs
+                    : withReverseGeocodedAddresses(jobs);
             }
 
             return status(401, { error: "Unauthorized" });
@@ -123,6 +165,7 @@ export const jobs = new Elysia({
             headers: t.Object({
                 authorization: t.Optional(t.String()),
             }),
+            query: JobModel.geocodeQuery,
             detail: {
                 security: [{ APIKeyAuth: [] }],
             },
@@ -193,7 +236,7 @@ export const jobs = new Elysia({
     )
     .post(
         "/:id/assign",
-        async ({ params, body, user }) => {
+        async ({ params, body, user, server }) => {
             const [updatedJob] = await db
                 .update(job)
                 .set({
@@ -213,6 +256,8 @@ export const jobs = new Elysia({
             if (!updatedJob) {
                 return status(404, { error: "Job not found" });
             }
+
+            notifyAssignedDriverInBackground(server, updatedJob);
 
             return updatedJob;
         },
@@ -325,7 +370,7 @@ export const jobs = new Elysia({
     )
     .get(
         "/:id",
-        async ({ params }) => {
+        async ({ params, query }) => {
             const [foundJob] = await db
                 .select()
                 .from(job)
@@ -336,12 +381,15 @@ export const jobs = new Elysia({
                 return status(404, { error: "Job not found" });
             }
 
-            return foundJob;
+            return query.geocode === undefined
+                ? foundJob
+                : withReverseGeocodedAddress(foundJob);
         },
         {
             params: t.Object({
                 id: t.String({ format: "uuid" }),
             }),
+            query: JobModel.geocodeQuery,
             auth: true,
         },
     )
@@ -359,10 +407,13 @@ export const jobs = new Elysia({
                           ? isNull(job.assignedDriverId)
                           : undefined,
                 );
-            return jobs;
+            return query.geocode === undefined
+                ? jobs
+                : withReverseGeocodedAddresses(jobs);
         },
         {
             query: t.Object({
+                geocode: t.Optional(t.String()),
                 filter: t.Optional(
                     t.Enum({
                         all: "all",

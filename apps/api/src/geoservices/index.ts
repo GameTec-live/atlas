@@ -5,6 +5,7 @@ import { env } from "@/env";
 import { authHandler } from "../authHandler";
 import { db } from "../db";
 import { shortname } from "../db/schema";
+import { GEOCODER_TIMEOUT_MS, requestReverseGeocode } from "./geocoder";
 import { type GeocoderResponse, GeoservicesModel } from "./model";
 import { requestRoute } from "./router";
 
@@ -82,6 +83,7 @@ export const geoservices = new Elysia({
                 `${GEOCODER_URL}/geocode?q=${encodeURIComponent(value)}`,
                 {
                     method: "GET",
+                    signal: AbortSignal.timeout(GEOCODER_TIMEOUT_MS),
                 },
             );
 
@@ -107,6 +109,26 @@ export const geoservices = new Elysia({
             auth: true,
             query: GeoservicesModel.resolveQuery,
             response: GeoservicesModel.geocoderResponse,
+        },
+    )
+    .get(
+        "/reverse",
+        async ({ query, set }) => {
+            const { status, result } = await requestReverseGeocode(
+                [query.lat, query.lon],
+                {
+                    radius_m: query.radius_m,
+                    limit: query.limit,
+                },
+            );
+
+            set.status = status;
+            return result;
+        },
+        {
+            auth: true,
+            query: GeoservicesModel.reverseQuery,
+            response: GeoservicesModel.reverseGeocoderResponse,
         },
     )
     .get(
