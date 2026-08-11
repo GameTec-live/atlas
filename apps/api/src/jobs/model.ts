@@ -45,6 +45,9 @@ export const JobModel = {
         t.Pick(t.Partial(jobInsertModel), ["to", "vehicleId"]),
     ),
     jobCandidateRequestModel: t.Pick(jobInsertModel, ["from", "to", "dueDate"]),
+    geocodeQuery: t.Object({
+        geocode: t.Optional(t.String()),
+    }),
     candidateModel: t.Object({
         driverId: t.String(),
         driverName: t.String(),
