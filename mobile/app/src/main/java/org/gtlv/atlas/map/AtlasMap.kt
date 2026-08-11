@@ -88,6 +88,10 @@ internal fun AtlasMap(
         mutableDoubleStateOf(0.0)
     }
 
+    var isFollowingLocation by rememberSaveable {
+        mutableStateOf(true)
+    }
+
     val initialCameraPosition = CameraPosition.Builder()
         .target(
             LatLng(
@@ -176,6 +180,16 @@ internal fun AtlasMap(
                     savedTilt = camera.tilt
                 }
 
+                map.addOnCameraMoveStartedListener { reason ->
+                    if (
+                        reason == MapLibreMap
+                            .OnCameraMoveStartedListener
+                            .REASON_API_GESTURE
+                    ) {
+                        isFollowingLocation = false
+                    }
+                }
+
                 readyMap = map
                 loadState = MapLoadState.Loaded
             }
@@ -185,7 +199,7 @@ internal fun AtlasMap(
     val availableLocation =
         (locationState as? LocationState.Available)?.location
 
-    // Every valid update moves both the location puck and the camera.
+    // Every update moves the puck; the camera moves only while following.
     LaunchedEffect(
         readyMap,
         availableLocation
@@ -200,7 +214,9 @@ internal fun AtlasMap(
             )
         }
 
-        map.followLocation(location)
+        if (isFollowingLocation) {
+            map.followLocation(location)
+        }
     }
 
     /*
@@ -219,6 +235,7 @@ internal fun AtlasMap(
         val location =
             availableLocation ?: return@LaunchedEffect
 
+        isFollowingLocation = true
         map.centerOnLocation(location)
     }
 
