@@ -49,6 +49,23 @@ services:
       - geodata:/data:ro
     restart: unless-stopped
 
+  geodata-api:
+    image: ghcr.io/gametec-live/atlas-geodata-api:latest
+    build:
+      context: ./apps/geodataAPI
+      dockerfile: Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - geodata:/data
+    restart: unless-stopped
+
   api:
     image: ghcr.io/gametec-live/atlas-api:latest
     build:
