@@ -38,7 +38,10 @@ class CarAwareLocationProvider(
     }
 
     override fun stop() {
+            if (carLocationProvider == null) {
         phoneLocationProvider.stop()
+    }
+
     }
 
     fun registerCarLocationProvider(provider: LocationProvider) {
@@ -48,6 +51,9 @@ class CarAwareLocationProvider(
         carLocationProvider = provider
         carState = provider.state.value
         publishPreferredState()
+
+        phoneLocationProvider.start()
+        provider.start()
 
         carStateJob = scope.launch {
             provider.state.collect { newCarState ->
