@@ -36,6 +36,7 @@ RUN addgroup --system --gid "${CADDY_GID}" caddy \
 RUN setcap cap_net_bind_service=+ep /usr/bin/caddy
 
 COPY --from=build --chown=${CADDY_UID}:${CADDY_GID} /workspace/apps/web/dist /srv
+COPY --chown=${CADDY_UID}:${CADDY_GID} apps/web/simulator /srv/simulator
 COPY --chown=root:root --chmod=0444 apps/web/Caddyfile /etc/caddy/Caddyfile
 COPY --chown=${CADDY_UID}:${CADDY_GID} --chmod=0444 apps/web/pki/atlas-local-root.crt /etc/caddy/pki/root.crt
 COPY --chown=${CADDY_UID}:${CADDY_GID} --chmod=0400 apps/web/pki/atlas-local-root.key /etc/caddy/pki/root.key

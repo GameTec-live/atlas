@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atlas · Operations Simulator</title>
+    <!-- Standalone simulator: serve this folder through a same-origin reverse proxy. -->
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css" />
+    <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
+    <style>
+        :root {
+            color-scheme: dark;
+            --ink: #e8f0ed;
+            --muted: #83918d;
+            --faint: #56625e;
+            --panel: rgba(15, 20, 19, .94);
+            --panel-2: #141b19;
+            --panel-3: #1b2421;
+            --line: rgba(211, 231, 222, .11);
+            --line-strong: rgba(211, 231, 222, .2);
+            --lime: #bbf451;
+            --lime-ink: #172008;
+            --amber: #ffb454;
+            --red: #ff6b65;
+            --cyan: #5ad8df;
+            --blue: #7eb4ff;
+            --shadow: 0 20px 60px rgba(0,0,0,.36);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; overflow: hidden; background: #090d0c; color: var(--ink); }
+        body { display: grid; grid-template-rows: 62px 1fr; }
+        button, input, select, textarea { font: inherit; }
+        button { cursor: pointer; }
+        button:disabled { cursor: not-allowed; opacity: .42; }
+        .topbar {
+            display: flex; align-items: center; gap: 18px; padding: 0 20px;
+            border-bottom: 1px solid var(--line); background: #0c1110; z-index: 20;
+        }
+        .brand { display: flex; align-items: center; gap: 11px; min-width: 290px; }
+        .brand-mark { width: 29px; height: 29px; position: relative; transform: rotate(45deg); border: 2px solid var(--lime); }
+        .brand-mark::after { content: ""; position: absolute; inset: 6px; background: var(--lime); }
+        .brand h1 { margin: 0; font-size: 14px; letter-spacing: .18em; text-transform: uppercase; }
+        .brand small { display: block; color: var(--muted); font-size: 10px; letter-spacing: .08em; margin-top: 2px; }
+        .api-config { display: flex; align-items: center; gap: 9px; flex: 1; max-width: 620px; }
+        .api-config label { color: var(--muted); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; white-space: nowrap; }
+        .top-input { width: 100%; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--ink); padding: 8px 11px; outline: none; }
+        .top-input:focus, input:focus, select:focus, textarea:focus { border-color: rgba(187,244,81,.65); box-shadow: 0 0 0 3px rgba(187,244,81,.08); }
+        .top-actions { margin-left: auto; display: flex; gap: 8px; }
+        .btn { border: 1px solid var(--line-strong); border-radius: 7px; background: var(--panel-3); color: var(--ink); padding: 8px 11px; line-height: 1; transition: .14s ease; }
+        .btn:hover:not(:disabled) { border-color: rgba(187,244,81,.45); transform: translateY(-1px); }
+        .btn.primary { background: var(--lime); color: var(--lime-ink); border-color: var(--lime); font-weight: 750; }
+        .btn.danger { color: #ff9e99; border-color: rgba(255,107,101,.28); }
+        .btn.ghost { background: transparent; }
+        .btn.small { padding: 6px 8px; font-size: 11px; }
+        .shell { min-height: 0; display: grid; grid-template-columns: 330px minmax(450px, 1fr) 390px; }
+        .rail { min-height: 0; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; z-index: 10; }
+        .rail.right { border-right: 0; border-left: 1px solid var(--line); }
+        .section-head { min-height: 49px; padding: 13px 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+        .section-head h2 { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; margin: 0; }
+        .count { display: inline-grid; place-items: center; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 20px; background: var(--panel-3); color: var(--muted); font-size: 10px; }
+        .scroll { overflow: auto; min-height: 0; scrollbar-width: thin; scrollbar-color: #34413d transparent; }
+        .user-list { padding: 10px; display: grid; gap: 9px; }
+        .empty { color: var(--muted); text-align: center; padding: 36px 22px; font-size: 12px; line-height: 1.6; border: 1px dashed var(--line-strong); border-radius: 10px; }
+        .user-card { border: 1px solid var(--line); border-radius: 10px; background: rgba(24,32,30,.72); overflow: hidden; transition: .14s ease; }
+        .user-card.active { border-color: rgba(187,244,81,.55); box-shadow: 0 0 0 1px rgba(187,244,81,.08); }
+        .user-summary { padding: 12px; display: grid; grid-template-columns: 10px minmax(0,1fr) auto; gap: 10px; align-items: center; cursor: pointer; }
+        .user-color { width: 9px; height: 34px; border-radius: 5px; }
+        .user-name { overflow: hidden; }
+        .user-name strong { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .user-name span { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .badges { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex-wrap: wrap; }
+        .badge { border: 1px solid var(--line); border-radius: 20px; padding: 3px 6px; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
+        .badge.live { color: var(--lime); border-color: rgba(187,244,81,.3); background: rgba(187,244,81,.06); }
+        .badge.role { color: var(--cyan); border-color: rgba(90,216,223,.25); }
+        .user-detail { border-top: 1px solid var(--line); padding: 11px; display: grid; gap: 10px; }
+        .user-detail[hidden] { display: none; }
+        .split { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+        .field { display: grid; gap: 5px; min-width: 0; }
+        .field label { color: var(--muted); font-size: 9px; letter-spacing: .09em; text-transform: uppercase; }
+        input, select, textarea { min-width: 0; width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #0f1513; color: var(--ink); padding: 8px 9px; outline: none; }
+        textarea { resize: vertical; min-height: 66px; }
+        input::placeholder, textarea::placeholder { color: #55605d; }
+        .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
+        .socket-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .socket-btn { display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .socket-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+        .socket-btn.connected .socket-dot { background: var(--lime); box-shadow: 0 0 8px var(--lime); }
+        .telemetry-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+        .telemetry-actions { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; }
+        .rx { color: var(--faint); font-size: 9px; font-variant-numeric: tabular-nums; }
+        .stage { min-width: 0; min-height: 0; position: relative; background: #101513; }
+        #map { position: absolute; inset: 0; }
+        .maplibregl-map { font: inherit; }
+        .maplibregl-ctrl-group { background: #151d1a; border: 1px solid var(--line-strong); box-shadow: var(--shadow); }
+        .maplibregl-ctrl-group button + button { border-top-color: var(--line); }
+        .maplibregl-ctrl button .maplibregl-ctrl-icon { filter: invert(1); opacity: .75; }
+        .maplibregl-popup-content { background: #111816; color: var(--ink); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow); padding: 12px; }
+        .map-overlay { position: absolute; z-index: 4; }
+        .map-toolbar { top: 14px; left: 14px; display: flex; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 9px; background: rgba(12,17,16,.9); backdrop-filter: blur(10px); box-shadow: var(--shadow); }
+        .map-toolbar .btn.selected { background: var(--lime); color: var(--lime-ink); border-color: var(--lime); }
+        .map-status { left: 14px; bottom: 14px; border: 1px solid var(--line); border-radius: 8px; background: rgba(12,17,16,.88); color: var(--muted); padding: 8px 10px; font-size: 10px; backdrop-filter: blur(10px); }
+        .legend { top: 14px; right: 14px; display: grid; gap: 5px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(12,17,16,.88); color: var(--muted); font-size: 9px; backdrop-filter: blur(10px); }
+        .legend-row { display: flex; align-items: center; gap: 7px; }
+        .legend-symbol { width: 8px; height: 8px; border-radius: 50%; }
+        .tabs { display: grid; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid var(--line); }
+        .tab { border: 0; border-right: 1px solid var(--line); background: #101614; color: var(--muted); padding: 12px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+        .tab:last-child { border-right: 0; }
+        .tab.active { color: var(--lime); background: var(--panel-3); box-shadow: inset 0 -2px var(--lime); }
+        .tab-pane { display: none; min-height: 0; height: 100%; }
+        .tab-pane.active { display: flex; flex-direction: column; }
+        .job-tools { padding: 10px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
+        .job-filter { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
+        .job-list { padding: 10px; display: grid; gap: 8px; }
+        .job-card { border: 1px solid var(--line); border-radius: 9px; background: rgba(24,32,30,.68); padding: 11px; display: grid; gap: 9px; }
+        .job-card.selected { border-color: rgba(126,180,255,.5); }
+        .job-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+        .job-id { font: 600 10px ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--blue); }
+        .job-note { font-size: 12px; line-height: 1.4; margin-top: 4px; }
+        .job-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; color: var(--muted); font-size: 9px; }
+        .job-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .status-pill { border-radius: 20px; padding: 4px 7px; font-size: 8px; text-transform: uppercase; letter-spacing: .07em; background: #27302e; color: var(--muted); white-space: nowrap; }
+        .status-pill.unassigned { color: var(--amber); background: rgba(255,180,84,.1); }
+        .status-pill.active { color: var(--lime); background: rgba(187,244,81,.1); }
+        .status-pill.complete { color: var(--cyan); background: rgba(90,216,223,.1); }
+        .candidate { padding: 8px; border: 1px solid var(--line); border-radius: 7px; display: grid; gap: 5px; font-size: 10px; }
+        .candidate:first-child { border-color: rgba(187,244,81,.35); }
+        .candidate-head { display: flex; justify-content: space-between; gap: 8px; }
+        .candidate-stats { color: var(--muted); display: grid; grid-template-columns: 1fr 1fr; gap: 3px 8px; font-size: 9px; }
+        .form { padding: 13px; display: grid; gap: 11px; }
+        .form-title { display: flex; justify-content: space-between; align-items: center; }
+        .form-title h3 { margin: 0; font-size: 12px; }
+        .coordinate-input { display: grid; gap: 7px; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: rgba(15,21,19,.55); }
+        .coordinate-picker { justify-self: start; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+        .coordinate-picker.selected { color: var(--lime-ink); background: var(--lime); border-color: var(--lime); }
+        .eyedropper { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .hint { color: var(--faint); font-size: 9px; line-height: 1.45; }
+        .activity { padding: 8px; display: grid; gap: 5px; }
+        .event { border-left: 2px solid var(--faint); background: rgba(24,32,30,.5); padding: 8px 9px; display: grid; grid-template-columns: 48px 1fr; gap: 7px; font: 9px ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.45; }
+        .event.ok { border-left-color: var(--lime); }
+        .event.error { border-left-color: var(--red); }
+        .event.ws { border-left-color: var(--cyan); }
+        .event time { color: var(--faint); }
+        .event div { overflow-wrap: anywhere; }
+        .toast-stack { position: fixed; right: 18px; top: 76px; z-index: 100; display: grid; gap: 8px; width: min(350px, calc(100vw - 36px)); pointer-events: none; }
+        .toast { border: 1px solid var(--line-strong); border-left: 3px solid var(--lime); border-radius: 8px; padding: 11px 13px; background: #151d1a; box-shadow: var(--shadow); font-size: 11px; animation: enter .2s ease; }
+        .toast.error { border-left-color: var(--red); }
+        dialog { width: min(500px, calc(100vw - 30px)); border: 1px solid var(--line-strong); border-radius: 12px; padding: 0; color: var(--ink); background: #111816; box-shadow: var(--shadow); }
+        dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(3px); }
+        .dialog-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+        .dialog-head h3 { margin: 0; font-size: 13px; }
+        .dialog-body { padding: 16px; display: grid; gap: 11px; }
+        @keyframes enter { from { transform: translateY(-5px); opacity: 0; } }
+        @media (max-width: 1150px) { .shell { grid-template-columns: 300px 1fr 345px; } .brand { min-width: auto; } .brand small { display:none; } }
+        @media (max-width: 900px) { body { overflow: auto; display: block; } .topbar { position: sticky; top: 0; height: auto; min-height: 62px; flex-wrap: wrap; padding: 10px; } .api-config { order: 3; width: 100%; max-width: none; } .shell { display: flex; flex-direction: column; } .rail, .rail.right { min-height: 420px; max-height: 70vh; border: 0; border-bottom: 1px solid var(--line); } .stage { min-height: 70vh; order: -1; } html, body { overflow: auto; height: auto; } }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand"><div class="brand-mark"></div><div><h1>Atlas</h1><small>Operations simulator</small></div></div>
+        <div class="api-config"><label for="apiBase">API origin</label><input id="apiBase" class="top-input" spellcheck="false" /></div>
+        <div class="top-actions"><button type="button" class="btn" id="refreshAll">Refresh</button><button type="button" class="btn primary" id="addUser">+ User</button></div>
+    </header>
+    <main class="shell">
+        <aside class="rail">
+            <div class="section-head"><h2>Simulated users</h2><span class="count" id="userCount">0</span></div>
+            <div class="scroll"><div class="user-list" id="userList"></div></div>
+        </aside>
+        <section class="stage">
+            <div id="map"></div>
+            <div class="map-overlay map-toolbar">
+                <button type="button" class="btn small selected" data-pick="inspect">Inspect</button>
+                <button type="button" class="btn small" data-pick="telemetry">Set user</button>
+                <button type="button" class="btn small" data-pick="from">Set pickup</button>
+                <button type="button" class="btn small" data-pick="to">Set dropoff</button>
+                <button type="button" class="btn small" id="fitMap">Fit all</button>
+            </div>
+            <div class="map-overlay legend"><div class="legend-row"><i class="legend-symbol" style="background:var(--lime)"></i>Live driver</div><div class="legend-row"><i class="legend-symbol" style="background:var(--amber)"></i>Pickup</div><div class="legend-row"><i class="legend-symbol" style="background:var(--blue)"></i>Dropoff</div></div>
+            <div class="map-overlay map-status" id="mapStatus">Drag a connected driver marker to send its new position</div>
+        </section>
+        <aside class="rail right">
+            <div class="tabs"><button type="button" class="tab active" data-tab="jobs">Jobs</button><button type="button" class="tab" data-tab="compose">Compose</button><button type="button" class="tab" data-tab="activity">Activity</button></div>
+            <div class="tab-pane active" id="pane-jobs">
+                <div class="job-tools"><div class="job-filter"><select id="jobFilter"><option value="all">All visible jobs</option><option value="unassigned">Unassigned</option><option value="assigned">Assigned</option><option value="active">In progress</option><option value="complete">Completed</option></select><button type="button" class="btn small" id="refreshJobs">↻</button></div><div class="hint" id="jobSummary">Sign in a user to load jobs.</div></div>
+                <div class="scroll"><div class="job-list" id="jobList"></div></div>
+            </div>
+            <div class="tab-pane" id="pane-compose"><div class="scroll">
+                <form class="form" id="jobForm">
+                    <div class="form-title"><h3 id="jobFormTitle">Create job</h3><button type="button" class="btn small ghost" id="resetJob">Reset</button></div>
+                    <div class="field"><label for="jobActor">Act as</label><select id="jobActor"></select></div>
+                    <div class="coordinate-input"><div class="split"><div class="field"><label for="fromLat">Pickup latitude</label><input id="fromLat" type="number" step="any" required value="48.2082" /></div><div class="field"><label for="fromLng">Pickup longitude</label><input id="fromLng" type="number" step="any" required value="16.3738" /></div></div><button type="button" class="btn small coordinate-picker" data-pick="from"><svg class="eyedropper" viewBox="0 0 16 16" aria-hidden="true"><path d="m9.5 2.5 4 4M8 4l4 4-6.8 6.8H1.2v-4zM3 13h2" /></svg>Pick pickup on map</button></div>
+                    <div class="coordinate-input"><div class="split"><div class="field"><label for="toLat">Dropoff latitude</label><input id="toLat" type="number" step="any" value="48.1947" /></div><div class="field"><label for="toLng">Dropoff longitude</label><input id="toLng" type="number" step="any" value="16.3122" /></div></div><button type="button" class="btn small coordinate-picker" data-pick="to"><svg class="eyedropper" viewBox="0 0 16 16" aria-hidden="true"><path d="m9.5 2.5 4 4M8 4l4 4-6.8 6.8H1.2v-4zM3 13h2" /></svg>Pick drop-off on map</button></div>
+                    <div class="field"><label for="dueDate">Due date</label><input id="dueDate" type="datetime-local" required /></div>
+                    <div class="field"><label for="assignedDriver">Assigned driver</label><select id="assignedDriver"><option value="">Leave unassigned</option></select></div>
+                    <div class="field"><label for="jobVehicle">Vehicle</label><select id="jobVehicle"><option value="">No vehicle</option></select></div>
+                    <div class="field"><label for="jobNote">Note</label><textarea id="jobNote" placeholder="Passenger, delivery, special instructions…"></textarea></div>
+                    <button class="btn primary" type="submit" id="saveJob">Create job</button>
+                    <div class="hint">Coordinates use the API’s [latitude, longitude] order. Use the map toolbar to populate them visually.</div>
+                </form>
+            </div></div>
+            <div class="tab-pane" id="pane-activity"><div class="section-head"><h2>Event stream</h2><button type="button" class="btn small ghost" id="clearLog">Clear</button></div><div class="scroll"><div class="activity" id="activity"></div></div></div>
+        </aside>
+    </main>
+    <div class="toast-stack" id="toasts"></div>
+    <dialog id="userDialog">
+        <div class="dialog-head"><h3>Add a simulator user</h3><button type="button" class="btn small ghost" data-close>✕</button></div>
+        <form class="dialog-body" id="userForm">
+            <div class="field"><label for="userName">Name</label><input id="userName" name="name" required placeholder="Driver One" /></div>
+            <div class="field"><label for="userEmail">Email</label><input id="userEmail" name="email" type="email" required placeholder="driver1@example.com" /></div>
+            <div class="field"><label for="userPassword">Password</label><input id="userPassword" name="password" type="password" required minlength="8" autocomplete="current-password" /></div>
+            <div class="split"><button class="btn" type="submit" value="signin">Sign in</button><button class="btn primary" type="submit" value="signup">Create account</button></div>
+            <div class="hint">The password stays in memory only. Before each user-scoped action, the simulator signs that identity in and lets Better Auth update the browser's session cookie.</div>
+        </form>
+    </dialog>
+    <script>
+    "use strict";
+
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+    const colors = ["#bbf451", "#5ad8df", "#ffb454", "#ff7dba", "#7eb4ff", "#c99cff", "#ff786f", "#71e4a5"];
+    const state = {
+        users: [], jobs: new Map(), vehicles: [], roles: [], activeUser: null,
+        pickMode: "inspect", editJobId: null, map: null, mapReady: false,
+        draggedUser: null, suppressPopupUntil: 0,
+        cookieTail: Promise.resolve(), eventKeys: new Map(),
+    };
+
+    const apiInput = $("#apiBase");
+    apiInput.value = localStorage.getItem("atlas-simulator-api") || location.origin;
+    const apiBase = () => apiInput.value.trim().replace(/\/$/, "");
+    const apiUrl = (path) => `${apiBase()}${path}`;
+    const wsUrl = (path) => `${apiBase().replace(/^http/, "ws")}${path}`;
+    const uid = () => crypto.randomUUID();
+    const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[char]);
+    const shortId = (value) => value ? `${value.slice(0, 8)}…` : "—";
+    const asDate = (value) => value ? new Date(value) : null;
+    const prettyDate = (value) => {
+        const date = asDate(value);
+        return date && !Number.isNaN(date.valueOf()) ? date.toLocaleString([], {month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit"}) : "—";
+    };
+    const coordinate = (value) => Array.isArray(value) ? value.map(Number) : null;
+    const currentUser = () => state.users.find((user) => user.localId === state.activeUser) || state.users[0];
+    const userByServerId = (id) => state.users.find((user) => user.id === id);
+
+    function toast(message, type = "ok") {
+        const node = document.createElement("div");
+        node.className = `toast ${type}`;
+        node.textContent = message;
+        $("#toasts").append(node);
+        setTimeout(() => node.remove(), 3600);
+    }
+
+    function log(message, type = "ok", details) {
+        const entry = document.createElement("div");
+        entry.className = `event ${type}`;
+        const detail = details === undefined ? "" : ` · ${typeof details === "string" ? details : JSON.stringify(details)}`;
+        entry.innerHTML = `<time>${new Date().toLocaleTimeString([], {hour12:false})}</time><div>${escapeHtml(message + detail)}</div>`;
+        $("#activity").prepend(entry);
+        while ($("#activity").children.length > 250) $("#activity").lastElementChild.remove();
+    }
+
+    async function parseResponse(response) {
+        const text = await response.text();
+        let body = text;
+        try { body = text ? JSON.parse(text) : null; } catch {}
+        if (!response.ok) {
+            const message = body?.message || body?.error || `${response.status} ${response.statusText}`;
+            const error = new Error(message);
+            error.status = response.status;
+            error.body = body;
+            throw error;
+        }
+        return body;
+    }
+
+    async function fetchJson(path, options = {}) {
+        const headers = new Headers(options.headers || {});
+        if (options.body !== undefined && !headers.has("content-type")) headers.set("content-type", "application/json");
+        const response = await fetch(apiUrl(path), {
+            ...options, headers, credentials: "include",
+            body: options.body === undefined ? undefined : typeof options.body === "string" ? options.body : JSON.stringify(options.body),
+        });
+        return parseResponse(response);
+    }
+
+    function queueCookieTask(task) {
+        const run = state.cookieTail.catch(() => {}).then(task);
+        state.cookieTail = run.catch(() => {});
+        return run;
+    }
+
+    async function signInCookie(user, quiet = true) {
+        const result = await fetchJson("/api/auth/sign-in/email", {
+            method: "POST", body: {email: user.email, password: user.password, rememberMe: true},
+        });
+        user.id = result.user.id;
+        user.name = result.user.name || user.name;
+        user.signedIn = true;
+        if (!quiet) log(`Signed in ${user.name}`, "ok");
+        return result;
+    }
+
+    function asUser(user, operation) {
+        if (!user?.password) return Promise.reject(new Error("This user has no in-memory credentials"));
+        return queueCookieTask(async () => {
+            await signInCookie(user);
+            return operation();
+        });
+    }
+
+    function handleError(error, context) {
+        const message = `${context}: ${error?.message || error}`;
+        log(message, "error", error?.body);
+        toast(message, "error");
+    }
+
+    async function addUser(form, mode) {
+        const data = Object.fromEntries(new FormData(form));
+        return queueCookieTask(async () => {
+            const path = mode === "signup" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email";
+            const body = mode === "signup"
+                ? {name: data.name, email: data.email, password: data.password}
+                : {email: data.email, password: data.password, rememberMe: true};
+            const result = await fetchJson(path, {method: "POST", body});
+            const existing = state.users.find((item) => item.id === result.user.id);
+            if (existing) {
+                existing.password = data.password;
+                existing.email = data.email;
+                existing.name = result.user.name;
+                existing.signedIn = true;
+                state.activeUser = existing.localId;
+            } else {
+                const index = state.users.length;
+                const user = {
+                    localId: uid(), id: result.user.id, name: result.user.name || data.name, email: data.email,
+                    password: data.password, color: colors[index % colors.length], signedIn: true,
+                    role: null, telemetry: {latitude: 48.2082 + index * .008, longitude: 16.3738 + index * .009, state: "free", fuelLevel: 80, odometer: 10000 + index * 125},
+                    trackSocket: null, notifySocket: null, autoTimer: null, rx: 0, trail: [],
+                };
+                state.users.push(user);
+                state.activeUser = user.localId;
+            }
+            log(`${mode === "signup" ? "Created" : "Signed in"} ${result.user.name}`, "ok");
+            toast(`${result.user.name} is ready`);
+            renderAll();
+        });
+    }
+
+    function closeUser(user) {
+        if (user.autoTimer) clearInterval(user.autoTimer);
+        user.trackSocket?.close();
+        user.notifySocket?.close();
+        state.users = state.users.filter((item) => item !== user);
+        if (state.activeUser === user.localId) state.activeUser = state.users[0]?.localId || null;
+        renderAll();
+    }
+
+    async function claimRole(user, role) {
+        try {
+            await asUser(user, () => fetchJson("/roles/", {method: "POST", body: {role}}));
+            user.role = role;
+            log(`${user.name} claimed ${role}`, "ok");
+            toast(`${user.name} is today's ${role}`);
+            await refreshRoles(user);
+        } catch (error) { handleError(error, "Role claim failed"); }
+    }
+
+    async function refreshRoles(actor = currentUser()) {
+        if (!actor) return;
+        try {
+            const result = await asUser(actor, () => fetchJson("/roles/"));
+            state.roles = result.roles || [];
+            for (const user of state.users) user.role = state.roles.find((role) => role.driverId === user.id)?.role || user.role;
+            renderUsers();
+        } catch (error) { handleError(error, "Could not load roles"); }
+    }
+
+    function socketState(socket) {
+        return socket?.readyState === WebSocket.OPEN ? "connected" : socket?.readyState === WebSocket.CONNECTING ? "connecting" : "closed";
+    }
+
+    async function connectSocket(user, kind) {
+        const key = kind === "track" ? "trackSocket" : "notifySocket";
+        if ([WebSocket.OPEN, WebSocket.CONNECTING].includes(user[key]?.readyState)) {
+            user[key].close();
+            return;
+        }
+        try {
+            await asUser(user, () => new Promise((resolve, reject) => {
+                const socket = new WebSocket(wsUrl(`/realtime/${kind}`));
+                user[key] = socket;
+                const timeout = setTimeout(() => reject(new Error("WebSocket handshake timed out")), 6000);
+                socket.addEventListener("open", () => {
+                    clearTimeout(timeout);
+                    log(`${user.name} connected /realtime/${kind}`, "ws");
+                    renderUsers();
+                    resolve();
+                }, {once: true});
+                socket.addEventListener("message", (event) => handleSocketMessage(user, kind, event.data));
+                socket.addEventListener("close", (event) => {
+                    if (user[key] === socket) user[key] = null;
+                    if (kind === "track" && user.autoTimer) toggleAuto(user, false);
+                    log(`${user.name} /${kind} closed (${event.code})`, "ws");
+                    renderUsers();
+                });
+                socket.addEventListener("error", () => {
+                    clearTimeout(timeout);
+                    if (socket.readyState !== WebSocket.OPEN) reject(new Error(`Could not connect /realtime/${kind}`));
+                }, {once: true});
+            }));
+        } catch (error) {
+            user[key]?.close(); user[key] = null;
+            handleError(error, `${user.name} socket`);
+            renderUsers();
+        }
+    }
+
+    function handleSocketMessage(recipient, kind, raw) {
+        let message;
+        try { message = JSON.parse(raw); } catch { message = raw; }
+        recipient.rx += 1;
+        if (kind === "track" && message?.type === "update") ingestTelemetry(message);
+        if (kind === "track" && message?.type === "connectionChange") {
+            const source = userByServerId(message.userId);
+            if (source) source.remoteState = message.state;
+        }
+        const signature = `${kind}:${typeof raw === "string" ? raw : JSON.stringify(raw)}`;
+        const now = Date.now();
+        if ((state.eventKeys.get(signature) || 0) < now - 120) {
+            log(`${recipient.name} received /${kind}`, "ws", message);
+            state.eventKeys.set(signature, now);
+        }
+        if (kind === "notify") toast(`Job notification for ${recipient.name}: ${shortId(message?.jobId)}`);
+        syncUserCard(recipient);
+    }
+
+    function telemetryPayload(user) {
+        const t = user.telemetry;
+        const payload = {type: "update", latitude: Number(t.latitude), longitude: Number(t.longitude), state: t.state};
+        if (t.vehicleId) payload.vehicleId = t.vehicleId;
+        if (t.fuelLevel !== "" && Number.isFinite(Number(t.fuelLevel))) payload.fuelLevel = Number(t.fuelLevel);
+        if (t.odometer !== "" && Number.isFinite(Number(t.odometer))) payload.odometer = Number(t.odometer);
+        return payload;
+    }
+
+    function sendTelemetry(user, quiet = false) {
+        if (user.trackSocket?.readyState !== WebSocket.OPEN) {
+            if (!quiet) toast(`Connect ${user.name}'s track socket first`, "error");
+            return;
+        }
+        const payload = telemetryPayload(user);
+        if (!Number.isFinite(payload.latitude) || !Number.isFinite(payload.longitude)) return toast("Invalid telemetry coordinates", "error");
+        user.trackSocket.send(JSON.stringify(payload));
+        ingestTelemetry({...payload, userId: user.id, userName: user.name});
+        if (!quiet) log(`${user.name} sent telemetry`, "ws", payload);
+    }
+
+    function ingestTelemetry(message) {
+        const user = userByServerId(message.userId);
+        if (user) {
+            user.telemetry = {...user.telemetry, ...message};
+            const point = [Number(message.longitude), Number(message.latitude)];
+            const last = user.trail.at(-1);
+            if (!last || last[0] !== point[0] || last[1] !== point[1]) user.trail.push(point);
+            if (user.trail.length > 120) user.trail.shift();
+        }
+        updateMapData();
+        if (user) syncUserCard(user);
+    }
+
+    function toggleAuto(user, force) {
+        const shouldRun = force ?? !user.autoTimer;
+        if (user.autoTimer) clearInterval(user.autoTimer);
+        user.autoTimer = null;
+        if (shouldRun) {
+            if (user.trackSocket?.readyState !== WebSocket.OPEN) return toast("Connect track before starting auto-drive", "error");
+            user.autoTimer = setInterval(() => {
+                const t = user.telemetry;
+                const bearing = Number(t.autoBearing ?? Math.random() * Math.PI * 2);
+                t.autoBearing = bearing + (Math.random() - .5) * .22;
+                t.latitude = Number(t.latitude) + Math.cos(t.autoBearing) * .00018;
+                t.longitude = Number(t.longitude) + Math.sin(t.autoBearing) * .00028;
+                if (t.odometer !== "") t.odometer = Number(t.odometer) + .02;
+                sendTelemetry(user, true);
+            }, 1000);
+            log(`${user.name} auto-drive started`, "ws");
+        }
+        renderUsers();
+    }
+
+    async function loadVehicles(actor = currentUser()) {
+        if (!actor) return;
+        try {
+            const rows = await asUser(actor, () => fetchJson("/fleet/vehicles"));
+            state.vehicles = (rows || []).map((row) => row.vehicle || row).filter(Boolean);
+            renderSelects();
+        } catch (error) { handleError(error, "Could not load vehicles"); }
+    }
+
+    async function refreshJobs() {
+        if (!state.users.length) return;
+        const button = $("#refreshJobs"); button.disabled = true;
+        try {
+            const visibleIds = new Set();
+            for (const user of state.users) {
+                const [unassigned, assigned] = await asUser(user, async () => Promise.all([
+                    fetchJson("/jobs/unassigned"), fetchJson("/jobs/assigned"),
+                ]));
+                for (const job of [...unassigned, ...assigned]) { state.jobs.set(job.id, job); visibleIds.add(job.id); }
+            }
+            for (const id of state.jobs.keys()) if (!visibleIds.has(id)) state.jobs.delete(id);
+            log(`Loaded ${state.jobs.size} visible jobs`, "ok");
+            renderJobs(); updateMapData();
+        } catch (error) { handleError(error, "Could not refresh jobs"); }
+        finally { button.disabled = false; }
+    }
+
+    async function jobAction(action, job, actor, body) {
+        if (!actor) return toast("Choose an acting user", "error");
+        try {
+            let result;
+            if (action === "candidates") {
+                result = await asUser(actor, () => fetchJson(`/jobs/${job.id}/candidates`));
+                job._candidates = result;
+            } else {
+                result = await asUser(actor, () => fetchJson(`/jobs/${job.id}/${action}`, {method: "POST", ...(body !== undefined ? {body} : {})}));
+                log(`${actor.name} ${action} ${shortId(job.id)}`, "ok", result);
+                toast(`Job ${action} successful`);
+                await refreshJobs();
+            }
+            renderJobs();
+        } catch (error) { handleError(error, `Job ${action} failed`); }
+    }
+
+    async function saveJob(event) {
+        event.preventDefault();
+        const actor = state.users.find((user) => user.localId === $("#jobActor").value);
+        if (!actor) return toast("Choose an acting user", "error");
+        const from = [Number($("#fromLat").value), Number($("#fromLng").value)];
+        const toProvided = $("#toLat").value !== "" && $("#toLng").value !== "";
+        const body = {
+            from, dueDate: new Date($("#dueDate").value).toISOString(),
+            ...toProvided ? {to: [Number($("#toLat").value), Number($("#toLng").value)]} : {},
+            ...$("#assignedDriver").value ? {assignedDriverId: $("#assignedDriver").value} : {},
+            ...$("#jobVehicle").value ? {vehicleId: $("#jobVehicle").value} : {},
+            ...$("#jobNote").value.trim() ? {note: $("#jobNote").value.trim()} : {},
+        };
+        try {
+            if (state.editJobId) {
+                await asUser(actor, () => fetchJson(`/jobs/${state.editJobId}`, {method: "PUT", body}));
+                log(`${actor.name} updated ${shortId(state.editJobId)}`, "ok");
+            } else {
+                const created = await asUser(actor, () => fetchJson("/jobs/create", {method: "POST", body}));
+                state.jobs.set(created.id, created);
+                log(`${actor.name} created ${shortId(created.id)}`, "ok", created);
+            }
+            toast(state.editJobId ? "Job updated" : "Job created");
+            resetJobForm(); await refreshJobs(); showTab("jobs");
+        } catch (error) { handleError(error, "Could not save job"); }
+    }
+
+    function editJob(job) {
+        state.editJobId = job.id;
+        const from = coordinate(job.from), to = coordinate(job.to);
+        $("#jobFormTitle").textContent = `Edit ${shortId(job.id)}`;
+        $("#saveJob").textContent = "Update job";
+        $("#fromLat").value = from?.[0] ?? ""; $("#fromLng").value = from?.[1] ?? "";
+        $("#toLat").value = to?.[0] ?? ""; $("#toLng").value = to?.[1] ?? "";
+        $("#dueDate").value = toLocalInput(job.dueDate);
+        $("#assignedDriver").value = job.assignedDriverId || "";
+        $("#jobVehicle").value = job.vehicleId || "";
+        $("#jobNote").value = job.note || "";
+        showTab("compose");
+    }
+
+    function resetJobForm() {
+        state.editJobId = null;
+        $("#jobFormTitle").textContent = "Create job"; $("#saveJob").textContent = "Create job";
+        $("#jobForm").reset(); setDefaultDueDate();
+        $("#fromLat").value = "48.2082"; $("#fromLng").value = "16.3738";
+        $("#toLat").value = "48.1947"; $("#toLng").value = "16.3122";
+        renderSelects();
+    }
+
+    function toLocalInput(value) {
+        const date = value ? new Date(value) : new Date(Date.now() + 30 * 60 * 1000);
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date - offset).toISOString().slice(0, 16);
+    }
+    function setDefaultDueDate() { $("#dueDate").value = toLocalInput(); }
+
+    function jobStatus(job) {
+        if (job.completedAt) return "complete";
+        if (job.startedAt) return "active";
+        if (job.assignedDriverId) return "assigned";
+        return "unassigned";
+    }
+
+    function renderUsers() {
+        $("#userCount").textContent = state.users.length;
+        const list = $("#userList");
+        if (!state.users.length) {
+            list.innerHTML = `<div class="empty">No identities yet.<br>Add an existing account or create a disposable simulator account.</div>`;
+            return;
+        }
+        list.innerHTML = state.users.map((user) => {
+            const t = user.telemetry;
+            const track = socketState(user.trackSocket), notify = socketState(user.notifySocket);
+            return `<article class="user-card ${state.activeUser === user.localId ? "active" : ""}" data-user="${user.localId}">
+                <div class="user-summary" data-action="select-user"><i class="user-color" style="background:${user.color}"></i><div class="user-name"><strong>${escapeHtml(user.name)}</strong><span>${escapeHtml(user.email)} · ${shortId(user.id)}</span></div><div class="badges">${user.role ? `<b class="badge role">${user.role}</b>` : ""}${track === "connected" ? `<b class="badge live">live</b>` : ""}</div></div>
+                <div class="user-detail" ${state.activeUser === user.localId ? "" : "hidden"}>
+                    <div class="button-row"><button class="btn small" data-action="role-driver">Claim driver</button><button class="btn small" data-action="role-dispatcher">Claim dispatcher</button><button class="btn small danger" data-action="remove-user">Remove</button></div>
+                    <div class="socket-row"><button class="btn small socket-btn ${track === "connected" ? "connected" : ""}" data-action="socket-track"><i class="socket-dot"></i>${track === "connected" ? "Disconnect" : "Track WS"}</button><button class="btn small socket-btn ${notify === "connected" ? "connected" : ""}" data-action="socket-notify"><i class="socket-dot"></i>${notify === "connected" ? "Disconnect" : "Notify WS"}</button></div>
+                    <div class="telemetry-fields"><div class="field"><label>Latitude</label><input data-field="latitude" type="number" step="any" value="${t.latitude}"></div><div class="field"><label>Longitude</label><input data-field="longitude" type="number" step="any" value="${t.longitude}"></div></div>
+                    <div class="telemetry-fields"><div class="field"><label>State</label><select data-field="state">${["free","onTheWay","occupied","away"].map(value => `<option ${t.state === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Vehicle</label><select data-field="vehicleId"><option value="">None</option>${vehicleOptions(t.vehicleId)}</select></div></div>
+                    <div class="telemetry-fields"><div class="field"><label>Fuel %</label><input data-field="fuelLevel" type="number" min="0" max="100" step=".1" value="${t.fuelLevel ?? ""}"></div><div class="field"><label>Odometer</label><input data-field="odometer" type="number" min="0" step=".01" value="${t.odometer ?? ""}"></div></div>
+                    <div class="telemetry-actions"><button class="btn primary small" data-action="send-telemetry">Send update</button><button class="btn small ${user.autoTimer ? "danger" : ""}" data-action="auto-drive">${user.autoTimer ? "Stop" : "Auto"}</button><button class="btn small" data-action="locate-user">⌖</button></div>
+                    <div class="rx">RX ${user.rx} · TRACK ${track.toUpperCase()} · NOTIFY ${notify.toUpperCase()}</div>
+                </div></article>`;
+        }).join("");
+    }
+
+    function syncUserCard(user) {
+        const card = document.querySelector(`[data-user="${CSS.escape(user.localId)}"]`);
+        if (!card) return;
+        for (const [field, value] of Object.entries(user.telemetry)) {
+            const control = card.querySelector(`[data-field="${field}"]`);
+            if (control && document.activeElement !== control && field !== "autoBearing") control.value = value ?? "";
+        }
+        const rx = card.querySelector(".rx");
+        if (rx) rx.textContent = `RX ${user.rx} · TRACK ${socketState(user.trackSocket).toUpperCase()} · NOTIFY ${socketState(user.notifySocket).toUpperCase()}`;
+    }
+
+    function vehicleOptions(selected) {
+        return state.vehicles.map((vehicle) => `<option value="${vehicle.id}" ${selected === vehicle.id ? "selected" : ""}>${escapeHtml(vehicle.licensePlate || shortId(vehicle.id))} · ${escapeHtml(`${vehicle.brand || ""} ${vehicle.model || ""}`.trim())}</option>`).join("");
+    }
+
+    function renderSelects() {
+        const actorValue = $("#jobActor").value || currentUser()?.localId || "";
+        $("#jobActor").innerHTML = state.users.map((user) => `<option value="${user.localId}">${escapeHtml(user.name)}</option>`).join("");
+        $("#jobActor").value = actorValue;
+        const driverValue = $("#assignedDriver").value;
+        $("#assignedDriver").innerHTML = `<option value="">Leave unassigned</option>${state.users.map((user) => `<option value="${user.id}">${escapeHtml(user.name)}${user.role ? ` · ${user.role}` : ""}</option>`).join("")}`;
+        $("#assignedDriver").value = driverValue;
+        const vehicleValue = $("#jobVehicle").value;
+        $("#jobVehicle").innerHTML = `<option value="">No vehicle</option>${vehicleOptions(vehicleValue)}`;
+        $("#jobVehicle").value = vehicleValue;
+    }
+
+    function renderJobs() {
+        const filter = $("#jobFilter").value;
+        const jobs = [...state.jobs.values()].filter((job) => filter === "all" || jobStatus(job) === filter || (filter === "assigned" && !!job.assignedDriverId && !job.startedAt && !job.completedAt)).sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
+        $("#jobSummary").textContent = `${jobs.length} shown · ${state.jobs.size} visible to signed-in users`;
+        $("#jobList").innerHTML = jobs.length ? jobs.map((job) => {
+            const status = jobStatus(job), driver = userByServerId(job.assignedDriverId), from = coordinate(job.from), to = coordinate(job.to);
+            const candidates = job._candidates ? `<div class="candidate-list">${job._candidates.length ? job._candidates.map((candidate, index) => `<div class="candidate"><div class="candidate-head"><strong>${index + 1}. ${escapeHtml(userByServerId(candidate.driverId)?.name || shortId(candidate.driverId))}</strong><button class="btn small ${index === 0 ? "primary" : ""}" data-job-action="assign-candidate" data-driver="${candidate.driverId}">Assign</button></div><div class="candidate-stats"><span>${candidate.state}</span><span>${candidate.routeDistanceKilometers.toFixed(1)} km route</span><span>pickup ${prettyDate(candidate.estimatedPickupAt)}</span><span>${candidate.lateBySeconds ? `${Math.round(candidate.lateBySeconds/60)}m late` : "on time"}</span></div></div>`).join("") : `<div class="hint">No eligible tracked drivers.</div>`}</div>` : "";
+            return `<article class="job-card" data-job="${job.id}"><div class="job-top"><div><div class="job-id">${job.id}</div><div class="job-note">${escapeHtml(job.note || "Untitled job")}</div></div><b class="status-pill ${status}">${status}</b></div>
+                <div class="job-meta"><span>Due ${prettyDate(job.dueDate)}</span><span>Driver ${escapeHtml(driver?.name || shortId(job.assignedDriverId))}</span><span>From ${from ? `${from[0].toFixed(4)}, ${from[1].toFixed(4)}` : "—"}</span><span>To ${to ? `${to[0].toFixed(4)}, ${to[1].toFixed(4)}` : "—"}</span></div>
+                <div class="button-row">${status === "unassigned" ? `<button class="btn small" data-job-action="candidates">Candidates</button><button class="btn small" data-job-action="assign-selected">Assign selected</button>` : ""}${status === "assigned" ? `<button class="btn small primary" data-job-action="start">Start</button>` : ""}${status === "active" ? `<button class="btn small primary" data-job-action="complete">Complete</button>` : ""}${status !== "complete" ? `<button class="btn small" data-job-action="edit">Edit</button><button class="btn small danger" data-job-action="cancel">Cancel</button>` : ""}<button class="btn small" data-job-action="locate">⌖</button></div>${candidates}</article>`;
+        }).join("") : `<div class="empty">No jobs match this view.</div>`;
+    }
+
+    function renderAll() { renderUsers(); renderSelects(); renderJobs(); updateMapData(); }
+
+    function showTab(name) {
+        $$(".tab").forEach((tab) => { tab.classList.toggle("active", tab.dataset.tab === name); });
+        $$(".tab-pane").forEach((pane) => { pane.classList.toggle("active", pane.id === `pane-${name}`); });
+    }
+
+    function initMap() {
+        if (!window.maplibregl) return toast("MapLibre failed to load", "error");
+        state.map = new maplibregl.Map({
+            container: "map", center: [16.3738, 48.2082], zoom: 12,
+            style: {version: 8, sources: {carto: {type: "raster", tiles: ["https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png"], tileSize: 256, attribution: "© OpenStreetMap contributors © CARTO"}}, layers: [{id:"base", type:"raster", source:"carto", paint:{"raster-opacity":.86}}]},
+        });
+        state.map.addControl(new maplibregl.NavigationControl({showCompass:false}), "bottom-right");
+        state.map.addControl(new maplibregl.ScaleControl({unit:"metric"}), "bottom-right");
+        state.map.on("load", () => {
+            state.mapReady = true;
+            state.map.addSource("trails", {type:"geojson", data: emptyGeoJson()});
+            state.map.addSource("job-lines", {type:"geojson", data: emptyGeoJson()});
+            state.map.addSource("jobs", {type:"geojson", data: emptyGeoJson()});
+            state.map.addSource("drivers", {type:"geojson", data: emptyGeoJson()});
+            state.map.addLayer({id:"trails", type:"line", source:"trails", paint:{"line-color":["get","color"],"line-width":2,"line-opacity":.55}});
+            state.map.addLayer({id:"job-lines", type:"line", source:"job-lines", paint:{"line-color":"#7eb4ff","line-width":2,"line-dasharray":[2,2],"line-opacity":.55}});
+            state.map.addLayer({id:"job-points", type:"circle", source:"jobs", paint:{"circle-radius":7,"circle-color":["match",["get","kind"],"pickup","#ffb454","#7eb4ff"],"circle-stroke-color":"#111816","circle-stroke-width":2}});
+            state.map.addLayer({id:"job-labels", type:"symbol", source:"jobs", layout:{"text-field":["get","label"],"text-size":10,"text-offset":[0,1.35],"text-anchor":"top"}, paint:{"text-color":"#e8f0ed","text-halo-color":"#0c1110","text-halo-width":1.5}});
+            state.map.addLayer({id:"driver-halo", type:"circle", source:"drivers", paint:{"circle-radius":13,"circle-color":["get","color"],"circle-opacity":.17}});
+            state.map.addLayer({id:"drivers", type:"circle", source:"drivers", paint:{"circle-radius":7,"circle-color":["get","color"],"circle-stroke-color":"#09100d","circle-stroke-width":3}});
+            state.map.addLayer({id:"driver-labels", type:"symbol", source:"drivers", layout:{"text-field":["get","label"],"text-size":11,"text-offset":[0,1.5],"text-anchor":"top"}, paint:{"text-color":"#ffffff","text-halo-color":"#0b100f","text-halo-width":2}});
+            for (const layer of ["drivers","job-points"]) state.map.on("click", layer, (event) => showFeaturePopup(event.features?.[0], event.lngLat));
+            state.map.on("mouseenter", "drivers", () => {
+                if (state.pickMode === "inspect" && !state.draggedUser) state.map.getCanvas().style.cursor = "grab";
+            });
+            state.map.on("mouseleave", "drivers", () => {
+                if (!state.draggedUser) state.map.getCanvas().style.cursor = state.pickMode === "inspect" ? "" : "crosshair";
+            });
+            state.map.on("mousedown", "drivers", startDriverDrag);
+            state.map.on("touchstart", "drivers", startDriverDrag);
+            state.map.on("mousemove", moveDriverDrag);
+            state.map.on("touchmove", moveDriverDrag);
+            state.map.on("mouseup", finishDriverDrag);
+            state.map.on("touchend", finishDriverDrag);
+            updateMapData();
+        });
+        state.map.on("click", (event) => {
+            if (state.pickMode === "inspect") return;
+            applyMapPick(event.lngLat.lat, event.lngLat.lng);
+        });
+    }
+
+    function emptyGeoJson() { return {type:"FeatureCollection", features:[]}; }
+    function updateMapData() {
+        if (!state.mapReady) return;
+        const driverFeatures = [], trailFeatures = [], jobFeatures = [], lineFeatures = [];
+        for (const user of state.users) {
+            const t = user.telemetry;
+            if (Number.isFinite(Number(t.latitude)) && Number.isFinite(Number(t.longitude))) {
+                driverFeatures.push({type:"Feature", geometry:{type:"Point", coordinates:[Number(t.longitude),Number(t.latitude)]}, properties:{type:"driver", id:user.id, label:`${user.name} · ${t.state}`, name:user.name, state:t.state, color:user.color, fuel:t.fuelLevel ?? "—", odometer:t.odometer ?? "—"}});
+            }
+            if (user.trail.length > 1) trailFeatures.push({type:"Feature", geometry:{type:"LineString",coordinates:user.trail},properties:{color:user.color}});
+        }
+        for (const job of state.jobs.values()) {
+            const from = coordinate(job.from), to = coordinate(job.to), label = shortId(job.id);
+            if (from) jobFeatures.push({type:"Feature",geometry:{type:"Point",coordinates:[from[1],from[0]]},properties:{type:"job",id:job.id,kind:"pickup",label:`P · ${label}`,note:job.note||"",status:jobStatus(job)}});
+            if (to) jobFeatures.push({type:"Feature",geometry:{type:"Point",coordinates:[to[1],to[0]]},properties:{type:"job",id:job.id,kind:"dropoff",label:`D · ${label}`,note:job.note||"",status:jobStatus(job)}});
+            if (from && to) lineFeatures.push({type:"Feature",geometry:{type:"LineString",coordinates:[[from[1],from[0]],[to[1],to[0]]]},properties:{id:job.id}});
+        }
+        state.map.getSource("drivers").setData({type:"FeatureCollection",features:driverFeatures});
+        state.map.getSource("trails").setData({type:"FeatureCollection",features:trailFeatures});
+        state.map.getSource("jobs").setData({type:"FeatureCollection",features:jobFeatures});
+        state.map.getSource("job-lines").setData({type:"FeatureCollection",features:lineFeatures});
+    }
+
+    function showFeaturePopup(feature, lngLat) {
+        if (!feature || Date.now() < state.suppressPopupUntil) return;
+        const p = feature.properties;
+        const html = p.type === "driver"
+            ? `<strong>${escapeHtml(p.name)}</strong><div style="color:#83918d;margin-top:5px">${escapeHtml(p.state)} · fuel ${p.fuel}% · ${p.odometer} km</div>`
+            : `<strong>${p.kind === "pickup" ? "Pickup" : "Dropoff"} · ${shortId(p.id)}</strong><div style="color:#83918d;margin-top:5px">${escapeHtml(p.note)} · ${escapeHtml(p.status)}</div>`;
+        new maplibregl.Popup({offset:12}).setLngLat(lngLat).setHTML(html).addTo(state.map);
+    }
+
+    function startDriverDrag(event) {
+        if (state.pickMode !== "inspect" || state.draggedUser) return;
+        if (event.points?.length > 1) return;
+        const user = userByServerId(event.features?.[0]?.properties?.id);
+        if (!user) return;
+        if (user.trackSocket?.readyState !== WebSocket.OPEN) {
+            toast(`Connect ${user.name}'s track socket before dragging`, "error");
+            return;
+        }
+        event.preventDefault();
+        if (user.autoTimer) toggleAuto(user, false);
+        state.draggedUser = user;
+        state.map.dragPan.disable();
+        state.map.touchZoomRotate.disable();
+        state.map.getCanvas().style.cursor = "grabbing";
+        $("#mapStatus").textContent = `Moving ${user.name} · release to send telemetry`;
+    }
+
+    function moveDriverDrag(event) {
+        const user = state.draggedUser;
+        if (!user || !event.lngLat) return;
+        event.preventDefault();
+        user.telemetry.latitude = event.lngLat.lat.toFixed(6);
+        user.telemetry.longitude = event.lngLat.lng.toFixed(6);
+        syncUserCard(user);
+        updateMapData();
+        $("#mapStatus").textContent = `${user.name} · ${user.telemetry.latitude}, ${user.telemetry.longitude}`;
+    }
+
+    function finishDriverDrag(event) {
+        const user = state.draggedUser;
+        if (!user) return;
+        event.preventDefault();
+        state.draggedUser = null;
+        state.suppressPopupUntil = Date.now() + 300;
+        state.map.dragPan.enable();
+        state.map.touchZoomRotate.enable();
+        state.map.getCanvas().style.cursor = "grab";
+        sendTelemetry(user);
+        $("#mapStatus").textContent = `Sent ${user.name} · ${user.telemetry.latitude}, ${user.telemetry.longitude}`;
+    }
+
+    function applyMapPick(lat, lng) {
+        if (state.pickMode === "telemetry") {
+            const user = currentUser();
+            if (!user) return toast("Select a user first", "error");
+            user.telemetry.latitude = lat.toFixed(6); user.telemetry.longitude = lng.toFixed(6); renderUsers();
+        } else {
+            const picked = state.pickMode;
+            $(`#${picked}Lat`).value = lat.toFixed(6); $(`#${picked}Lng`).value = lng.toFixed(6);
+            setPickMode("inspect");
+            $("#mapStatus").textContent = `${picked === "from" ? "Pickup" : "Drop-off"} selected · ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            toast(`${picked === "from" ? "Pickup" : "Drop-off"} coordinates selected`);
+            return;
+        }
+        $("#mapStatus").textContent = `${state.pickMode} = ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+
+    function setPickMode(mode) {
+        state.pickMode = mode;
+        $$('[data-pick]').forEach((button) => { button.classList.toggle("selected", button.dataset.pick === mode); });
+        $("#mapStatus").textContent = mode === "inspect" ? "Drag a connected driver marker to send its new position" : `Click the map to set ${mode}`;
+        state.map.getCanvas().style.cursor = mode === "inspect" ? "" : "crosshair";
+    }
+
+    function fitAll() {
+        const points = [];
+        for (const user of state.users) points.push([Number(user.telemetry.longitude),Number(user.telemetry.latitude)]);
+        for (const job of state.jobs.values()) for (const point of [coordinate(job.from),coordinate(job.to)]) if (point) points.push([point[1],point[0]]);
+        if (!points.length) return;
+        const bounds = points.reduce((bounds, point) => bounds.extend(point), new maplibregl.LngLatBounds(points[0],points[0]));
+        state.map.fitBounds(bounds, {padding:70, maxZoom:14, duration:650});
+    }
+
+    $("#userForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const mode = event.submitter?.value || "signin";
+        try { await addUser(event.currentTarget, mode); event.currentTarget.reset(); $("#userDialog").close(); }
+        catch (error) { handleError(error, mode === "signup" ? "Account creation failed" : "Sign-in failed"); }
+    });
+    $("#addUser").addEventListener("click", () => $("#userDialog").showModal());
+    $("[data-close]").addEventListener("click", () => $("#userDialog").close());
+    $("#userDialog").addEventListener("click", (event) => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+    apiInput.addEventListener("change", () => { localStorage.setItem("atlas-simulator-api", apiBase()); toast("API origin updated"); });
+    $$(".tab").forEach((tab) => { tab.addEventListener("click", () => showTab(tab.dataset.tab)); });
+    $$('[data-pick]').forEach((button) => { button.addEventListener("click", () => setPickMode(button.dataset.pick)); });
+    $("#fitMap").addEventListener("click", fitAll);
+    $("#jobFilter").addEventListener("change", renderJobs);
+    $("#refreshJobs").addEventListener("click", refreshJobs);
+    $("#jobForm").addEventListener("submit", saveJob);
+    $("#resetJob").addEventListener("click", resetJobForm);
+    $("#clearLog").addEventListener("click", () => $("#activity").replaceChildren());
+    $("#refreshAll").addEventListener("click", async () => {
+        const actor = currentUser();
+        if (!actor) return toast("Add a user first", "error");
+        await refreshRoles(actor); await loadVehicles(actor); await refreshJobs();
+    });
+
+    $("#userList").addEventListener("input", (event) => {
+        const card = event.target.closest("[data-user]"), field = event.target.dataset.field;
+        if (!card || !field) return;
+        const user = state.users.find((item) => item.localId === card.dataset.user);
+        if (user) user.telemetry[field] = event.target.value;
+    });
+    $("#userList").addEventListener("click", async (event) => {
+        const card = event.target.closest("[data-user]"), action = event.target.closest("[data-action]")?.dataset.action;
+        if (!card || !action) return;
+        const user = state.users.find((item) => item.localId === card.dataset.user);
+        if (!user) return;
+        if (action === "select-user") { state.activeUser = user.localId; renderAll(); }
+        if (action === "remove-user") closeUser(user);
+        if (action === "role-driver") await claimRole(user, "driver");
+        if (action === "role-dispatcher") await claimRole(user, "dispatcher");
+        if (action === "socket-track") await connectSocket(user, "track");
+        if (action === "socket-notify") await connectSocket(user, "notify");
+        if (action === "send-telemetry") sendTelemetry(user);
+        if (action === "auto-drive") toggleAuto(user);
+        if (action === "locate-user") state.map.flyTo({center:[Number(user.telemetry.longitude),Number(user.telemetry.latitude)],zoom:15});
+    });
+
+    $("#jobList").addEventListener("click", async (event) => {
+        const card = event.target.closest("[data-job]"), button = event.target.closest("[data-job-action]");
+        if (!card || !button) return;
+        const job = state.jobs.get(card.dataset.job), actor = state.users.find((user) => user.localId === $("#jobActor").value) || currentUser();
+        if (!job) return;
+        const action = button.dataset.jobAction;
+        if (action === "edit") return editJob(job);
+        if (action === "locate") {
+            const point = coordinate(job.from); if (point) state.map.flyTo({center:[point[1],point[0]],zoom:15}); return;
+        }
+        if (action === "assign-selected") {
+            const driver = currentUser();
+            if (!driver) return toast("Select a driver user first", "error");
+            return jobAction("assign", job, actor, {assignedDriverId:driver.id});
+        }
+        if (action === "assign-candidate") return jobAction("assign", job, actor, {assignedDriverId:button.dataset.driver});
+        if (action === "start") return jobAction("start", job, actor, job.vehicleId ? {vehicleId:job.vehicleId} : {});
+        return jobAction(action, job, actor);
+    });
+
+    setDefaultDueDate();
+    initMap();
+    renderAll();
+    log("Simulator ready. Add a user to begin.", "ok");
+    if (new URL(apiBase(), location.href).origin !== location.origin) {
+        toast("Use a same-origin reverse proxy so browser session cookies reach the API", "error");
+        log("API origin differs from page origin; cookie auth may be blocked. A same-origin reverse proxy is recommended.", "error");
+    }
+    </script>
+</body>
+</html>
