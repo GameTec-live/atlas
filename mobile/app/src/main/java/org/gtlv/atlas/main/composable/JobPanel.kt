@@ -111,14 +111,12 @@ private fun CollapsedJobs(
     onToggleExpanded: () -> Unit
 ) {
     val nextJob = state.queuedJobs.firstOrNull()
-    val hasQueuedJobs = state.queuedJobs.isNotEmpty()
 
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(
-                    enabled = hasQueuedJobs,
                     onClick = onToggleExpanded
                 )
                 .padding(
@@ -158,13 +156,11 @@ private fun CollapsedJobs(
                 )
             }
 
-            if (hasQueuedJobs) {
-                Icon(
-                    imageVector = Icons.Default.ExpandLess,
-                    contentDescription = "Show assigned jobs",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
+            Icon(
+                imageVector = Icons.Default.ExpandLess,
+                contentDescription = "Show assigned jobs",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
         }
 
         HorizontalDivider()
@@ -224,7 +220,9 @@ private fun ExpandedJobs(
                 text = stringResource(
                     R.string.job_panel_no_jobs
                 ),
-                modifier = Modifier.padding(12.dp)
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(12.dp)
             )
         } else {
             LazyColumn(

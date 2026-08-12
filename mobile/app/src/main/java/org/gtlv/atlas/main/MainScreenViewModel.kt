@@ -96,17 +96,11 @@ class MainScreenViewModel(
     }
 
     fun toggleJobList() {
-        _uiState.update { state ->
-            if (state.queuedJobs.isEmpty()) {
-                state.copy(
-                    isJobListExpanded = false
-                )
-            } else {
-                state.copy(
-                    isJobListExpanded =
-                        !state.isJobListExpanded
-                )
-            }
+        _uiState.update {
+            it.copy(
+                isJobListExpanded =
+                    !it.isJobListExpanded
+            )
         }
     }
 }
