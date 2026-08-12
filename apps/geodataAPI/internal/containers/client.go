@@ -1,10 +1,12 @@
 package containers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -101,9 +103,107 @@ func (c *Client) Restart(ctx context.Context) error {
 	}
 	for _, container := range targets {
 		consumer := container.Labels[consumerLabel]
+		if consumer == "router" {
+			if err := c.removeRouterTiles(ctx, container.ID); err != nil {
+				return fmt.Errorf("remove stale tiles from router container %s: %w", displayName(container), err)
+			}
+		}
 		if err := c.restart(ctx, container.ID); err != nil {
 			return fmt.Errorf("restart %s container %s: %w", consumer, displayName(container), err)
 		}
+	}
+	return nil
+}
+
+func (c *Client) removeRouterTiles(ctx context.Context, id string) error {
+	createBody, err := json.Marshal(struct {
+		AttachStdout bool     `json:"AttachStdout"`
+		AttachStderr bool     `json:"AttachStderr"`
+		Cmd          []string `json:"Cmd"`
+	}{
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd: []string{
+			"rm", "-rf",
+			"/custom_files/valhalla_tiles.tar",
+			"/custom_files/valhalla_tiles",
+		},
+	})
+	if err != nil {
+		return err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://container-runtime/containers/"+url.PathEscape(id)+"/exec", bytes.NewReader(createBody))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := c.http.Do(request)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != http.StatusCreated {
+		response.Body.Close()
+		return fmt.Errorf("create cleanup command: runtime returned HTTP %d", response.StatusCode)
+	}
+	var created struct {
+		ID string `json:"Id"`
+	}
+	decodeErr := json.NewDecoder(response.Body).Decode(&created)
+	closeErr := response.Body.Close()
+	if decodeErr != nil || closeErr != nil {
+		if decodeErr != nil {
+			decodeErr = fmt.Errorf("decode cleanup command: %w", decodeErr)
+		}
+		return errors.Join(decodeErr, closeErr)
+	}
+	if created.ID == "" {
+		return errors.New("runtime returned an empty cleanup command ID")
+	}
+
+	startBody := bytes.NewBufferString(`{"Detach":false,"Tty":false}`)
+	request, err = http.NewRequestWithContext(ctx, http.MethodPost, "http://container-runtime/exec/"+url.PathEscape(created.ID)+"/start", startBody)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err = c.http.Do(request)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != http.StatusOK {
+		response.Body.Close()
+		return fmt.Errorf("start cleanup command: runtime returned HTTP %d", response.StatusCode)
+	}
+	_, copyErr := io.Copy(io.Discard, response.Body)
+	closeErr = response.Body.Close()
+	if copyErr != nil || closeErr != nil {
+		return errors.Join(copyErr, closeErr)
+	}
+
+	request, err = http.NewRequestWithContext(ctx, http.MethodGet, "http://container-runtime/exec/"+url.PathEscape(created.ID)+"/json", nil)
+	if err != nil {
+		return err
+	}
+	response, err = c.http.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("inspect cleanup command: runtime returned HTTP %d", response.StatusCode)
+	}
+	var result struct {
+		Running  bool `json:"Running"`
+		ExitCode int  `json:"ExitCode"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return fmt.Errorf("decode cleanup result: %w", err)
+	}
+	if result.Running {
+		return errors.New("cleanup command is still running")
+	}
+	if result.ExitCode != 0 {
+		return fmt.Errorf("cleanup command exited with status %d", result.ExitCode)
 	}
 	return nil
 }

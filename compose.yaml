@@ -25,7 +25,7 @@ services:
     labels:
       live.gametec.atlas.geodata-consumer: router
     volumes:
-      - router-data:/data
+      - router-data:/custom_files
       - geodata:/pbf:ro
     restart: unless-stopped
 

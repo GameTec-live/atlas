@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -28,8 +27,9 @@ func TestRestartFindsLabeledConsumers(t *testing.T) {
 	}
 
 	client := NewClient(socketPath, time.Second)
-	var restarted []string
+	var requests []string
 	client.http.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests = append(requests, request.Method+" "+request.URL.Path)
 		if request.Method == http.MethodGet && request.URL.Path == "/containers/json" {
 			filters, err := url.QueryUnescape(request.URL.Query().Get("filters"))
 			if err != nil {
@@ -48,8 +48,30 @@ func TestRestartFindsLabeledConsumers(t *testing.T) {
 				{"Id":"map-id","Names":["/atlas-map-1"],"Labels":{}}
 			]`), nil
 		}
-		if request.Method == http.MethodPost {
-			restarted = append(restarted, request.URL.Path)
+		if request.Method == http.MethodPost && request.URL.Path == "/containers/router-id/exec" {
+			var command struct {
+				Cmd []string `json:"Cmd"`
+			}
+			if err := json.NewDecoder(request.Body).Decode(&command); err != nil {
+				t.Fatal(err)
+			}
+			want := []string{
+				"rm", "-rf",
+				"/custom_files/valhalla_tiles.tar",
+				"/custom_files/valhalla_tiles",
+			}
+			if !reflect.DeepEqual(command.Cmd, want) {
+				t.Fatalf("cleanup command = %#v, want %#v", command.Cmd, want)
+			}
+			return response(http.StatusCreated, `{"Id":"cleanup-id"}`), nil
+		}
+		if request.Method == http.MethodPost && request.URL.Path == "/exec/cleanup-id/start" {
+			return response(http.StatusOK, ""), nil
+		}
+		if request.Method == http.MethodGet && request.URL.Path == "/exec/cleanup-id/json" {
+			return response(http.StatusOK, `{"Running":false,"ExitCode":0}`), nil
+		}
+		if request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/restart") {
 			return response(http.StatusNoContent, ""), nil
 		}
 		t.Fatalf("unexpected runtime request: %s %s", request.Method, request.URL.String())
@@ -59,10 +81,16 @@ func TestRestartFindsLabeledConsumers(t *testing.T) {
 	if err := client.Restart(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	sort.Strings(restarted)
-	want := []string{"/containers/geocoder-id/restart", "/containers/router-id/restart"}
-	if !reflect.DeepEqual(restarted, want) {
-		t.Fatalf("restart requests = %#v, want %#v", restarted, want)
+	want := []string{
+		"GET /containers/json",
+		"POST /containers/router-id/exec",
+		"POST /exec/cleanup-id/start",
+		"GET /exec/cleanup-id/json",
+		"POST /containers/router-id/restart",
+		"POST /containers/geocoder-id/restart",
+	}
+	if !reflect.DeepEqual(requests, want) {
+		t.Fatalf("runtime requests = %#v, want %#v", requests, want)
 	}
 }
 

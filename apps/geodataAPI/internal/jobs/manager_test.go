@@ -143,7 +143,10 @@ func TestFullPipelineMergesAndRebuildsMap(t *testing.T) {
 	if !strings.Contains(calls, "osmium merge") {
 		t.Fatalf("second install did not merge PBFs:\n%s", calls)
 	}
-	if !strings.Contains(calls, "packgen build --source openstreetmap") || !strings.Contains(calls, "--include-roads=false") {
+	if !strings.Contains(calls, "osmium time-filter") || !strings.Contains(calls, "--output-format=pbf,history=true") {
+		t.Fatalf("second install did not collapse overlapping PBF versions:\n%s", calls)
+	}
+	if !strings.Contains(calls, "packgen build --source openstreetmap --format pbf") || !strings.Contains(calls, "--include-roads=false") {
 		t.Fatalf("first install did not exclude roads from its geocoder pack:\n%s", calls)
 	}
 	installed, found := dataStore.Dataset("one")
@@ -382,9 +385,21 @@ func TestInstallRestoresSharedMapWhenDatasetPersistenceFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	stateBlocker := filepath.Join(root, ".geodata", "state.json.tmp")
+	var stagedPBFFiles []string
 	runner := &testRunner{}
 	runner.afterRun = func(name string) {
 		if name == "java" {
+			if err := filepath.WalkDir(filepath.Join(root, ".geodata"), func(path string, entry os.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+				if !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".pbf") {
+					stagedPBFFiles = append(stagedPBFFiles, path)
+				}
+				return nil
+			}); err != nil {
+				t.Errorf("inspect staged files: %v", err)
+			}
 			if err := os.Mkdir(stateBlocker, 0o755); err != nil {
 				t.Errorf("block state persistence: %v", err)
 			}
@@ -403,6 +418,9 @@ func TestInstallRestoresSharedMapWhenDatasetPersistenceFails(t *testing.T) {
 
 	if err := manager.runInstall(context.Background(), &job); err == nil {
 		t.Fatal("install unexpectedly succeeded")
+	}
+	if len(stagedPBFFiles) != 0 {
+		t.Fatalf("staged PBFs must not use the .pbf extension: %v", stagedPBFFiles)
 	}
 	if _, found := dataStore.Dataset("new"); found {
 		t.Fatal("failed install remained registered in memory")

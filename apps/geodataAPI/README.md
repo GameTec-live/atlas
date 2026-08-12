@@ -7,7 +7,7 @@ A small Gin service that downloads and manages OpenStreetMap data for Atlas. It 
 - Lists the current [Geofabrik](https://download.geofabrik.de/) download catalog, with name and parent filters.
 - Installs a catalog extract, a custom PBF URL, or a bounding-box dataset.
 - Generates a [geocoder-go](https://github.com/GameTec-live/geocoder-go) SQLite pack for every dataset with `packgen`.
-- Merges installed PBFs with [osmium](https://osmcode.org/osmium-tool/manual.html) and builds the single PMTiles archive with [Planetiler](https://github.com/onthegomap/planetiler).
+- Merges installed PBFs with [osmium](https://osmcode.org/osmium-tool/manual.html), collapses overlapping object versions, and builds the single PMTiles archive with [Planetiler](https://github.com/onthegomap/planetiler).
 - Persists installed datasets and job history across restarts.
 - Reports job progress over REST and WebSocket.
 - Deletes dataset-owned files and removes/rebuilds the shared map archive.
@@ -156,7 +156,7 @@ curl -X POST http://localhost:8080/api/v1/datasets \
 
 `excludeRoads` defaults to `false`. Set it to `true` to pass `--include-roads=false` to geocoder-go's `packgen`, substantially reducing the SQLite pack size when named-road results are not needed. It affects only the geocoder pack; routing PBF and PMTiles generation remain unchanged. The selected value is stored with the dataset and returned by dataset listings.
 
-Install builds and inspects the PBF, geocoder pack, and combined map in the job directory before publishing them together. If artifact publication or dataset-state persistence fails, all three files are rolled back and an existing `map.pmtiles` is restored.
+Install builds and inspects the PBF, geocoder pack, and combined map in the job directory before publishing them together. Staged PBFs use extensionless names so recursive consumers cannot mistake incomplete files below `.geodata` for installed data. If artifact publication or dataset-state persistence fails, all three files are rolled back and an existing `map.pmtiles` is restored.
 
 Coordinates are WGS84 longitude/latitude. The service chooses the smallest Geofabrik extract whose published envelope covers the box, downloads it, and invokes `osmium extract`. The optional `id` becomes the stable dataset/file name.
 
@@ -207,7 +207,7 @@ Deletion is also a job. It first builds a replacement `map.pmtiles` from the rem
 - The manifest is `data/.geodata/state.json`. Do not edit it while the service is running.
 - On restart, jobs that were queued or running are retained in history as failed/interrupted; partially built files live only under `.geodata/tmp` or use a `.part` suffix.
 - The manifest retains the newest 100 completed, failed, or cancelled jobs. Queued and running jobs are always retained in addition to that history limit.
-- Successful installs and deletions mark the consumer services for reload. Once no queued or running jobs remain, the service uses the mounted Docker-compatible socket to restart containers labeled `live.gametec.atlas.geodata-consumer=router` or `live.gametec.atlas.geodata-consumer=geocoder`. A missing socket disables this behavior; discovery or restart errors are logged and do not change the completed job result.
+- Successful installs and deletions mark the consumer services for reload. Once no queued or running jobs remain, the service uses the mounted Docker-compatible socket to restart containers labeled `live.gametec.atlas.geodata-consumer=router` or `live.gametec.atlas.geodata-consumer=geocoder`. Before restarting the router, it removes `/custom_files/valhalla_tiles.tar` and `/custom_files/valhalla_tiles` inside that container so Valhalla cannot reuse an incomplete graph and rebuilds its tiles from the current PBFs. A missing socket disables this behavior; discovery, cleanup, or restart errors are logged and do not change the completed job result.
 - The example Compose file mounts `${CONTAINER_SOCKET_PATH:-/var/run/docker.sock}`. This works with Docker and Podman's Docker-compatible API; set `CONTAINER_SOCKET_PATH` to a different host socket when needed. Podman's required `label=disable` security option is included. Because the API remains non-root, set `CONTAINER_SOCKET_GID` to the socket's numeric group ID if its group is not `0` (for example, `stat -c '%g' /var/run/docker.sock`). Mounting a container-runtime socket grants powerful control over the host and should only be used for this internal service on a trusted host.
 - OpenStreetMap-derived output remains subject to ODbL attribution requirements.
 

@@ -395,10 +395,10 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) error {
 	}
 	defer os.RemoveAll(workDir)
 
-	candidatePBF := filepath.Join(workDir, request.DatasetID+".osm.pbf")
+	candidatePBF := stagedPBFPath(workDir, "dataset")
 	downloadTarget := candidatePBF
 	if request.Bounds != nil {
-		downloadTarget = filepath.Join(workDir, "source.osm.pbf")
+		downloadTarget = stagedPBFPath(workDir, "source")
 	}
 	job.Stage = "downloading_pbf"
 	job.Progress = 0.02
@@ -414,7 +414,7 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) error {
 		job.Progress = 0.52
 		_ = m.saveAndPublish(*job)
 		bbox := fmt.Sprintf("%g,%g,%g,%g", request.Bounds.MinLongitude, request.Bounds.MinLatitude, request.Bounds.MaxLongitude, request.Bounds.MaxLatitude)
-		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, "extract", "--bbox", bbox, "--set-bounds", "--overwrite", "--output", candidatePBF, downloadTarget); err != nil {
+		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, "extract", "--bbox", bbox, "--set-bounds", "--overwrite", "--input-format=pbf", "--output-format=pbf", "--output", candidatePBF, downloadTarget); err != nil {
 			return fmt.Errorf("extract bounding box with osmium: %w", err)
 		}
 	}
@@ -510,9 +510,9 @@ func (m *Manager) runUpdate(ctx context.Context, job *model.Job) (bool, error) {
 	job.Stage = "checking_update"
 	job.Progress = 0.02
 	_ = m.saveAndPublish(*job)
-	downloadTarget := filepath.Join(workDir, "updated.osm.pbf")
+	downloadTarget := stagedPBFPath(workDir, "updated")
 	if dataset.Bounds != nil {
-		downloadTarget = filepath.Join(workDir, "source.osm.pbf")
+		downloadTarget = stagedPBFPath(workDir, "source")
 	}
 	version, changed, err := m.download(ctx, dataset.SourceURL, downloadTarget, job, sourceVersion{
 		ETag: dataset.SourceETag, LastModified: dataset.SourceLastModified,
@@ -537,9 +537,9 @@ func (m *Manager) runUpdate(ctx context.Context, job *model.Job) (bool, error) {
 		job.Stage = "extracting_bbox"
 		job.Progress = 0.52
 		_ = m.saveAndPublish(*job)
-		candidatePBF = filepath.Join(workDir, dataset.ID+".osm.pbf")
+		candidatePBF = stagedPBFPath(workDir, "dataset")
 		bbox := fmt.Sprintf("%g,%g,%g,%g", dataset.Bounds.MinLongitude, dataset.Bounds.MinLatitude, dataset.Bounds.MaxLongitude, dataset.Bounds.MaxLatitude)
-		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, "extract", "--bbox", bbox, "--set-bounds", "--overwrite", "--output", candidatePBF, downloadTarget); err != nil {
+		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, "extract", "--bbox", bbox, "--set-bounds", "--overwrite", "--input-format=pbf", "--output-format=pbf", "--output", candidatePBF, downloadTarget); err != nil {
 			return false, fmt.Errorf("extract bounding box with osmium: %w", err)
 		}
 	}
@@ -734,7 +734,7 @@ func (m *Manager) download(ctx context.Context, sourceURL, destination string, j
 }
 
 func (m *Manager) buildGeocoder(ctx context.Context, pbfPath, output, countryCode string, excludeRoads bool) error {
-	args := []string{"build", "--source", "openstreetmap", "--output", output}
+	args := []string{"build", "--source", "openstreetmap", "--format", "pbf", "--output", output}
 	if countryCode != "" {
 		args = append(args, "--country", countryCode)
 	}
@@ -755,10 +755,17 @@ func (m *Manager) generateMap(ctx context.Context, workDir string, pbfs []string
 	sort.Strings(pbfs)
 	input := pbfs[0]
 	if len(pbfs) > 1 {
-		input = filepath.Join(workDir, "combined.osm.pbf")
-		args := append([]string{"merge", "--overwrite", "--output", input}, pbfs...)
+		mergedHistory := stagedPBFPath(workDir, "merged-history")
+		input = stagedPBFPath(workDir, "combined")
+		args := append([]string{"merge", "--overwrite", "--input-format=pbf", "--output-format=pbf,history=true", "--output", mergedHistory}, pbfs...)
 		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, args...); err != nil {
 			return "", fmt.Errorf("merge PBF files with osmium: %w", err)
+		}
+		// Country extracts can overlap and may come from different snapshot times.
+		// Merge preserves those versions, so collapse them before Planetiler, which
+		// requires each object ID to occur only once.
+		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, "time-filter", "--overwrite", "--input-format=pbf,history=true", "--output-format=pbf", "--output", input, mergedHistory); err != nil {
+			return "", fmt.Errorf("deduplicate merged PBF files with osmium: %w", err)
 		}
 	}
 	temporary := filepath.Join(workDir, "map.pmtiles")
@@ -768,6 +775,12 @@ func (m *Manager) generateMap(ctx context.Context, workDir string, pbfs []string
 		return "", fmt.Errorf("build PMTiles with Planetiler: %w", err)
 	}
 	return temporary, nil
+}
+
+// stagedPBFPath deliberately has no .pbf extension. Consumers may discover PBFs
+// recursively, so incomplete files below .geodata must not look installable.
+func stagedPBFPath(workDir, name string) string {
+	return filepath.Join(workDir, "pbf-"+name)
 }
 
 func datasetPBFs(root string, datasets []model.Dataset) []string {

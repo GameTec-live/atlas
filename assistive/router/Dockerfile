@@ -2,6 +2,8 @@
 # docker build --file assistive/router/Dockerfile --tag atlas-router .
 FROM ghcr.io/valhalla/valhalla-scripted:latest
 
+ENV server_threads=2
+
 ENTRYPOINT ["/bin/bash", "-c", "find /custom_files -maxdepth 1 -type l -name '*.pbf' -delete && if [[ -d /pbf ]]; then find /pbf -type f -name '*.pbf' -exec ln -sf -- {} /custom_files/ \\;; fi && exec /valhalla/scripts/docker-entrypoint.sh \"$@\"", "--"]
 CMD ["build_tiles"]
 
