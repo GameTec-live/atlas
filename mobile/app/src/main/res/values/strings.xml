@@ -43,4 +43,6 @@
     <string name="map_location_display_error">Your location could not be displayed on the map.</string>
     <string name="map_recenter_location">Return to current location</string>
     <string name="logout">Log out</string>
+    <string name="could_not_load_jobs">Could not load jobs</string>
+    <string name="jobList_Retry">Retry</string>
 </resources>
