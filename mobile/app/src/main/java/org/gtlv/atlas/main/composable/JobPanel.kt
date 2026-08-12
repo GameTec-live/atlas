@@ -1,6 +1,5 @@
 package org.gtlv.atlas.main.composable
 
-import android.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,7 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.Divider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,9 +25,11 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.gtlv.atlas.R
 import org.gtlv.atlas.main.MainScreenUiState
 import org.gtlv.core.job.Job
 
@@ -56,18 +56,9 @@ internal fun JobPanel(
         ) {
             when {
                 state.hasError -> {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(text = stringResource(org.gtlv.atlas.R.string.could_not_load_jobs))
-
-                        OutlinedButton(
-                            onClick = onRetry,
-                            modifier = Modifier.padding(top = 8.dp)
-                        ) {
-                            Text(text = stringResource(org.gtlv.atlas.R.string.jobList_Retry))
-                        }
-                    }
+                    JobError(
+                        onRetry = onRetry
+                    )
                 }
 
                 state.isJobListExpanded -> {
@@ -89,12 +80,37 @@ internal fun JobPanel(
 }
 
 @Composable
+private fun JobError(
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier.padding(16.dp)
+    ) {
+        Text(
+            text = stringResource(
+                R.string.job_panel_load_error
+            )
+        )
+
+        OutlinedButton(
+            onClick = onRetry,
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            Text(
+                text = stringResource(
+                    R.string.job_panel_retry
+                )
+            )
+        }
+    }
+}
+
+@Composable
 private fun CollapsedJobs(
     state: MainScreenUiState,
     onToggleExpanded: () -> Unit
 ) {
     val nextJob = state.queuedJobs.firstOrNull()
-
     val hasQueuedJobs = state.queuedJobs.isNotEmpty()
 
     Column {
@@ -117,15 +133,24 @@ private fun CollapsedJobs(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Next Job (${state.queuedJobs.size} in queue)",
+                    text = pluralStringResource(
+                        R.plurals.job_panel_next_job,
+                        count = state.queuedJobs.size,
+                        state.queuedJobs.size
+                    ),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
-                    text = nextJob?.let {
-                        "From: ${it.fromDisplayAddress()}"
-                    } ?: "No jobs in queue",
+                    text = nextJob?.let { job ->
+                        stringResource(
+                            R.string.job_panel_from,
+                            job.fromDisplayAddress()
+                        )
+                    } ?: stringResource(
+                        R.string.job_panel_no_jobs
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -133,7 +158,7 @@ private fun CollapsedJobs(
                 )
             }
 
-            if(hasQueuedJobs) {
+            if (hasQueuedJobs) {
                 Icon(
                     imageVector = Icons.Default.ExpandLess,
                     contentDescription = "Show assigned jobs",
@@ -144,32 +169,14 @@ private fun CollapsedJobs(
 
         HorizontalDivider()
 
-        Column(
+        CurrentJobSection(
+            currentJob = state.currentJob,
             modifier = Modifier.padding(
                 horizontal = 8.dp,
                 vertical = 5.dp
-            )
-        ) {
-            Text(
-                text = "Current Job",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            val currentJob = state.currentJob
-
-            Text(
-                text = if (currentJob == null) {
-                    "No current job"
-                } else {
-                    "From: ${currentJob.fromDisplayAddress()}"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+            ),
+            compact = true
+        )
     }
 }
 
@@ -179,8 +186,7 @@ private fun ExpandedJobs(
     onToggleExpanded: () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxHeight(0.75f)
+        modifier = Modifier.fillMaxHeight(0.75f)
     ) {
         Row(
             modifier = Modifier
@@ -189,16 +195,19 @@ private fun ExpandedJobs(
                     start = 12.dp,
                     end = 4.dp
                 ),
-            verticalAlignment =
-                Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Total: ${state.queuedJobs.size}",
-                style =
-                    MaterialTheme.typography.titleSmall
+                text = stringResource(
+                    R.string.job_panel_total_jobs,
+                    state.queuedJobs.size
+                ),
+                style = MaterialTheme.typography.titleSmall
             )
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(
+                modifier = Modifier.weight(1f)
+            )
 
             IconButton(
                 onClick = onToggleExpanded
@@ -212,7 +221,9 @@ private fun ExpandedJobs(
 
         if (state.queuedJobs.isEmpty()) {
             Text(
-                text = "No jobs in queue",
+                text = stringResource(
+                    R.string.job_panel_no_jobs
+                ),
                 modifier = Modifier.padding(12.dp)
             )
         } else {
@@ -224,36 +235,62 @@ private fun ExpandedJobs(
                     key = Job::id
                 ) { job ->
                     JobRow(job = job)
-                    Divider()
+                    HorizontalDivider()
                 }
             }
         }
 
-        Divider()
+        HorizontalDivider()
 
-        Column(
-            modifier = Modifier.padding(12.dp)
-        ) {
+        CurrentJobSection(
+            currentJob = state.currentJob,
+            modifier = Modifier.padding(12.dp),
+            compact = false
+        )
+    }
+}
+
+@Composable
+private fun CurrentJobSection(
+    currentJob: Job?,
+    modifier: Modifier = Modifier,
+    compact: Boolean
+) {
+    Column(
+        modifier = modifier
+    ) {
+        Text(
+            text = stringResource(
+                R.string.job_panel_current_job
+            ),
+            style = if (compact) {
+                MaterialTheme.typography.labelLarge
+            } else {
+                MaterialTheme.typography.titleSmall
+            },
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        if (currentJob == null) {
             Text(
-                text = "Current Job",
-                style =
-                    MaterialTheme.typography.titleSmall
+                text = stringResource(
+                    R.string.job_panel_no_current_job
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            AddressLine(
+                labelResource = R.string.job_panel_from,
+                address = currentJob.fromDisplayAddress(),
+                compact = compact
             )
 
-            val currentJob = state.currentJob
-
-            if (currentJob == null) {
-                Text(text = "No current Job")
-            } else {
-                Text(
-                    text =
-                        "From: ${currentJob.fromDisplayAddress()}"
-                )
-                Text(
-                    text =
-                        "To: ${currentJob.toDisplayAddress()}"
-                )
-            }
+            AddressLine(
+                labelResource = R.string.job_panel_to,
+                address = currentJob.toDisplayAddress(),
+                compact = compact
+            )
         }
     }
 }
@@ -265,28 +302,54 @@ private fun JobRow(
     Column(
         modifier = Modifier.padding(12.dp)
     ) {
-        Text(
-            text = "From: ${job.fromDisplayAddress()}"
+        AddressLine(
+            labelResource = R.string.job_panel_from,
+            address = job.fromDisplayAddress(),
+            compact = false
         )
 
-        Text(
-            text = "To: ${job.toDisplayAddress()}"
+        AddressLine(
+            labelResource = R.string.job_panel_to,
+            address = job.toDisplayAddress(),
+            compact = false
         )
     }
 }
 
+@Composable
+private fun AddressLine(
+    labelResource: Int,
+    address: String,
+    compact: Boolean
+) {
+    Text(
+        text = stringResource(
+            labelResource,
+            address
+        ),
+        style = if (compact) {
+            MaterialTheme.typography.bodySmall
+        } else {
+            MaterialTheme.typography.bodyMedium
+        },
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
+}
+
 private fun Job.fromDisplayAddress(): String {
     return fromAddress
-        ?: from?.let {
-            "${it.latitude}, ${it.longitude}"
+        ?: from?.let { coordinates ->
+            "${coordinates.latitude}, ${coordinates.longitude}"
         }
         ?: " "
 }
 
 private fun Job.toDisplayAddress(): String {
     return toAddress
-        ?: to?.let {
-            "${it.latitude}, ${it.longitude}"
+        ?: to?.let { coordinates ->
+            "${coordinates.latitude}, ${coordinates.longitude}"
         }
         ?: " "
 }
