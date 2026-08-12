@@ -23,6 +23,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.car.app)
     implementation(libs.google.play.services.location)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)

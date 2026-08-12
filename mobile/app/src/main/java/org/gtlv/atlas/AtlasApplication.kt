@@ -1,6 +1,13 @@
 package org.gtlv.atlas
 
 import android.app.Application
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import org.gtlv.core.location.CarAwareLocationProvider
+import org.gtlv.core.location.CarLocationProviderRegistry
+import org.gtlv.core.location.LocationProvider
+import org.gtlv.core.location.PhoneLocationProvider
 import org.gtlv.core.shift.ShiftSessionProvider
 import org.gtlv.core.network.NetworkClient
 import org.gtlv.core.repository.AuthRepositoryImpl
@@ -11,16 +18,42 @@ import org.gtlv.core.settings.DataStoreServerSettingsRepository
 import org.gtlv.core.settings.ServerSettingsProvider
 import org.gtlv.core.shift.DataStoreShiftSessionStore
 import org.gtlv.core.shift.ShiftSessionManager
-import org.gtlv.core.location.PhoneLocationProvider
-import org.gtlv.core.location.LocationProvider
 
-class AtlasApplication : Application(), ShiftSessionProvider, ServerSettingsProvider {
+class AtlasApplication : Application(), ShiftSessionProvider,
+    ServerSettingsProvider, CarLocationProviderRegistry {
 
-    val locationProvider: LocationProvider by lazy {
+    private val applicationScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate
+    )
+
+    private val phoneLocationProvider: LocationProvider by lazy {
         PhoneLocationProvider(
             context = applicationContext
         )
     }
+
+    private val carAwareLocationProvider by lazy {
+        CarAwareLocationProvider(
+            phoneLocationProvider = phoneLocationProvider,
+            scope = applicationScope
+        )
+    }
+
+    val locationProvider: LocationProvider
+        get() = carAwareLocationProvider
+
+    override fun registerCarLocationProvider(
+        provider: LocationProvider
+    ) {
+        carAwareLocationProvider.registerCarLocationProvider(provider)
+    }
+
+    override fun unregisterCarLocationProvider(
+        provider: LocationProvider
+    ) {
+        carAwareLocationProvider.unregisterCarLocationProvider(provider)
+    }
+
     val networkClient by lazy {
         NetworkClient()
     }
