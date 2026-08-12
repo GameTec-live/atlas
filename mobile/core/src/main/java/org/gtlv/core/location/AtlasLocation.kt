@@ -1,5 +1,6 @@
 package org.gtlv.core.location
 
+
 data class AtlasLocation(
     val latitude: Double,
     val longitude: Double,

@@ -24,6 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
 import org.gtlv.atlas.map.AtlasMap
+import org.gtlv.atlas.map.MapConfiguration
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
 
@@ -33,8 +34,13 @@ internal fun MainScreen(
     role: ShiftRole,
     locationState: LocationState,
     onLogout: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    serverAddress: String
 ) {
+    val styleUrl = MapConfiguration.createStyleUrl(
+        serverAddress = serverAddress
+    )
+
     var recenterRequestId by remember {
         mutableIntStateOf(0)
     }
@@ -45,6 +51,7 @@ internal fun MainScreen(
         AtlasMap(
             locationState = locationState,
             recenterRequestId = recenterRequestId,
+            styleUrl = styleUrl,
             modifier = Modifier.fillMaxSize()
         )
 

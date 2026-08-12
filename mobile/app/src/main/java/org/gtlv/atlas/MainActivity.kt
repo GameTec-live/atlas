@@ -151,14 +151,11 @@ class MainActivity : ComponentActivity() {
                                         atlasApplication.locationProvider
                                 ) { locationState ->
                                     AuthenticatedNavHost(
-                                        userName =
-                                            currentSession.userName,
-                                        role =
-                                            currentShift.session.role,
-                                        locationState =
-                                            locationState,
-                                        onLogout =
-                                            loginViewModel::logout
+                                        userName = currentSession.userName,
+                                        role = currentShift.session.role,
+                                        serverAddress = loginState.serverAddress,
+                                        locationState = locationState,
+                                        onLogout = loginViewModel::logout
                                     )
                                 }
                             }
