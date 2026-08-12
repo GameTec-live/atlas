@@ -2,6 +2,7 @@ package org.gtlv.atlas.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,11 +21,33 @@ class MainScreenViewModel(
     val uiState: StateFlow<MainScreenUiState> =
         _uiState.asStateFlow()
 
-    private var loadedUserId: String? = null
+    private var activeUserId: String? = null
+    private var refreshJob: Job? = null
+    private var sessionGeneration: Long = 0L
 
+    fun loadJobsForUser(userId: String) {
+        if (activeUserId == userId) {
+            return
+        }
+
+        refreshJob?.cancel()
+        sessionGeneration += 1
+        activeUserId = userId
+
+        _uiState.value = MainScreenUiState(
+            isLoading = true
+        )
+
+        refresh()
+    }
 
     fun refresh() {
-        viewModelScope.launch {
+        val requestedUserId = activeUserId ?: return
+        val requestedGeneration = sessionGeneration
+
+        refreshJob?.cancel()
+
+        refreshJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
                     isLoading = true,
@@ -32,7 +55,17 @@ class MainScreenViewModel(
                 )
             }
 
-            when (val result = jobRepository.getJobs()) {
+            val result = jobRepository.getJobs()
+
+            // Ignore results from a previous authenticated session.
+            if (
+                activeUserId != requestedUserId ||
+                sessionGeneration != requestedGeneration
+            ) {
+                return@launch
+            }
+
+            when (result) {
                 is JobsResult.Success -> {
                     _uiState.update {
                         it.copy(
@@ -59,10 +92,24 @@ class MainScreenViewModel(
         }
     }
 
+    fun clearJobs() {
+        sessionGeneration += 1
+        activeUserId = null
+
+        refreshJob?.cancel()
+        refreshJob = null
+
+        _uiState.value = MainScreenUiState(
+            isLoading = false
+        )
+    }
+
     fun toggleJobList() {
         _uiState.update { state ->
             if (state.queuedJobs.isEmpty()) {
-                state.copy(isJobListExpanded = false)
+                state.copy(
+                    isJobListExpanded = false
+                )
             } else {
                 state.copy(
                     isJobListExpanded =
@@ -72,24 +119,8 @@ class MainScreenViewModel(
         }
     }
 
-    fun loadJobsForUser(userId: String) {
-        if (loadedUserId == userId) {
-            return
-        }
-
-        loadedUserId = userId
-
-        _uiState.value = MainScreenUiState(
-            isLoading = true
-        )
-
-        refresh()
-    }
-
-    fun clearJobs() {
-        loadedUserId = null
-        _uiState.value = MainScreenUiState(
-            isLoading = false
-        )
+    override fun onCleared() {
+        refreshJob?.cancel()
+        super.onCleared()
     }
 }
