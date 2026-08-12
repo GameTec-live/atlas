@@ -128,11 +128,6 @@ internal fun AtlasMap(
         }
     }
 
-    /*
-     * This is deliberately not rememberSaveable. Whenever a new
-     * map screen is created after login or app startup, the first
-     * available location should center and zoom the camera.
-     */
     var hasInitiallyCentered by rememberSaveable {
         mutableStateOf(false)
     }
