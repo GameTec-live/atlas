@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +47,8 @@ import org.maplibre.android.maps.Style
 internal fun AtlasMap(
     locationState: LocationState,
     recenterRequestId: Int,
+    isFollowingLocation: Boolean,
+    onUserCameraMove: () -> Unit,
     styleUrl: String,
     modifier: Modifier = Modifier
 ) {
@@ -58,7 +61,9 @@ internal fun AtlasMap(
         stringResource(R.string.map_location_display_error)
 
     var loadState by remember {
-        mutableStateOf<MapLoadState>(MapLoadState.Loading)
+        mutableStateOf<MapLoadState>(
+            MapLoadState.Loading
+        )
     }
 
     var readyMap by remember {
@@ -66,19 +71,42 @@ internal fun AtlasMap(
     }
 
     /*
-     * These values preserve the camera after rotation. They are also
-     * updated whenever the user manually moves the map.
+     * This is deliberately not rememberSaveable. Whenever a new
+     * map screen is created after login or app startup, the first
+     * available location should center and zoom the camera.
+     */
+    var hasInitiallyCentered by remember {
+        mutableStateOf(false)
+    }
+
+    /*
+     * The MapLibre listener is registered outside normal
+     * recomposition. This ensures that it always calls the latest
+     * callback supplied by MainScreen.
+     */
+    val currentOnUserCameraMove by rememberUpdatedState(
+        onUserCameraMove
+    )
+
+    /*
+     * These values preserve the camera after configuration changes.
      */
     var savedLatitude by rememberSaveable {
-        mutableDoubleStateOf(MapConfiguration.INITIAL_LATITUDE)
+        mutableDoubleStateOf(
+            MapConfiguration.INITIAL_LATITUDE
+        )
     }
 
     var savedLongitude by rememberSaveable {
-        mutableDoubleStateOf(MapConfiguration.INITIAL_LONGITUDE)
+        mutableDoubleStateOf(
+            MapConfiguration.INITIAL_LONGITUDE
+        )
     }
 
     var savedZoom by rememberSaveable {
-        mutableDoubleStateOf(MapConfiguration.INITIAL_ZOOM)
+        mutableDoubleStateOf(
+            MapConfiguration.INITIAL_ZOOM
+        )
     }
 
     var savedBearing by rememberSaveable {
@@ -87,10 +115,6 @@ internal fun AtlasMap(
 
     var savedTilt by rememberSaveable {
         mutableDoubleStateOf(0.0)
-    }
-
-    var isFollowingLocation by rememberSaveable {
-        mutableStateOf(true)
     }
 
     val initialCameraPosition = CameraPosition.Builder()
@@ -151,7 +175,9 @@ internal fun AtlasMap(
                     map.locationComponent
                         .isLocationComponentEnabled = true
 
-                    // Manual following keeps pan and zoom gestures enabled.
+                    /*
+                     * The app controls camera following manually.
+                     */
                     map.locationComponent.cameraMode =
                         CameraMode.NONE
 
@@ -187,7 +213,11 @@ internal fun AtlasMap(
                             .OnCameraMoveStartedListener
                             .REASON_API_GESTURE
                     ) {
-                        isFollowingLocation = false
+                        /*
+                         * Only user interaction stops camera
+                         * following. Programmatic movement does not.
+                         */
+                        currentOnUserCameraMove()
                     }
                 }
 
@@ -198,16 +228,29 @@ internal fun AtlasMap(
     }
 
     val availableLocation =
-        (locationState as? LocationState.Available)?.location
+        (locationState as? LocationState.Available)
+            ?.location
 
-    // Every update moves the puck; the camera moves only while following.
+    /*
+     * Every location update moves the puck.
+     *
+     * The first available location also uses the same center and
+     * zoom operation as the recenter button. Later updates follow
+     * the puck without resetting the zoom.
+     *
+     * After the user moves the camera, isFollowingLocation becomes
+     * false. The puck continues moving, but the camera stays where
+     * the user placed it.
+     */
     LaunchedEffect(
         readyMap,
         availableLocation
     ) {
-        val map = readyMap ?: return@LaunchedEffect
-        val location =
-            availableLocation ?: return@LaunchedEffect
+        val map = readyMap
+            ?: return@LaunchedEffect
+
+        val location = availableLocation
+            ?: return@LaunchedEffect
 
         runCatching {
             map.locationComponent.forceLocationUpdate(
@@ -216,13 +259,19 @@ internal fun AtlasMap(
         }
 
         if (isFollowingLocation) {
-            map.followLocation(location)
+            if (!hasInitiallyCentered) {
+                hasInitiallyCentered = true
+                map.centerOnLocation(location)
+            } else {
+                map.followLocation(location)
+            }
         }
     }
 
     /*
-     * Camera movement caused by the recenter button. Location updates
-     * themselves do not trigger this effect.
+     * Pressing the recenter button centers and zooms the camera.
+     * MainScreen also changes isFollowingLocation to true, so future
+     * location updates continue following the puck.
      */
     LaunchedEffect(
         readyMap,
@@ -232,11 +281,13 @@ internal fun AtlasMap(
             return@LaunchedEffect
         }
 
-        val map = readyMap ?: return@LaunchedEffect
-        val location =
-            availableLocation ?: return@LaunchedEffect
+        val map = readyMap
+            ?: return@LaunchedEffect
 
-        isFollowingLocation = true
+        val location = availableLocation
+            ?: return@LaunchedEffect
+
+        hasInitiallyCentered = true
         map.centerOnLocation(location)
     }
 
@@ -251,7 +302,9 @@ internal fun AtlasMap(
         when (val state = loadState) {
             MapLoadState.Loading -> {
                 CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
+                    modifier = Modifier.align(
+                        Alignment.Center
+                    )
                 )
             }
 
@@ -259,13 +312,17 @@ internal fun AtlasMap(
 
             is MapLoadState.Error -> {
                 Surface(
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier.align(
+                        Alignment.Center
+                    ),
                     color =
                         MaterialTheme.colorScheme.errorContainer,
                     contentColor =
                         MaterialTheme.colorScheme.onErrorContainer
                 ) {
-                    Text(text = state.message)
+                    Text(
+                        text = state.message
+                    )
                 }
             }
         }
@@ -286,15 +343,31 @@ private fun MapLibreMap.centerOnLocation(
     )
 }
 
+private fun MapLibreMap.followLocation(
+    location: AtlasLocation
+) {
+    animateCamera(
+        CameraUpdateFactory.newLatLng(
+            LatLng(
+                location.latitude,
+                location.longitude
+            )
+        )
+    )
+}
+
 @Composable
 private fun rememberMapViewWithLifecycle(
     initialCameraPosition: CameraPosition
 ): MapView {
     val context = LocalContext.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val lifecycle =
+        LocalLifecycleOwner.current.lifecycle
 
     val mapView = remember {
-        MapLibre.getInstance(context.applicationContext)
+        MapLibre.getInstance(
+            context.applicationContext
+        )
 
         val options = MapLibreMapOptions
             .createFromAttributes(context)
@@ -376,17 +449,4 @@ private fun rememberMapViewWithLifecycle(
     }
 
     return mapView
-}
-
-private fun MapLibreMap.followLocation(
-    location: AtlasLocation
-) {
-    animateCamera(
-        CameraUpdateFactory.newLatLng(
-            LatLng(
-                location.latitude,
-                location.longitude
-            )
-        )
-    )
 }

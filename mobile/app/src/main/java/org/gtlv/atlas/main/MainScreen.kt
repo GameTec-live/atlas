@@ -35,6 +35,8 @@ import org.gtlv.atlas.map.AtlasMap
 import org.gtlv.atlas.map.MapConfiguration
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 
 @Composable
 internal fun MainScreen(
@@ -51,6 +53,10 @@ internal fun MainScreen(
     val styleUrl = MapConfiguration.createStyleUrl(
         serverAddress = serverAddress
     )
+
+    var isFollowingLocation by rememberSaveable {
+        mutableStateOf(true)
+    }
 
     var recenterRequestId by remember {
         mutableIntStateOf(0)
@@ -70,6 +76,10 @@ internal fun MainScreen(
         AtlasMap(
             locationState = locationState,
             recenterRequestId = recenterRequestId,
+            isFollowingLocation = isFollowingLocation,
+            onUserCameraMove = {
+                isFollowingLocation = false
+            },
             styleUrl = styleUrl,
             modifier = Modifier.fillMaxSize()
         )
@@ -91,13 +101,17 @@ internal fun MainScreen(
                     )
             )
 
-            if (locationState is LocationState.Available) {
+            if (
+                locationState is LocationState.Available &&
+                !isFollowingLocation
+            ) {
                 FloatingActionButton(
                     onClick = {
+                        isFollowingLocation = true
                         recenterRequestId += 1
                     },
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
+                        .align(Alignment.TopStart)
                         .padding(16.dp)
                 ) {
                     Icon(
