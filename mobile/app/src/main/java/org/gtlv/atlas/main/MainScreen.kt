@@ -1,5 +1,6 @@
 package org.gtlv.atlas.main
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -57,6 +58,10 @@ internal fun MainScreen(
 
     var isProfileOpen by rememberSaveable(userName) {
         mutableStateOf(false)
+    }
+
+    BackHandler(enabled = isProfileOpen) {
+        isProfileOpen = false
     }
 
     Box(
