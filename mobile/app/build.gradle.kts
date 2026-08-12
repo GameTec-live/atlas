@@ -52,6 +52,7 @@ dependencies {
     implementation(project(":core"))
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-runtime-compose")
+    implementation(libs.androidx.material3)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.okhttp)
     implementation(platform(libs.androidx.compose.bom))

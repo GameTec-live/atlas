@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
+import org.gtlv.atlas.main.composable.JobPanel
 import org.gtlv.atlas.map.AtlasMap
 import org.gtlv.atlas.map.MapConfiguration
 import org.gtlv.core.location.LocationState
@@ -35,6 +36,9 @@ internal fun MainScreen(
     locationState: LocationState,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
+    jobState: MainScreenUiState,
+    onToggleJobList: () -> Unit,
+    onRetryJobs: () -> Unit,
     serverAddress: String
 ) {
     val styleUrl = MapConfiguration.createStyleUrl(
@@ -67,6 +71,15 @@ internal fun MainScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(16.dp)
+            )
+
+            JobPanel(
+                state = jobState,
+                onToggleExpanded = onToggleJobList,
+                onRetry = onRetryJobs,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 8.dp, bottom = 8.dp)
             )
 
             if (locationState is LocationState.Available) {
