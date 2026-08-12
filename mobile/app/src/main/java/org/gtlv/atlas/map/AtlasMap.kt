@@ -41,6 +41,14 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import android.content.res.Configuration
+import android.view.Gravity
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.dp
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -53,6 +61,39 @@ internal fun AtlasMap(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+
+    val isLandscape =
+        configuration.orientation ==
+                Configuration.ORIENTATION_LANDSCAPE
+
+    val safeLeft = WindowInsets.safeDrawing.getLeft(
+        density = density,
+        layoutDirection = layoutDirection
+    )
+
+    val safeTop = WindowInsets.safeDrawing.getTop(
+        density = density
+    )
+
+    val compassLeftMargin = safeLeft + with(density) {
+        if (isLandscape) {
+            84.dp.roundToPx()
+        } else {
+            20.dp.roundToPx()
+        }
+    }
+
+    val compassTopMargin = safeTop + with(density) {
+        if (isLandscape) {
+            20.dp.roundToPx()
+        } else {
+            84.dp.roundToPx()
+        }
+    }
 
     val defaultMapError =
         stringResource(R.string.map_load_error)
@@ -68,6 +109,23 @@ internal fun AtlasMap(
 
     var readyMap by remember {
         mutableStateOf<MapLibreMap?>(null)
+    }
+
+    LaunchedEffect(
+        readyMap,
+        compassLeftMargin,
+        compassTopMargin
+    ) {
+        readyMap?.uiSettings?.apply {
+            compassGravity = Gravity.TOP or Gravity.START
+
+            setCompassMargins(
+                compassLeftMargin,
+                compassTopMargin,
+                0,
+                0
+            )
+        }
     }
 
     /*
