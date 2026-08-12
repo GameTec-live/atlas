@@ -31,6 +31,9 @@ func TestRestartFindsLabeledConsumers(t *testing.T) {
 	client.http.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		requests = append(requests, request.Method+" "+request.URL.Path)
 		if request.Method == http.MethodGet && request.URL.Path == "/containers/json" {
+			if request.URL.Query().Has("all") {
+				t.Fatal("consumer discovery must not include stopped containers")
+			}
 			filters, err := url.QueryUnescape(request.URL.Query().Get("filters"))
 			if err != nil {
 				t.Fatal(err)
@@ -45,6 +48,7 @@ func TestRestartFindsLabeledConsumers(t *testing.T) {
 			return response(http.StatusOK, `[
 				{"Id":"router-id","Names":["/atlas-router-1"],"Labels":{"live.gametec.atlas.geodata-consumer":"router"}},
 				{"Id":"geocoder-id","Names":["/atlas-geocoder-1"],"Labels":{"live.gametec.atlas.geodata-consumer":"geocoder"}},
+				{"Id":"other-id","Names":["/unrelated"],"Labels":{"live.gametec.atlas.geodata-consumer":"other"}},
 				{"Id":"map-id","Names":["/atlas-map-1"],"Labels":{}}
 			]`), nil
 		}
@@ -94,13 +98,30 @@ func TestRestartFindsLabeledConsumers(t *testing.T) {
 	}
 }
 
-func TestRestartIsDisabledWhenSocketIsAbsent(t *testing.T) {
+func TestRestartFailsWhenSocketIsAbsent(t *testing.T) {
 	client := NewClient(filepath.Join(t.TempDir(), "missing.sock"), time.Second)
 	client.http.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		t.Fatalf("unexpected runtime request: %s", request.URL)
 		return nil, nil
 	})
-	if err := client.Restart(context.Background()); err != nil {
+	if err := client.Restart(context.Background()); err == nil {
+		t.Fatal("restart unexpectedly succeeded")
+	}
+}
+
+func TestPingChecksContainerRuntime(t *testing.T) {
+	socketPath := filepath.Join(t.TempDir(), "docker.sock")
+	if err := os.WriteFile(socketPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	client := NewClient(socketPath, time.Second)
+	client.http.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodGet || request.URL.Path != "/_ping" {
+			t.Fatalf("request = %s %s", request.Method, request.URL.Path)
+		}
+		return response(http.StatusOK, "OK"), nil
+	})
+	if err := client.Ping(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 }

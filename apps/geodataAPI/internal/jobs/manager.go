@@ -23,8 +23,8 @@ import (
 
 	"github.com/GameTec-live/atlas/apps/geodataAPI/internal/catalog"
 	"github.com/GameTec-live/atlas/apps/geodataAPI/internal/config"
-	"github.com/GameTec-live/atlas/apps/geodataAPI/internal/containers"
 	"github.com/GameTec-live/atlas/apps/geodataAPI/internal/model"
+	reloadclient "github.com/GameTec-live/atlas/apps/geodataAPI/internal/reloader"
 	"github.com/GameTec-live/atlas/apps/geodataAPI/internal/store"
 )
 
@@ -106,8 +106,8 @@ func NewManager(cfg config.Config, dataStore *store.Store, regionCatalog catalog
 	var reloader ServiceReloader
 	if len(reloaders) > 0 {
 		reloader = reloaders[0]
-	} else if cfg.ContainerSocket != "" {
-		reloader = containers.NewClient(cfg.ContainerSocket, cfg.ReloadTimeout)
+	} else if cfg.ReloaderURL != "" {
+		reloader = reloadclient.NewClient(cfg.ReloaderURL, cfg.ReloadTimeout)
 	}
 	return &Manager{
 		cfg: cfg, store: dataStore, catalog: regionCatalog, runner: runner,

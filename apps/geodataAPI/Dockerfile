@@ -11,6 +11,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
 COPY main.go ./
+COPY cmd ./cmd
 COPY internal ./internal
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
@@ -20,6 +21,49 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -ldflags="-s -w" \
       -o /out/geodata-api . && \
     mkdir -p /out/data/.geodata/tmp
+
+
+FROM api-build AS reloader-build
+
+ARG TARGETOS
+ARG TARGETARCH
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -buildvcs=false -trimpath \
+      -tags netgo,osusergo \
+      -ldflags="-s -w" \
+      -o /out/geodata-reloader ./cmd/reloader
+
+
+FROM scratch AS reloader
+
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="Atlas geodata reloader" \
+      org.opencontainers.image.description="Minimal Docker-compatible consumer reload API" \
+      org.opencontainers.image.source="https://github.com/GameTec-live/atlas" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$COMMIT" \
+      org.opencontainers.image.created="$BUILD_DATE"
+
+COPY --from=reloader-build /out/geodata-reloader /app/geodata-reloader
+
+USER 65532:65532
+
+ENV RELOADER_LISTEN=:8080 \
+    RELOADER_CONTAINER_SOCKET=/var/run/docker.sock \
+    RELOADER_OPERATION_TIMEOUT=2m
+
+EXPOSE 8080
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD ["/app/geodata-reloader", "healthcheck"]
+
+ENTRYPOINT ["/app/geodata-reloader"]
 
 
 FROM --platform=$BUILDPLATFORM golang:1.26-trixie AS packgen-build
@@ -77,7 +121,7 @@ RUN apt-get update && \
     echo "${PLANETILER_SHA256}  /out/opt/planetiler/planetiler.jar" | sha256sum --check --strict
 
 
-FROM gcr.io/distroless/java25-debian13:nonroot
+FROM gcr.io/distroless/java25-debian13:nonroot AS geodata-api
 
 ARG VERSION=dev
 ARG COMMIT=unknown

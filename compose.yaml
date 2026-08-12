@@ -58,6 +58,33 @@ services:
     build:
       context: ./apps/geodataAPI
       dockerfile: Dockerfile
+      target: geodata-api
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    environment:
+      GEODATA_RELOADER_URL: "http://geodata-reloader:8080"
+    volumes:
+      - geodata:/data
+    networks:
+      - default
+      - geodata-control
+    depends_on:
+      geodata-reloader:
+        condition: service_healthy
+    restart: unless-stopped
+
+  geodata-reloader:
+    image: ghcr.io/gametec-live/atlas-geodata-reloader:latest
+    build:
+      context: ./apps/geodataAPI
+      dockerfile: Dockerfile
+      target: reloader
     user: "65532:65532"
     read_only: true
     cap_drop:
@@ -65,13 +92,12 @@ services:
     security_opt:
       - no-new-privileges:true
       - label=disable
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=64m
     group_add:
       - "${CONTAINER_SOCKET_GID:-0}"
     volumes:
-      - geodata:/data
       - "${CONTAINER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock"
+    networks:
+      - geodata-control
     restart: unless-stopped
 
   api:
@@ -131,3 +157,7 @@ volumes:
   router-data:
   map-data:
   geodata:
+
+networks:
+  geodata-control:
+    internal: true

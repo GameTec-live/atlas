@@ -44,16 +44,42 @@ func NewClient(socketPath string, timeout time.Duration) *Client {
 	}
 }
 
-// Restart reloads the configured Compose services when a Docker-compatible
-// socket is available. A missing socket intentionally disables this feature.
-func (c *Client) Restart(ctx context.Context) error {
+func (c *Client) checkSocket() error {
 	if strings.TrimSpace(c.socketPath) == "" {
-		return nil
+		return errors.New("container socket path is empty")
 	}
 	if _, err := os.Stat(c.socketPath); errors.Is(err, os.ErrNotExist) {
-		return nil
+		return fmt.Errorf("container socket does not exist: %s", c.socketPath)
 	} else if err != nil {
 		return fmt.Errorf("inspect container socket: %w", err)
+	}
+	return nil
+}
+
+// Ping verifies that the configured Docker-compatible API is reachable.
+func (c *Client) Ping(ctx context.Context) error {
+	if err := c.checkSocket(); err != nil {
+		return err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://container-runtime/_ping", nil)
+	if err != nil {
+		return err
+	}
+	response, err := c.http.Do(request)
+	if err != nil {
+		return fmt.Errorf("ping container runtime: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("ping container runtime: runtime returned HTTP %d", response.StatusCode)
+	}
+	return nil
+}
+
+// Restart cleans the router cache and reloads the two fixed, labeled consumers.
+func (c *Client) Restart(ctx context.Context) error {
+	if err := c.checkSocket(); err != nil {
+		return err
 	}
 
 	filters, err := json.Marshal(map[string][]string{
@@ -62,7 +88,7 @@ func (c *Client) Restart(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	endpoint := "http://container-runtime/containers/json?all=true&filters=" + url.QueryEscape(string(filters))
+	endpoint := "http://container-runtime/containers/json?filters=" + url.QueryEscape(string(filters))
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return err
@@ -80,20 +106,21 @@ func (c *Client) Restart(ctx context.Context) error {
 	if err := json.NewDecoder(response.Body).Decode(&found); err != nil {
 		return fmt.Errorf("decode container list: %w", err)
 	}
-	foundConsumers := make(map[string]struct{}, len(requiredConsumers))
-	var targets []containerSummary
+	targets := make(map[string]containerSummary, len(requiredConsumers))
 	for _, container := range found {
 		consumer := container.Labels[consumerLabel]
-		if consumer == "" {
+		if consumer != "router" && consumer != "geocoder" {
 			continue
 		}
-		foundConsumers[consumer] = struct{}{}
-		targets = append(targets, container)
+		if existing, duplicate := targets[consumer]; duplicate {
+			return fmt.Errorf("multiple %s containers found: %s, %s", consumer, displayName(existing), displayName(container))
+		}
+		targets[consumer] = container
 	}
 
 	var missing []string
 	for _, consumer := range requiredConsumers {
-		if _, ok := foundConsumers[consumer]; !ok {
+		if _, ok := targets[consumer]; !ok {
 			missing = append(missing, consumer)
 		}
 	}
@@ -101,8 +128,8 @@ func (c *Client) Restart(ctx context.Context) error {
 		sort.Strings(missing)
 		return fmt.Errorf("geodata consumers not found: %s", strings.Join(missing, ", "))
 	}
-	for _, container := range targets {
-		consumer := container.Labels[consumerLabel]
+	for _, consumer := range requiredConsumers {
+		container := targets[consumer]
 		if consumer == "router" {
 			if err := c.removeRouterTiles(ctx, container.ID); err != nil {
 				return fmt.Errorf("remove stale tiles from router container %s: %w", displayName(container), err)

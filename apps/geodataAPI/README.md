@@ -11,7 +11,7 @@ A small Gin service that downloads and manages OpenStreetMap data for Atlas. It 
 - Persists installed datasets and job history across restarts.
 - Reports job progress over REST and WebSocket.
 - Deletes dataset-owned files and removes/rebuilds the shared map archive.
-- Reloads the router and geocoder after successful changes when a Docker-compatible runtime socket is available.
+- Asks a separate, narrowly scoped reloader service to reload the router and geocoder after successful changes.
 
 Jobs are processed serially. This deliberately prevents two expensive imports from writing `map.pmtiles` at the same time. A dataset is one lifecycle unit: every successful install has its PBF and SQLite files and is included in the shared `map.pmtiles`.
 
@@ -47,7 +47,7 @@ data/
 
 ## Container
 
-The included multi-stage image contains every processor used by the API:
+The included multi-stage Dockerfile produces two images. The main image contains every processor used by the data API:
 
 - the statically linked `geodata-api` service
 - the statically linked geocoder-go `packgen` converter
@@ -55,6 +55,8 @@ The included multi-stage image contains every processor used by the API:
 - a Java 25 runtime and the checksum-verified Planetiler JAR
 
 The final image uses Distroless Java 25 on Debian 13, has no shell or package manager, and runs as UID/GID `65532`. Planetiler is pinned to `0.10.2`, while geocoder-go is pinned to a commit; both can be overridden with build arguments. All Debian-based build and runtime stages use Debian 13/Trixie.
+
+The `reloader` target is a separate statically linked Go binary in a `scratch` image. It exposes only `GET /healthz` and `POST /restart`; its health endpoint also verifies that the container runtime is reachable. Container labels, the Valhalla cleanup command, and restart targets are fixed in its code, so callers cannot submit container IDs or commands. Only this small container needs the Docker-compatible socket.
 
 ```sh
 docker build -t atlas-geodata-api .
@@ -68,6 +70,12 @@ docker run --rm \
   -p 8080:8080 \
   -v "$(pwd)/data:/data" \
   atlas-geodata-api
+```
+
+The standalone command leaves automatic consumer reload disabled. The root Compose example builds and connects the private reloader automatically. To build that image directly:
+
+```sh
+docker build --target reloader -t atlas-geodata-reloader .
 ```
 
 The mounted host directory must be writable by UID/GID `65532`. The root filesystem can remain read-only because all downloads, build intermediates, persistent state, and final artifacts are written beneath `/data`. `SQLITE_TMPDIR` and `TMPDIR` default to `/data/.geodata/tmp`, keeping large packgen staging files off the intentionally small `/tmp` tmpfs. The image has a built-in `/healthz` healthcheck implemented by the API binary, so no `curl` or shell is included.
@@ -101,13 +109,15 @@ docker build \
 | `GEODATA_CATALOG_URL` | Geofabrik `index-v1.json` | Region catalog URL |
 | `GEODATA_CATALOG_TTL` | `24h` | In-memory catalog lifetime; seconds or Go duration |
 | `GEODATA_HTTP_TIMEOUT` | `24h` | PBF download timeout |
-| `GEODATA_CONTAINER_SOCKET` | `/var/run/docker.sock` | Optional Docker-compatible Unix socket; reload is disabled when it does not exist |
-| `GEODATA_RELOAD_TIMEOUT` | `30s` | Total timeout for container discovery and restart |
+| `GEODATA_RELOADER_URL` | empty | Internal reloader base URL; reload is disabled when empty |
+| `GEODATA_RELOAD_TIMEOUT` | `2m` | Timeout for an internal reloader request |
 | `GEODATA_OSMIUM` | `osmium` | osmium executable name/path |
 | `GEODATA_PACKGEN` | `packgen` | geocoder-go pack generator name/path |
 | `GEODATA_JAVA` | `java` | Java executable name/path |
 | `GEODATA_PLANETILER_JAR` | empty | Required path to `planetiler.jar` for map output |
 | `GEODATA_PLANETILER_ARGS` | empty | Extra space-separated Planetiler arguments, for example JVM/profile tuning supported after the JAR arguments |
+
+The reloader container accepts `RELOADER_LISTEN` (default `:8080`), `RELOADER_CONTAINER_SOCKET` (default `/var/run/docker.sock`), and `RELOADER_OPERATION_TIMEOUT` (default `2m`). It should only be reachable from the manager over a private container network.
 
 Example PowerShell setup:
 
@@ -207,8 +217,8 @@ Deletion is also a job. It first builds a replacement `map.pmtiles` from the rem
 - The manifest is `data/.geodata/state.json`. Do not edit it while the service is running.
 - On restart, jobs that were queued or running are retained in history as failed/interrupted; partially built files live only under `.geodata/tmp` or use a `.part` suffix.
 - The manifest retains the newest 100 completed, failed, or cancelled jobs. Queued and running jobs are always retained in addition to that history limit.
-- Successful installs and deletions mark the consumer services for reload. Once no queued or running jobs remain, the service uses the mounted Docker-compatible socket to restart containers labeled `live.gametec.atlas.geodata-consumer=router` or `live.gametec.atlas.geodata-consumer=geocoder`. Before restarting the router, it removes `/custom_files/valhalla_tiles.tar` and `/custom_files/valhalla_tiles` inside that container so Valhalla cannot reuse an incomplete graph and rebuilds its tiles from the current PBFs. A missing socket disables this behavior; discovery, cleanup, or restart errors are logged and do not change the completed job result.
-- The example Compose file mounts `${CONTAINER_SOCKET_PATH:-/var/run/docker.sock}`. This works with Docker and Podman's Docker-compatible API; set `CONTAINER_SOCKET_PATH` to a different host socket when needed. Podman's required `label=disable` security option is included. Because the API remains non-root, set `CONTAINER_SOCKET_GID` to the socket's numeric group ID if its group is not `0` (for example, `stat -c '%g' /var/run/docker.sock`). Mounting a container-runtime socket grants powerful control over the host and should only be used for this internal service on a trusted host.
+- Successful installs and deletions mark the consumer services for reload. Once no queued or running jobs remain, geodataAPI calls the private reloader, which restarts containers labeled `live.gametec.atlas.geodata-consumer=router` or `live.gametec.atlas.geodata-consumer=geocoder`. Before restarting the router, it removes `/custom_files/valhalla_tiles.tar` and `/custom_files/valhalla_tiles` inside that container so Valhalla cannot reuse an incomplete graph. Reload errors are logged and do not change the completed data job result.
+- The example Compose file mounts `${CONTAINER_SOCKET_PATH:-/var/run/docker.sock}` only into the scratch-based reloader and connects it to geodataAPI through an internal network. This works with Docker and Podman's Docker-compatible API; set `CONTAINER_SOCKET_PATH` to a different host socket when needed. Podman's required `label=disable` security option is confined to the reloader. Set `CONTAINER_SOCKET_GID` to the socket's numeric group ID if it is not `0` (for example, `stat -c '%g' /var/run/docker.sock`). The reloader remains highly privileged by nature, so keep its image minimal and its network private.
 - OpenStreetMap-derived output remains subject to ODbL attribution requirements.
 
 ## Development
