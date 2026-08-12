@@ -32,11 +32,21 @@ import org.gtlv.atlas.role.RoleSelectionViewModelFactory
 import org.gtlv.atlas.ui.theme.AtlasTheme
 import org.gtlv.core.session.SessionState
 import org.gtlv.core.shift.ShiftSessionState
+import org.gtlv.atlas.main.MainScreenViewModel
+import org.gtlv.atlas.main.MainScreenViewModelFactory
 
 class MainActivity : ComponentActivity() {
 
     private val atlasApplication by lazy {
         application as AtlasApplication
+    }
+
+    private val mainScreenViewModel:
+            MainScreenViewModel by viewModels {
+        MainScreenViewModelFactory(
+            jobRepository =
+                atlasApplication.jobRepository
+        )
     }
 
     private val sessionManager
@@ -78,6 +88,12 @@ class MainActivity : ComponentActivity() {
 
                 val sessionState by sessionManager.state
                     .collectAsStateWithLifecycle()
+
+                LaunchedEffect(sessionState) {
+                    if (sessionState !is SessionState.SignedIn) {
+                        mainScreenViewModel.clearJobs()
+                    }
+                }
 
                 when (val currentSession = sessionState) {
                     SessionState.Checking -> {
@@ -146,6 +162,15 @@ class MainActivity : ComponentActivity() {
                             }
 
                             is ShiftSessionState.Active -> {
+                                LaunchedEffect(currentSession.userId) {
+                                    mainScreenViewModel.loadJobsForUser(
+                                        userId = currentSession.userId
+                                    )
+                                }
+
+
+                                val mainScreenState by mainScreenViewModel.uiState
+                                    .collectAsStateWithLifecycle()
                                 RequiredLocationPermissionGate(
                                     locationProvider =
                                         atlasApplication.locationProvider
@@ -155,6 +180,11 @@ class MainActivity : ComponentActivity() {
                                         role = currentShift.session.role,
                                         serverAddress = loginState.serverAddress,
                                         locationState = locationState,
+                                        mainScreenState = mainScreenState,
+                                        onToggleJobList =
+                                            mainScreenViewModel::toggleJobList,
+                                        onRetryJobs =
+                                            mainScreenViewModel::refresh,
                                         onLogout = loginViewModel::logout
                                     )
                                 }

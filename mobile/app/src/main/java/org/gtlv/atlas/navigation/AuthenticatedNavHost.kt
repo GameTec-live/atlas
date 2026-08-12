@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import org.gtlv.atlas.main.MainScreen
+import org.gtlv.atlas.main.MainScreenUiState
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
 
@@ -15,8 +16,11 @@ internal fun AuthenticatedNavHost(
     role: ShiftRole,
     locationState: LocationState,
     onLogout: () -> Unit,
-    modifier: Modifier = Modifier,
-    serverAddress: String
+    serverAddress: String,
+    mainScreenState: MainScreenUiState,
+    onToggleJobList: () -> Unit,
+    onRetryJobs: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
 
@@ -31,6 +35,9 @@ internal fun AuthenticatedNavHost(
                 role = role,
                 serverAddress = serverAddress,
                 locationState = locationState,
+                jobState = mainScreenState,
+                onToggleJobList = onToggleJobList,
+                onRetryJobs = onRetryJobs,
                 onLogout = onLogout
             )
         }

@@ -43,4 +43,18 @@
     <string name="map_location_display_error">Your location could not be displayed on the map.</string>
     <string name="map_recenter_location">Return to current location</string>
     <string name="logout">Log out</string>
+
+    <string name="job_panel_load_error">Could not load jobs</string>
+    <string name="job_panel_retry">Retry</string>
+    <string name="job_panel_no_jobs">No jobs in queue</string>
+    <string name="job_panel_from">From: %1$s</string>
+    <string name="job_panel_to">To: %1$s</string>
+    <string name="job_panel_no_current_job">No current job</string>
+    <string name="job_panel_total_jobs">Total: %1$d</string>
+    <string name="job_panel_current_job">Current Job</string>
+
+    <plurals name="job_panel_next_job">
+        <item quantity="one">Next Job (%1$d in queue)</item>
+        <item quantity="other">Next Job (%1$d in queue)</item>
+    </plurals>
 </resources>
