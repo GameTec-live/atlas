@@ -6,6 +6,8 @@
 !apps
 !apps/api
 !apps/api/package.json
+!apps/geodataAPI
+!apps/geodataAPI/package.json
 !apps/web
 !apps/web/**
 

@@ -9,6 +9,7 @@ import { configApp } from "./config";
 import { BUILD_INFO } from "./constants";
 import { runMigrations } from "./db/migrate";
 import { fleet } from "./fleet";
+import { geodata } from "./geodata";
 import { geoservices } from "./geoservices";
 import { jobs } from "./jobs";
 import { logbooks } from "./logbooks";
@@ -108,6 +109,7 @@ export const app = new Elysia()
     .use(configApp)
     .use(realtime)
     .use(geoservices)
+    .use(geodata)
     .use(fleet)
     .use(roles)
     .use(jobs)
