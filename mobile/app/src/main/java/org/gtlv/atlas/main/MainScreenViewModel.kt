@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
+import org.gtlv.core.job.StartJobResult
 import kotlin.coroutines.coroutineContext
 
 class MainScreenViewModel(
@@ -25,6 +26,7 @@ class MainScreenViewModel(
 
     private var activeUserId: String? = null
     private var refreshJob: Job? = null
+    private var startNextJobTask: Job? = null
 
     fun loadJobsForUser(userId: String) {
         if (activeUserId == userId) {
@@ -32,6 +34,8 @@ class MainScreenViewModel(
         }
 
         refreshJob?.cancel()
+        startNextJobTask?.cancel()
+
         activeUserId = userId
         _uiState.value = MainScreenUiState()
 
@@ -39,7 +43,10 @@ class MainScreenViewModel(
     }
 
     fun refresh() {
-        if (activeUserId == null) {
+        if (
+            activeUserId == null ||
+            _uiState.value.isStartingNextJob
+        ) {
             return
         }
 
@@ -49,7 +56,8 @@ class MainScreenViewModel(
             _uiState.update {
                 it.copy(
                     isLoading = true,
-                    hasError = false
+                    hasError = false,
+                    startNextJobFailed = false
                 )
             }
 
@@ -59,17 +67,7 @@ class MainScreenViewModel(
 
             when (result) {
                 is JobsResult.Success -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            currentJob = result.currentJob,
-                            queuedJobs = result.queuedJobs,
-                            isJobListExpanded =
-                                it.isJobListExpanded &&
-                                        result.queuedJobs.isNotEmpty(),
-                            hasError = false
-                        )
-                    }
+                    applyJobs(result)
                 }
 
                 else -> {
@@ -84,11 +82,102 @@ class MainScreenViewModel(
         }
     }
 
+    fun startNextJob() {
+        val state = _uiState.value
+
+        if (
+            activeUserId == null ||
+            state.currentJob != null ||
+            state.isLoading ||
+            state.isStartingNextJob
+        ) {
+            return
+        }
+
+        val nextJob = state.queuedJobs.firstOrNull()
+            ?: return
+
+        refreshJob?.cancel()
+        startNextJobTask?.cancel()
+
+        startNextJobTask = viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isStartingNextJob = true,
+                    startNextJobFailed = false
+                )
+            }
+
+            when (
+                jobRepository.startJob(
+                    jobId = nextJob.id
+                )
+            ) {
+                StartJobResult.Success -> {
+                    reloadJobsAfterStarting()
+                }
+
+                else -> {
+                    coroutineContext.ensureActive()
+
+                    _uiState.update {
+                        it.copy(
+                            isStartingNextJob = false,
+                            startNextJobFailed = true
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun reloadJobsAfterStarting() {
+        val result = jobRepository.getJobs()
+
+        coroutineContext.ensureActive()
+
+        when (result) {
+            is JobsResult.Success -> {
+                applyJobs(result)
+            }
+
+            else -> {
+                _uiState.update {
+                    it.copy(
+                        isStartingNextJob = false,
+                        hasError = true
+                    )
+                }
+            }
+        }
+    }
+
+    private fun applyJobs(
+        result: JobsResult.Success
+    ) {
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                currentJob = result.currentJob,
+                queuedJobs = result.queuedJobs,
+                isJobListExpanded =
+                    it.isJobListExpanded &&
+                            result.queuedJobs.isNotEmpty(),
+                hasError = false,
+                isStartingNextJob = false,
+                startNextJobFailed = false
+            )
+        }
+    }
+
     fun clearJobs() {
         activeUserId = null
 
         refreshJob?.cancel()
         refreshJob = null
+
+        startNextJobTask?.cancel()
+        startNextJobTask = null
 
         _uiState.value = MainScreenUiState(
             isLoading = false

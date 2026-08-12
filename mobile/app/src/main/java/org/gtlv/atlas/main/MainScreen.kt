@@ -37,6 +37,7 @@ import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import org.gtlv.atlas.main.composable.JobActionButtons
 
 @Composable
 internal fun MainScreen(
@@ -44,11 +45,12 @@ internal fun MainScreen(
     role: ShiftRole,
     locationState: LocationState,
     onLogout: () -> Unit,
-    modifier: Modifier = Modifier,
     jobState: MainScreenUiState,
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
-    serverAddress: String
+    onStartNextJob: () -> Unit,
+    serverAddress: String,
+    modifier: Modifier = Modifier
 ) {
     val styleUrl = MapConfiguration.createStyleUrl(
         serverAddress = serverAddress
@@ -97,6 +99,20 @@ internal fun MainScreen(
                     .align(Alignment.BottomStart)
                     .padding(
                         start = 8.dp,
+                        bottom = 8.dp
+                    )
+            )
+
+            JobActionButtons(
+                hasCurrentJob = jobState.currentJob != null,
+                hasNextJob = jobState.queuedJobs.isNotEmpty(),
+                isStartingNextJob =
+                    jobState.isStartingNextJob,
+                onNextJobClick = onStartNextJob,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = 8.dp,
                         bottom = 8.dp
                     )
             )

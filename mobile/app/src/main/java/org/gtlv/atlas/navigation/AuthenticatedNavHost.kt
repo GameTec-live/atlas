@@ -20,6 +20,7 @@ internal fun AuthenticatedNavHost(
     mainScreenState: MainScreenUiState,
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
+    onStartNextJob: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
@@ -38,6 +39,7 @@ internal fun AuthenticatedNavHost(
                 jobState = mainScreenState,
                 onToggleJobList = onToggleJobList,
                 onRetryJobs = onRetryJobs,
+                onStartNextJob = onStartNextJob,
                 onLogout = onLogout
             )
         }

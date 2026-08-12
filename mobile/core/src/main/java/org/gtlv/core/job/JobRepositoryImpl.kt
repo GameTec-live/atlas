@@ -13,6 +13,8 @@ import org.gtlv.core.settings.ServerSettingsRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class JobRepositoryImpl(
     private val networkClient: NetworkClient,
@@ -85,6 +87,80 @@ class JobRepositoryImpl(
                 }
             }
         }
+
+    override suspend fun startJob(
+        jobId: String
+    ): StartJobResult = withContext(Dispatchers.IO) {
+        if (jobId.isBlank()) {
+            return@withContext StartJobResult.InvalidResponse
+        }
+
+        val serverAddress = serverSettingsRepository
+            .serverAddress
+            .first()
+            .removeSuffix("/")
+
+        val startUrl = serverAddress
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.addPathSegments("api/jobs")
+            ?.addPathSegment(jobId)
+            ?.addPathSegment("start")
+            ?.build()
+            ?: return@withContext StartJobResult.InvalidResponse
+
+        val emptyRequestBody = ByteArray(0).toRequestBody(
+            "application/json".toMediaType()
+        )
+
+        val requestBuilder = Request.Builder()
+            .url(startUrl)
+            .header("Origin", serverAddress)
+            .header("Accept", "application/json")
+            .post(emptyRequestBody)
+
+        accessTokenProvider.currentAccessToken()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { token ->
+                requestBuilder.header(
+                    "Authorization",
+                    "Bearer $token"
+                )
+            }
+
+        try {
+            networkClient.okHttpClient
+                .newCall(requestBuilder.build())
+                .execute()
+                .use { response ->
+                    val responseText =
+                        response.body?.string().orEmpty()
+
+                    when {
+                        response.code == 401 -> {
+                            StartJobResult.Unauthorized
+                        }
+
+                        !response.isSuccessful -> {
+                            StartJobResult.ServerError(
+                                statusCode = response.code,
+                                message = readServerMessage(
+                                    responseText
+                                )
+                            )
+                        }
+
+                        else -> {
+                            StartJobResult.Success
+                        }
+                    }
+                }
+        } catch (_: IOException) {
+            StartJobResult.NetworkError
+        } catch (_: Exception) {
+            StartJobResult.InvalidResponse
+        }
+    }
 
     private fun createUrl(
         serverAddress: String,

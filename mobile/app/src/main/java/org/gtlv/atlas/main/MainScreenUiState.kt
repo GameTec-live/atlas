@@ -7,5 +7,7 @@ data class MainScreenUiState(
     val currentJob: Job? = null,
     val queuedJobs: List<Job> = emptyList(),
     val isJobListExpanded: Boolean = false,
-    val hasError: Boolean = false
+    val hasError: Boolean = false,
+    val isStartingNextJob: Boolean = false,
+    val startNextJobFailed: Boolean = false
 )
