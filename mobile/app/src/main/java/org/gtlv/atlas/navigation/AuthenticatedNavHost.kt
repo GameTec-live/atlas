@@ -15,7 +15,8 @@ internal fun AuthenticatedNavHost(
     role: ShiftRole,
     locationState: LocationState,
     onLogout: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    serverAddress: String
 ) {
     val navController = rememberNavController()
 
@@ -28,6 +29,7 @@ internal fun AuthenticatedNavHost(
             MainScreen(
                 userName = userName,
                 role = role,
+                serverAddress = serverAddress,
                 locationState = locationState,
                 onLogout = onLogout
             )

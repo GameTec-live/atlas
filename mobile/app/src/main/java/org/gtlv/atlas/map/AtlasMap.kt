@@ -46,6 +46,7 @@ import org.maplibre.android.maps.Style
 internal fun AtlasMap(
     locationState: LocationState,
     recenterRequestId: Int,
+    styleUrl: String,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -108,7 +109,7 @@ internal fun AtlasMap(
         initialCameraPosition = initialCameraPosition
     )
 
-    LaunchedEffect(mapView) {
+    LaunchedEffect(mapView, styleUrl) {
         loadState = MapLoadState.Loading
         readyMap = null
 
@@ -124,7 +125,7 @@ internal fun AtlasMap(
 
             map.setStyle(
                 Style.Builder()
-                    .fromUri(MapConfiguration.STYLE_URL)
+                    .fromUri(styleUrl)
             ) { style ->
                 val activationResult = runCatching {
                     val componentOptions =

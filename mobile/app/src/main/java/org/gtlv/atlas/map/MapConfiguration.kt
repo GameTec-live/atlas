@@ -2,15 +2,18 @@ package org.gtlv.atlas.map
 
 internal object MapConfiguration {
 
-    /*
-     * Temporary development address.
-     * Replace only the base URL when the reverse proxy is ready.
-     */
-    private const val MAP_SERVER_BASE_URL =
-        "https://atlas.gametec-live.com/map"
+    private const val STYLE_PATH =
+        "map/style/liberty"
 
-    const val STYLE_URL =
-        "$MAP_SERVER_BASE_URL/style/liberty"
+    fun createStyleUrl(
+        serverAddress: String
+    ): String {
+        return buildString {
+            append(serverAddress.trimEnd('/'))
+            append('/')
+            append(STYLE_PATH)
+        }
+    }
 
     const val INITIAL_LATITUDE = 48.500
     const val INITIAL_LONGITUDE = 14.580
