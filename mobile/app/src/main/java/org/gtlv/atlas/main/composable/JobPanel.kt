@@ -215,19 +215,19 @@ private fun ExpandedJobs(
             }
         }
 
-        if (state.queuedJobs.isEmpty()) {
-            Text(
-                text = stringResource(
-                    R.string.job_panel_no_jobs
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(12.dp)
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f)
-            ) {
+        LazyColumn(
+            modifier = Modifier.weight(1f)
+        ) {
+            if (state.queuedJobs.isEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(
+                            R.string.job_panel_no_jobs
+                        ),
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            } else {
                 items(
                     items = state.queuedJobs,
                     key = Job::id

@@ -37,15 +37,16 @@ import org.gtlv.atlas.main.MainScreenViewModelFactory
 
 class MainActivity : ComponentActivity() {
 
+    private val atlasApplication by lazy {
+        application as AtlasApplication
+    }
+
     private val mainScreenViewModel:
             MainScreenViewModel by viewModels {
         MainScreenViewModelFactory(
             jobRepository =
                 atlasApplication.jobRepository
         )
-    }
-    private val atlasApplication by lazy {
-        application as AtlasApplication
     }
 
     private val sessionManager
@@ -87,6 +88,12 @@ class MainActivity : ComponentActivity() {
 
                 val sessionState by sessionManager.state
                     .collectAsStateWithLifecycle()
+
+                LaunchedEffect(sessionState) {
+                    if (sessionState !is SessionState.SignedIn) {
+                        mainScreenViewModel.clearJobs()
+                    }
+                }
 
                 when (val currentSession = sessionState) {
                     SessionState.Checking -> {
@@ -178,9 +185,7 @@ class MainActivity : ComponentActivity() {
                                             mainScreenViewModel::toggleJobList,
                                         onRetryJobs =
                                             mainScreenViewModel::refresh,
-                                        onLogout = {
-                                            mainScreenViewModel.clearJobs()
-                                            loginViewModel.logout() }
+                                        onLogout = loginViewModel::logout
                                     )
                                 }
                             }
