@@ -3,6 +3,7 @@ package org.gtlv.atlas.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
+import kotlin.coroutines.coroutineContext
 
 class MainScreenViewModel(
     private val jobRepository: JobRepository
@@ -23,7 +25,6 @@ class MainScreenViewModel(
 
     private var activeUserId: String? = null
     private var refreshJob: Job? = null
-    private var sessionGeneration: Long = 0L
 
     fun loadJobsForUser(userId: String) {
         if (activeUserId == userId) {
@@ -31,19 +32,16 @@ class MainScreenViewModel(
         }
 
         refreshJob?.cancel()
-        sessionGeneration += 1
         activeUserId = userId
-
-        _uiState.value = MainScreenUiState(
-            isLoading = true
-        )
+        _uiState.value = MainScreenUiState()
 
         refresh()
     }
 
     fun refresh() {
-        val requestedUserId = activeUserId ?: return
-        val requestedGeneration = sessionGeneration
+        if (activeUserId == null) {
+            return
+        }
 
         refreshJob?.cancel()
 
@@ -57,13 +55,7 @@ class MainScreenViewModel(
 
             val result = jobRepository.getJobs()
 
-            // Ignore results from a previous authenticated session.
-            if (
-                activeUserId != requestedUserId ||
-                sessionGeneration != requestedGeneration
-            ) {
-                return@launch
-            }
+            coroutineContext.ensureActive()
 
             when (result) {
                 is JobsResult.Success -> {
@@ -93,7 +85,6 @@ class MainScreenViewModel(
     }
 
     fun clearJobs() {
-        sessionGeneration += 1
         activeUserId = null
 
         refreshJob?.cancel()
@@ -117,10 +108,5 @@ class MainScreenViewModel(
                 )
             }
         }
-    }
-
-    override fun onCleared() {
-        refreshJob?.cancel()
-        super.onCleared()
     }
 }
