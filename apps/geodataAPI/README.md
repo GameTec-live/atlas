@@ -156,6 +156,8 @@ curl -X POST http://localhost:8080/api/v1/datasets \
 
 `excludeRoads` defaults to `false`. Set it to `true` to pass `--include-roads=false` to geocoder-go's `packgen`, substantially reducing the SQLite pack size when named-road results are not needed. It affects only the geocoder pack; routing PBF and PMTiles generation remain unchanged. The selected value is stored with the dataset and returned by dataset listings.
 
+Install builds and inspects the PBF, geocoder pack, and combined map in the job directory before publishing them together. If artifact publication or dataset-state persistence fails, all three files are rolled back and an existing `map.pmtiles` is restored.
+
 Coordinates are WGS84 longitude/latitude. The service chooses the smallest Geofabrik extract whose published envelope covers the box, downloads it, and invokes `osmium extract`. The optional `id` becomes the stable dataset/file name.
 
 ```sh
@@ -196,7 +198,7 @@ Updates preserve the dataset's bounding box and `excludeRoads` setting. The new 
 DELETE /api/v1/datasets/{dataset-id}
 ```
 
-Deletion is also a job. It first builds a replacement `map.pmtiles` from the remaining datasets, then removes the dataset PBF and SQLite pack and commits the replacement map. If the rebuild fails, the original dataset and map remain available.
+Deletion is also a job. It first builds a replacement `map.pmtiles` from the remaining datasets, then stages the dataset artifacts and shared-map replacement in one transaction. Files are permanently removed only after dataset-state persistence succeeds; any staging, map replacement, or persistence failure restores all artifacts and metadata.
 
 ## Operational notes
 

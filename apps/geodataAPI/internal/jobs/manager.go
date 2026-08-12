@@ -384,7 +384,7 @@ func (m *Manager) reloadServicesWhenIdle(success bool) {
 	}
 }
 
-func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error) {
+func (m *Manager) runInstall(ctx context.Context, job *model.Job) error {
 	request := job.Request
 	if request.Region == nil {
 		return errors.New("job has no source region")
@@ -395,15 +395,8 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	}
 	defer os.RemoveAll(workDir)
 
-	finalPBF := filepath.Join(m.store.Root(), request.DatasetID+".osm.pbf")
-	finalGeocoder := filepath.Join(m.store.Root(), request.DatasetID+".sqlite")
-	defer func() {
-		if runErr != nil {
-			_ = os.Remove(finalPBF)
-			_ = os.Remove(finalGeocoder)
-		}
-	}()
-	downloadTarget := finalPBF + ".part"
+	candidatePBF := filepath.Join(workDir, request.DatasetID+".osm.pbf")
+	downloadTarget := candidatePBF
 	if request.Bounds != nil {
 		downloadTarget = filepath.Join(workDir, "source.osm.pbf")
 	}
@@ -421,15 +414,13 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 		job.Progress = 0.52
 		_ = m.saveAndPublish(*job)
 		bbox := fmt.Sprintf("%g,%g,%g,%g", request.Bounds.MinLongitude, request.Bounds.MinLatitude, request.Bounds.MaxLongitude, request.Bounds.MaxLatitude)
-		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, "extract", "--bbox", bbox, "--set-bounds", "--overwrite", "--output", finalPBF, downloadTarget); err != nil {
+		if err := m.runner.Run(ctx, m.cfg.OsmiumBinary, "extract", "--bbox", bbox, "--set-bounds", "--overwrite", "--output", candidatePBF, downloadTarget); err != nil {
 			return fmt.Errorf("extract bounding box with osmium: %w", err)
 		}
-	} else if err := replace(downloadTarget, finalPBF); err != nil {
-		return fmt.Errorf("commit PBF: %w", err)
 	}
 
 	artifacts := make([]model.Artifact, 0, 3)
-	pbfArtifact, err := m.store.Artifact(model.ArtifactPBF, request.DatasetID+".osm.pbf")
+	pbfArtifact, err := artifactFromCandidate(model.ArtifactPBF, request.DatasetID+".osm.pbf", candidatePBF)
 	if err != nil {
 		return err
 	}
@@ -439,18 +430,15 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	job.Progress = 0.65
 	_ = m.saveAndPublish(*job)
 	relative := request.DatasetID + ".sqlite"
-	temporary := filepath.Join(workDir, request.DatasetID+".sqlite.building")
+	candidateGeocoder := filepath.Join(workDir, request.DatasetID+".sqlite")
 	countryCode := ""
 	if len(request.Region.CountryCodes) > 0 {
 		countryCode = request.Region.CountryCodes[0]
 	}
-	if err := m.buildGeocoder(ctx, finalPBF, temporary, countryCode, request.ExcludeRoads); err != nil {
+	if err := m.buildGeocoder(ctx, candidatePBF, candidateGeocoder, countryCode, request.ExcludeRoads); err != nil {
 		return err
 	}
-	if err := replace(temporary, finalGeocoder); err != nil {
-		return fmt.Errorf("commit geocoder pack: %w", err)
-	}
-	geocoderArtifact, err := m.store.Artifact(model.ArtifactGeocoder, relative)
+	geocoderArtifact, err := artifactFromCandidate(model.ArtifactGeocoder, relative, candidateGeocoder)
 	if err != nil {
 		return err
 	}
@@ -459,10 +447,13 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	job.Stage = "building_map"
 	job.Progress = 0.82
 	_ = m.saveAndPublish(*job)
-	if err := m.buildMap(ctx, workDir, finalPBF); err != nil {
+	pbfs := datasetPBFs(m.store.Root(), m.store.Datasets())
+	pbfs = append(pbfs, candidatePBF)
+	candidateMap, err := m.generateMap(ctx, workDir, pbfs)
+	if err != nil {
 		return err
 	}
-	mapArtifact, err := m.store.Artifact(model.ArtifactMap, "map.pmtiles")
+	mapArtifact, err := artifactFromCandidate(model.ArtifactMap, "map.pmtiles", candidateMap)
 	if err != nil {
 		return err
 	}
@@ -486,9 +477,22 @@ func (m *Manager) runInstall(ctx context.Context, job *model.Job) (runErr error)
 	if dataset.SourceType == "url" {
 		dataset.SourceRegion = ""
 	}
-	if err := m.store.PutDataset(dataset); err != nil {
-		return err
+
+	job.Stage = "committing"
+	job.Progress = 0.95
+	_ = m.saveAndPublish(*job)
+	transaction, err := applyFileReplacements(workDir, []fileReplacement{
+		{candidate: candidatePBF, destination: filepath.Join(m.store.Root(), request.DatasetID+".osm.pbf")},
+		{candidate: candidateGeocoder, destination: filepath.Join(m.store.Root(), request.DatasetID+".sqlite")},
+		{candidate: candidateMap, destination: filepath.Join(m.store.Root(), "map.pmtiles")},
+	})
+	if err != nil {
+		return fmt.Errorf("commit installed artifacts: %w", err)
 	}
+	if err := m.store.PutDataset(dataset); err != nil {
+		return errors.Join(err, transaction.Rollback())
+	}
+	transaction.Commit()
 	return nil
 }
 
@@ -613,17 +617,18 @@ func (m *Manager) runDelete(ctx context.Context, job *model.Job) error {
 			remaining = append(remaining, candidate)
 		}
 	}
+	workDir := filepath.Join(m.store.TempDir(), job.ID)
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		return err
+	}
+	defer os.RemoveAll(workDir)
+
 	pbfs := datasetPBFs(m.store.Root(), remaining)
 	var replacementMap string
 	if len(pbfs) > 0 {
 		job.Stage = "rebuilding_map"
 		job.Progress = 0.25
 		_ = m.saveAndPublish(*job)
-		workDir := filepath.Join(m.store.TempDir(), job.ID)
-		if err := os.MkdirAll(workDir, 0o755); err != nil {
-			return err
-		}
-		defer os.RemoveAll(workDir)
 		var err error
 		replacementMap, err = m.generateMap(ctx, workDir, pbfs)
 		if err != nil {
@@ -634,28 +639,31 @@ func (m *Manager) runDelete(ctx context.Context, job *model.Job) error {
 	job.Stage = "deleting_files"
 	job.Progress = 0.85
 	_ = m.saveAndPublish(*job)
+	replacements := make([]fileReplacement, 0, len(dataset.Artifacts)+1)
+	seen := make(map[string]struct{}, len(dataset.Artifacts)+1)
 	for _, artifact := range dataset.Artifacts {
 		if artifact.Kind == model.ArtifactMap {
 			continue
 		}
-		if err := os.Remove(filepath.Join(m.store.Root(), filepath.FromSlash(artifact.Path))); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+		destination := filepath.Join(m.store.Root(), filepath.FromSlash(artifact.Path))
+		if _, exists := seen[destination]; !exists {
+			seen[destination] = struct{}{}
+			replacements = append(replacements, fileReplacement{destination: destination})
 		}
 	}
-	if err := m.store.RemoveDataset(dataset.ID); err != nil {
-		return err
+	mapPath := filepath.Join(m.store.Root(), "map.pmtiles")
+	if _, exists := seen[mapPath]; !exists {
+		replacements = append(replacements, fileReplacement{candidate: replacementMap, destination: mapPath})
 	}
 
-	mapPath := filepath.Join(m.store.Root(), "map.pmtiles")
-	if len(pbfs) == 0 {
-		if err := os.Remove(mapPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		return nil
+	transaction, err := applyFileReplacements(workDir, replacements)
+	if err != nil {
+		return fmt.Errorf("stage dataset deletion: %w", err)
 	}
-	if err := replace(replacementMap, mapPath); err != nil {
-		return fmt.Errorf("commit map.pmtiles: %w", err)
+	if err := m.store.RemoveDataset(dataset.ID); err != nil {
+		return errors.Join(err, transaction.Rollback())
 	}
+	transaction.Commit()
 	return nil
 }
 
@@ -740,32 +748,6 @@ func (m *Manager) buildGeocoder(ctx context.Context, pbfPath, output, countryCod
 	return nil
 }
 
-func (m *Manager) buildMap(ctx context.Context, workDir, candidatePBF string) error {
-	pbfs := datasetPBFs(m.store.Root(), m.store.Datasets())
-	pbfs = append(pbfs, candidatePBF)
-	unique := make(map[string]struct{}, len(pbfs))
-	filtered := pbfs[:0]
-	for _, path := range pbfs {
-		path, _ = filepath.Abs(path)
-		if _, exists := unique[path]; !exists {
-			unique[path] = struct{}{}
-			filtered = append(filtered, path)
-		}
-	}
-	return m.buildMapFromPaths(ctx, workDir, filtered)
-}
-
-func (m *Manager) buildMapFromPaths(ctx context.Context, workDir string, pbfs []string) error {
-	temporary, err := m.generateMap(ctx, workDir, pbfs)
-	if err != nil {
-		return err
-	}
-	if err := replace(temporary, filepath.Join(m.store.Root(), "map.pmtiles")); err != nil {
-		return fmt.Errorf("commit map.pmtiles: %w", err)
-	}
-	return nil
-}
-
 func (m *Manager) generateMap(ctx context.Context, workDir string, pbfs []string) (string, error) {
 	if strings.TrimSpace(m.cfg.PlanetilerJar) == "" {
 		return "", errors.New("map generation requested but GEODATA_PLANETILER_JAR is not configured")
@@ -828,6 +810,14 @@ type fileTransaction struct {
 	files []replacedFile
 }
 
+func artifactFromCandidate(kind model.ArtifactKind, relativePath, candidate string) (model.Artifact, error) {
+	info, err := os.Stat(candidate)
+	if err != nil {
+		return model.Artifact{}, err
+	}
+	return model.Artifact{Kind: kind, Path: relativePath, Size: info.Size(), ModifiedAt: info.ModTime().UTC()}, nil
+}
+
 func applyFileReplacements(workDir string, replacements []fileReplacement) (*fileTransaction, error) {
 	transaction := &fileTransaction{files: make([]replacedFile, 0, len(replacements))}
 	for index, replacement := range replacements {
@@ -844,8 +834,10 @@ func applyFileReplacements(workDir string, replacements []fileReplacement) (*fil
 			return nil, errors.Join(err, transaction.Rollback())
 		}
 		transaction.files = append(transaction.files, entry)
-		if err := os.Rename(replacement.candidate, replacement.destination); err != nil {
-			return nil, errors.Join(err, transaction.Rollback())
+		if replacement.candidate != "" {
+			if err := os.Rename(replacement.candidate, replacement.destination); err != nil {
+				return nil, errors.Join(err, transaction.Rollback())
+			}
 		}
 	}
 	return transaction, nil
@@ -871,7 +863,7 @@ func (transaction *fileTransaction) Rollback() error {
 func (transaction *fileTransaction) Commit() {
 	for _, entry := range transaction.files {
 		if entry.hadOriginal {
-			_ = os.Remove(entry.backup)
+			_ = os.RemoveAll(entry.backup)
 		}
 	}
 	transaction.files = nil

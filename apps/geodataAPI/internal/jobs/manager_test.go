@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -35,6 +36,7 @@ type testRunner struct {
 	mu       sync.Mutex
 	calls    []string
 	failJava bool
+	afterRun func(string)
 }
 
 type testReloader struct {
@@ -76,7 +78,16 @@ func (r *testRunner) Run(_ context.Context, name string, args ...string) error {
 	if output == "" {
 		return fmt.Errorf("test command has no output argument")
 	}
-	return os.WriteFile(output, []byte(name+" output"), 0o644)
+	if err := os.WriteFile(output, []byte(name+" output"), 0o644); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	afterRun := r.afterRun
+	r.mu.Unlock()
+	if afterRun != nil {
+		afterRun(name)
+	}
+	return nil
 }
 
 func (r *testRunner) setFailJava(fail bool) {
@@ -352,6 +363,161 @@ func TestFileReplacementsRollbackAfterPartialCommit(t *testing.T) {
 		if readErr != nil || string(content) != expected {
 			t.Fatalf("rollback left %s as %q, %v", path, content, readErr)
 		}
+	}
+}
+
+func TestInstallRestoresSharedMapWhenDatasetPersistenceFails(t *testing.T) {
+	pbf := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("new-pbf"))
+	}))
+	defer pbf.Close()
+
+	root := t.TempDir()
+	dataStore, err := store.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapPath := filepath.Join(root, "map.pmtiles")
+	if err := os.WriteFile(mapPath, []byte("old-map"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stateBlocker := filepath.Join(root, ".geodata", "state.json.tmp")
+	runner := &testRunner{}
+	runner.afterRun = func(name string) {
+		if name == "java" {
+			if err := os.Mkdir(stateBlocker, 0o755); err != nil {
+				t.Errorf("block state persistence: %v", err)
+			}
+		}
+	}
+	manager := NewManager(
+		config.Config{DataDir: root, HTTPTimeout: time.Second, PackgenBinary: "packgen", JavaBinary: "java", PlanetilerJar: "planetiler.jar"},
+		dataStore,
+		testCatalog{},
+		runner,
+	)
+	region := model.Region{ID: "new", Name: "New", PBFURL: pbf.URL}
+	job := model.Job{ID: "install", DatasetID: "new", Request: model.JobRequest{
+		Name: "New", DatasetID: "new", SourceType: "catalog", Region: &region,
+	}}
+
+	if err := manager.runInstall(context.Background(), &job); err == nil {
+		t.Fatal("install unexpectedly succeeded")
+	}
+	if _, found := dataStore.Dataset("new"); found {
+		t.Fatal("failed install remained registered in memory")
+	}
+	for _, name := range []string{"new.osm.pbf", "new.sqlite"} {
+		if _, err := os.Stat(filepath.Join(root, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("failed install published %s: %v", name, err)
+		}
+	}
+	if content, err := os.ReadFile(mapPath); err != nil || string(content) != "old-map" {
+		t.Fatalf("failed install did not restore map: %q, %v", content, err)
+	}
+	if err := os.Remove(stateBlocker); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := store.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found := reopened.Dataset("new"); found {
+		t.Fatal("failed install was durably registered")
+	}
+}
+
+func TestDeleteRestoresStagedArtifactsAfterLaterRemovalFails(t *testing.T) {
+	root := t.TempDir()
+	dataStore, err := store.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{
+		"one.osm.pbf": "pbf", "map.pmtiles": "map",
+	} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dataset := model.Dataset{ID: "one", Artifacts: []model.Artifact{
+		{Kind: model.ArtifactPBF, Path: "one.osm.pbf"},
+		// Renaming the data root into its own transaction directory must fail,
+		// after the preceding PBF removal has already been staged.
+		{Kind: model.ArtifactGeocoder, Path: "."},
+		{Kind: model.ArtifactMap, Path: "map.pmtiles"},
+	}}
+	if err := dataStore.PutDataset(dataset); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(config.Config{DataDir: root}, dataStore, testCatalog{}, &testRunner{})
+	job := model.Job{ID: "delete", DatasetID: "one"}
+
+	if err := manager.runDelete(context.Background(), &job); err == nil {
+		t.Fatal("delete unexpectedly succeeded")
+	}
+	if _, found := dataStore.Dataset("one"); !found {
+		t.Fatal("failed delete removed dataset metadata")
+	}
+	for name, expected := range map[string]string{"one.osm.pbf": "pbf", "map.pmtiles": "map"} {
+		content, readErr := os.ReadFile(filepath.Join(root, name))
+		if readErr != nil || string(content) != expected {
+			t.Fatalf("failed delete changed %s: %q, %v", name, content, readErr)
+		}
+	}
+}
+
+func TestDeleteRestoresFilesWhenDatasetPersistenceFails(t *testing.T) {
+	root := t.TempDir()
+	dataStore, err := store.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{
+		"one.osm.pbf": "pbf", "one.sqlite": "geocoder", "map.pmtiles": "map",
+	} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dataset := model.Dataset{ID: "one", Artifacts: []model.Artifact{
+		{Kind: model.ArtifactPBF, Path: "one.osm.pbf"},
+		{Kind: model.ArtifactGeocoder, Path: "one.sqlite"},
+		{Kind: model.ArtifactMap, Path: "map.pmtiles"},
+	}}
+	if err := dataStore.PutDataset(dataset); err != nil {
+		t.Fatal(err)
+	}
+	stateBlocker := filepath.Join(root, ".geodata", "state.json.tmp")
+	if err := os.Mkdir(stateBlocker, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(config.Config{DataDir: root}, dataStore, testCatalog{}, &testRunner{})
+	job := model.Job{ID: "delete", DatasetID: "one"}
+
+	if err := manager.runDelete(context.Background(), &job); err == nil {
+		t.Fatal("delete unexpectedly succeeded")
+	}
+	if _, found := dataStore.Dataset("one"); !found {
+		t.Fatal("failed delete removed dataset metadata from memory")
+	}
+	for name, expected := range map[string]string{
+		"one.osm.pbf": "pbf", "one.sqlite": "geocoder", "map.pmtiles": "map",
+	} {
+		content, readErr := os.ReadFile(filepath.Join(root, name))
+		if readErr != nil || string(content) != expected {
+			t.Fatalf("failed delete changed %s: %q, %v", name, content, readErr)
+		}
+	}
+	if err := os.Remove(stateBlocker); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := store.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found := reopened.Dataset("one"); !found {
+		t.Fatal("failed delete durably removed dataset metadata")
 	}
 }
 

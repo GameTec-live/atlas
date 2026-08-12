@@ -77,15 +77,31 @@ func (s *Store) Dataset(id string) (model.Dataset, bool) {
 func (s *Store) PutDataset(dataset model.Dataset) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	previous, existed := s.state.Datasets[dataset.ID]
 	s.state.Datasets[dataset.ID] = dataset
-	return s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		if existed {
+			s.state.Datasets[dataset.ID] = previous
+		} else {
+			delete(s.state.Datasets, dataset.ID)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Store) RemoveDataset(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	previous, existed := s.state.Datasets[id]
 	delete(s.state.Datasets, id)
-	return s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		if existed {
+			s.state.Datasets[id] = previous
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Store) Jobs() []model.Job {
