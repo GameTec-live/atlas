@@ -6,7 +6,11 @@ interface JobRepository {
 
     suspend fun startJob(
         jobId: String
-    ): StartJobResult
+    ): JobActionResult
+
+    suspend fun cancelJob(
+        jobId: String
+    ): JobActionResult
 }
 
 sealed interface JobsResult {
@@ -28,18 +32,18 @@ sealed interface JobsResult {
     ) : JobsResult
 }
 
-sealed interface StartJobResult {
+sealed interface JobActionResult {
 
-    data object Success : StartJobResult
+    data object Success : JobActionResult
 
-    data object Unauthorized : StartJobResult
+    data object Unauthorized : JobActionResult
 
-    data object NetworkError : StartJobResult
+    data object NetworkError : JobActionResult
 
-    data object InvalidResponse : StartJobResult
+    data object InvalidResponse : JobActionResult
 
     data class ServerError(
         val statusCode: Int,
         val message: String?
-    ) : StartJobResult
+    ) : JobActionResult
 }

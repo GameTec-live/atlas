@@ -21,6 +21,7 @@ internal fun AuthenticatedNavHost(
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
+    onCancelCurrentJob: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
@@ -40,6 +41,7 @@ internal fun AuthenticatedNavHost(
                 onToggleJobList = onToggleJobList,
                 onRetryJobs = onRetryJobs,
                 onStartNextJob = onStartNextJob,
+                onCancelCurrentJob = onCancelCurrentJob,
                 onLogout = onLogout
             )
         }

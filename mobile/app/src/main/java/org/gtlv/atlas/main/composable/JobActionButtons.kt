@@ -24,7 +24,9 @@ internal fun JobActionButtons(
     hasCurrentJob: Boolean,
     hasNextJob: Boolean,
     isStartingNextJob: Boolean,
+    isCancellingCurrentJob: Boolean,
     onNextJobClick: () -> Unit,
+    onCancelCurrentJobClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -33,23 +35,29 @@ internal fun JobActionButtons(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (hasCurrentJob) {
-            /*
-             * These buttons are intentionally disabled.
-             * Their business logic will be implemented later.
-             */
             FilledTonalIconButton(
-                onClick = {},
-                enabled = false,
+                onClick = onCancelCurrentJobClick,
+                enabled = !isCancellingCurrentJob,
                 modifier = Modifier.size(48.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(
-                        R.string.job_action_cancel
+                if (isCancellingCurrentJob) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
                     )
-                )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(
+                            R.string.job_action_cancel
+                        )
+                    )
+                }
             }
 
+            /*
+             * Person-collected logic will be implemented later.
+             */
             Button(
                 onClick = {},
                 enabled = false,

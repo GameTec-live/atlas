@@ -9,5 +9,7 @@ data class MainScreenUiState(
     val isJobListExpanded: Boolean = false,
     val hasError: Boolean = false,
     val isStartingNextJob: Boolean = false,
-    val startNextJobFailed: Boolean = false
+    val startNextJobFailed: Boolean = false,
+    val isCancellingCurrentJob: Boolean = false,
+    val cancelCurrentJobFailed: Boolean = false
 )

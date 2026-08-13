@@ -187,6 +187,8 @@ class MainActivity : ComponentActivity() {
                                             mainScreenViewModel::refresh,
                                         onStartNextJob =
                                             mainScreenViewModel::startNextJob,
+                                        onCancelCurrentJob =
+                                            mainScreenViewModel::cancelCurrentJob,
                                         onLogout = loginViewModel::logout
                                     )
                                 }

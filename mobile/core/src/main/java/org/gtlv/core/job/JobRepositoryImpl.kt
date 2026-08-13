@@ -90,9 +90,28 @@ class JobRepositoryImpl(
 
     override suspend fun startJob(
         jobId: String
-    ): StartJobResult = withContext(Dispatchers.IO) {
+    ): JobActionResult {
+        return executeJobAction(
+            jobId = jobId,
+            action = "start"
+        )
+    }
+
+    override suspend fun cancelJob(
+        jobId: String
+    ): JobActionResult {
+        return executeJobAction(
+            jobId = jobId,
+            action = "cancel"
+        )
+    }
+
+    private suspend fun executeJobAction(
+        jobId: String,
+        action: String
+    ): JobActionResult = withContext(Dispatchers.IO) {
         if (jobId.isBlank()) {
-            return@withContext StartJobResult.InvalidResponse
+            return@withContext JobActionResult.InvalidResponse
         }
 
         val serverAddress = serverSettingsRepository
@@ -100,21 +119,21 @@ class JobRepositoryImpl(
             .first()
             .removeSuffix("/")
 
-        val startUrl = serverAddress
+        val actionUrl = serverAddress
             .toHttpUrlOrNull()
             ?.newBuilder()
             ?.addPathSegments("api/jobs")
             ?.addPathSegment(jobId)
-            ?.addPathSegment("start")
+            ?.addPathSegment(action)
             ?.build()
-            ?: return@withContext StartJobResult.InvalidResponse
+            ?: return@withContext JobActionResult.InvalidResponse
 
         val emptyRequestBody = ByteArray(0).toRequestBody(
             "application/json".toMediaType()
         )
 
         val requestBuilder = Request.Builder()
-            .url(startUrl)
+            .url(actionUrl)
             .header("Origin", serverAddress)
             .header("Accept", "application/json")
             .post(emptyRequestBody)
@@ -138,11 +157,11 @@ class JobRepositoryImpl(
 
                     when {
                         response.code == 401 -> {
-                            StartJobResult.Unauthorized
+                            JobActionResult.Unauthorized
                         }
 
                         !response.isSuccessful -> {
-                            StartJobResult.ServerError(
+                            JobActionResult.ServerError(
                                 statusCode = response.code,
                                 message = readServerMessage(
                                     responseText
@@ -151,14 +170,14 @@ class JobRepositoryImpl(
                         }
 
                         else -> {
-                            StartJobResult.Success
+                            JobActionResult.Success
                         }
                     }
                 }
         } catch (_: IOException) {
-            StartJobResult.NetworkError
+            JobActionResult.NetworkError
         } catch (_: Exception) {
-            StartJobResult.InvalidResponse
+            JobActionResult.InvalidResponse
         }
     }
 

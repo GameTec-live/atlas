@@ -49,6 +49,7 @@ internal fun MainScreen(
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
+    onCancelCurrentJob: () -> Unit,
     serverAddress: String,
     modifier: Modifier = Modifier
 ) {
@@ -108,7 +109,11 @@ internal fun MainScreen(
                 hasNextJob = jobState.queuedJobs.isNotEmpty(),
                 isStartingNextJob =
                     jobState.isStartingNextJob,
+                isCancellingCurrentJob =
+                    jobState.isCancellingCurrentJob,
                 onNextJobClick = onStartNextJob,
+                onCancelCurrentJobClick =
+                    onCancelCurrentJob,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
