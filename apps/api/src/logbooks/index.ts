@@ -67,6 +67,7 @@ export const logbooks = new Elysia({
                     startedAt: logbook.startedAt,
                     endedAt: logbook.endedAt,
                     revenue: logbook.revenue,
+                    invalid: logbook.invalid,
                     createdAt: logbook.createdAt,
                     updatedAt: logbook.updatedAt,
                     vehicle: {
@@ -101,6 +102,7 @@ export const logbooks = new Elysia({
                     startedAt: logbook.startedAt,
                     endedAt: logbook.endedAt,
                     revenue: logbook.revenue,
+                    invalid: logbook.invalid,
                     createdAt: logbook.createdAt,
                     updatedAt: logbook.updatedAt,
                     vehicle: {
@@ -164,6 +166,7 @@ export const logbooks = new Elysia({
                     startedAt: logbook.startedAt,
                     endedAt: logbook.endedAt,
                     revenue: logbook.revenue,
+                    invalid: logbook.invalid,
                     createdAt: logbook.createdAt,
                     updatedAt: logbook.updatedAt,
                     vehicle: {
@@ -201,6 +204,7 @@ export const logbooks = new Elysia({
                     startedAt: logbook.startedAt,
                     endedAt: logbook.endedAt,
                     revenue: logbook.revenue,
+                    invalid: logbook.invalid,
                     createdAt: logbook.createdAt,
                     updatedAt: logbook.updatedAt,
                     vehicle: {
@@ -240,6 +244,7 @@ export const logbooks = new Elysia({
                     startedAt: logbook.startedAt,
                     endedAt: logbook.endedAt,
                     revenue: logbook.revenue,
+                    invalid: logbook.invalid,
                     createdAt: logbook.createdAt,
                     updatedAt: logbook.updatedAt,
                     vehicle: {
