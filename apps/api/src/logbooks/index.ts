@@ -129,6 +129,27 @@ export const logbooks = new Elysia({
             admin: true,
         },
     )
+    .delete(
+        "/:id",
+        async ({ params }) => {
+            const softDeleteResult = await db
+                .update(logbook)
+                .set({ invalid: true })
+                .where(eq(logbook.id, params.id));
+
+            if (softDeleteResult.rowCount === 0) {
+                return status(404, { error: "Logbook entry not found" });
+            }
+
+            return { message: "Logbook entry marked invalid" };
+        },
+        {
+            params: t.Object({
+                id: t.String({ format: "uuid" }),
+            }),
+            admin: true,
+        },
+    )
     .get(
         "/vehicle/:vehicleId",
         async ({ params }) => {

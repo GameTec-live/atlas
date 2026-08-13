@@ -13,6 +13,7 @@ import {
     exampleData,
     getDbMockTableRows,
     resetDbMocks,
+    setDbMockRowCount,
     setDbMockRows,
 } from "../mocks/db";
 
@@ -57,8 +58,17 @@ const adminSession = {
 };
 
 const serializedFetchedLogbook = {
-    ...serializedLogbook,
+    id: serializedLogbook.id,
+    vehicleId: serializedLogbook.vehicleId,
+    driverId: serializedLogbook.driverId,
     driverName: first(exampleData.user, "user").name,
+    startOdometer: serializedLogbook.startOdometer,
+    endOdometer: serializedLogbook.endOdometer,
+    startedAt: serializedLogbook.startedAt,
+    endedAt: serializedLogbook.endedAt,
+    revenue: serializedLogbook.revenue,
+    createdAt: serializedLogbook.createdAt,
+    updatedAt: serializedLogbook.updatedAt,
     vehicle: {
         id: exampleVehicle.id,
         licensePlate: exampleVehicle.licensePlate,
@@ -90,6 +100,14 @@ const fetchRequest = (path: string) =>
         }),
     );
 
+const deleteRequest = (id = exampleLogbook.id) =>
+    app.handle(
+        new Request(`http://localhost/logbooks/${id}`, {
+            method: "DELETE",
+            headers: { authorization: "Bearer test-token" },
+        }),
+    );
+
 const useJoinedLogbookRow = () => {
     const logbookRow = first(getDbMockTableRows("logbook"), "logbook row");
     const vehicleRow = first(getDbMockTableRows("vehicle"), "vehicle row");
@@ -101,7 +119,8 @@ const useJoinedLogbookRow = () => {
             logbookRow[1],
             logbookRow[2],
             driver.name,
-            ...logbookRow.slice(3),
+            ...logbookRow.slice(3, 8),
+            ...logbookRow.slice(9),
             vehicleRow[0],
             vehicleRow[5],
             vehicleRow[2],
@@ -416,6 +435,85 @@ describe("GET /logbooks/:id", () => {
 
         expect(response.status).toBe(422);
         expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("DELETE /logbooks/:id", () => {
+    it("returns 401 without a session and does not update the entry", async () => {
+        const response = await deleteRequest();
+
+        expect(response.status).toBe(401);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 403 for a non-admin and does not update the entry", async () => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await deleteRequest();
+
+        expect(response.status).toBe(403);
+        expect(getSessionMock).toHaveBeenCalledTimes(1);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("marks the requested entry invalid", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRowCount("update", 1);
+
+        const response = await deleteRequest();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+            message: "Logbook entry marked invalid",
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+
+        const { sql, values } = getQuery(0);
+        expect(sql).toContain(
+            'update "logbook" set "invalid" = $1, "updated_at" = $2 where "logbook"."id" = $3',
+        );
+        expect(values).toHaveLength(3);
+        expect(values[0]).toBe(true);
+        expect(values[1]).toEqual(expect.any(String));
+        expect(
+            Number.isNaN(new Date(values[1] as string).getTime()),
+        ).toBeFalse();
+        expect(values[2]).toBe(exampleLogbook.id);
+    });
+
+    it("returns 404 when the logbook entry does not exist", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRowCount("update", 0);
+
+        const response = await deleteRequest();
+
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({
+            error: "Logbook entry not found",
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 422 for a non-UUID id without querying the database", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await deleteRequest("not-a-uuid");
+
+        expect(response.status).toBe(422);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 when the update fails", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        dbClientQueryMock.mockRejectedValueOnce(
+            new Error("database unavailable"),
+        );
+
+        const response = await deleteRequest();
+
+        expect(response.status).toBe(500);
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
     });
 });
 
