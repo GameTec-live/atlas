@@ -1,8 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { api, unwrapEden } from "@/lib/api-client";
 import { authClient } from "@/lib/auth-client";
+import { m } from "@/paraglide/messages";
+import { getLocale, setLocale } from "@/paraglide/runtime";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -20,6 +23,11 @@ function Home() {
     return (
         <main>
             <div>
+                <p>{getLocale()}</p>
+                <Button onClick={() => setLocale("en")}>EN</Button>
+                <Button onClick={() => setLocale("de")}>DE</Button>
+            </div>
+            <div>
                 {isSessionPending && <p>Loading session…</p>}
                 {sessionError && (
                     <Alert variant="destructive">
@@ -28,7 +36,13 @@ function Home() {
                         </AlertDescription>
                     </Alert>
                 )}
-                {session && <p>Signed in as {session.user.email}</p>}
+                {session && (
+                    <p>
+                        {m.example_message({
+                            username: session.user.name,
+                        })}
+                    </p>
+                )}
             </div>
 
             <div>

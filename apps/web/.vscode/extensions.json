@@ -1,8 +1,9 @@
 {
-    "recommendations": [
-        "YoavBls.pretty-ts-errors",
-        "biomejs.biome",
-        "dbaeumer.vscode-eslint",
-        "bradlc.vscode-tailwindcss"
-    ]
+  "recommendations": [
+    "YoavBls.pretty-ts-errors",
+    "biomejs.biome",
+    "dbaeumer.vscode-eslint",
+    "bradlc.vscode-tailwindcss",
+    "inlang.vs-code-extension"
+  ]
 }
