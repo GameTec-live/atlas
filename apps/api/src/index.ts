@@ -128,6 +128,8 @@ export const app = new Elysia()
     })
     .listen(3000);
 
+export type App = typeof app;
+
 const banner = `
        d8888 888    888
       d88888 888    888
