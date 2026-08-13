@@ -9,30 +9,33 @@ import okhttp3.Cookie
 import org.json.JSONArray
 import org.json.JSONObject
 
-private val Context.secureSessionDataStore by preferencesDataStore(
-    name = "atlas_secure_session"
-)
+private val Context.secureSessionDataStore
+        by preferencesDataStore(
+            name = "atlas_secure_session"
+        )
 
 class SecureSessionStore(
     context: Context,
-    private val cipher: KeystoreCipher = KeystoreCipher()
+    private val cipher: KeystoreCipher =
+        KeystoreCipher()
 ) {
     private val dataStore =
-        context.applicationContext.secureSessionDataStore
+        context.applicationContext
+            .secureSessionDataStore
 
     suspend fun save(
-        token: String,
         cookies: List<Cookie>
     ) {
         val plainJson = encodeSession(
-            token = token,
             cookies = cookies
         )
 
-        val encryptedSession = cipher.encrypt(plainJson)
+        val encryptedSession =
+            cipher.encrypt(plainJson)
 
         dataStore.edit { preferences ->
-            preferences[ENCRYPTED_SESSION] = encryptedSession
+            preferences[ENCRYPTED_SESSION] =
+                encryptedSession
         }
     }
 
@@ -43,7 +46,9 @@ class SecureSessionStore(
             ?: return null
 
         return try {
-            val plainJson = cipher.decrypt(encryptedSession)
+            val plainJson =
+                cipher.decrypt(encryptedSession)
+
             decodeSession(plainJson)
         } catch (_: Exception) {
             clear()
@@ -53,12 +58,13 @@ class SecureSessionStore(
 
     suspend fun clear() {
         dataStore.edit { preferences ->
-            preferences.remove(ENCRYPTED_SESSION)
+            preferences.remove(
+                ENCRYPTED_SESSION
+            )
         }
     }
 
     private fun encodeSession(
-        token: String,
         cookies: List<Cookie>
     ): String {
         val cookieArray = JSONArray()
@@ -70,15 +76,23 @@ class SecureSessionStore(
                     .put("value", cookie.value)
                     .put("domain", cookie.domain)
                     .put("path", cookie.path)
-                    .put("expiresAt", cookie.expiresAt)
+                    .put(
+                        "expiresAt",
+                        cookie.expiresAt
+                    )
                     .put("secure", cookie.secure)
-                    .put("httpOnly", cookie.httpOnly)
-                    .put("hostOnly", cookie.hostOnly)
+                    .put(
+                        "httpOnly",
+                        cookie.httpOnly
+                    )
+                    .put(
+                        "hostOnly",
+                        cookie.hostOnly
+                    )
             )
         }
 
         return JSONObject()
-            .put("token", token)
             .put("cookies", cookieArray)
             .toString()
     }
@@ -87,19 +101,28 @@ class SecureSessionStore(
         plainJson: String
     ): StoredSession {
         val root = JSONObject(plainJson)
-        val token = root.getString("token")
-        val cookieArray = root.getJSONArray("cookies")
-        val cookies = mutableListOf<Cookie>()
+        val cookieArray =
+            root.getJSONArray("cookies")
 
-        for (index in 0 until cookieArray.length()) {
-            val json = cookieArray.getJSONObject(index)
-            val domain = json.getString("domain")
+        val cookies =
+            mutableListOf<Cookie>()
+
+        for (
+        index in 0 until cookieArray.length()
+        ) {
+            val json =
+                cookieArray.getJSONObject(index)
+
+            val domain =
+                json.getString("domain")
 
             val builder = Cookie.Builder()
                 .name(json.getString("name"))
                 .value(json.getString("value"))
                 .path(json.getString("path"))
-                .expiresAt(json.getLong("expiresAt"))
+                .expiresAt(
+                    json.getLong("expiresAt")
+                )
 
             if (json.getBoolean("hostOnly")) {
                 builder.hostOnlyDomain(domain)
@@ -119,14 +142,14 @@ class SecureSessionStore(
         }
 
         return StoredSession(
-            token = token,
             cookies = cookies
         )
     }
 
-
     private companion object {
         val ENCRYPTED_SESSION =
-            stringPreferencesKey("encrypted_session")
+            stringPreferencesKey(
+                "encrypted_session"
+            )
     }
 }

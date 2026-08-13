@@ -1,26 +1,24 @@
 package org.gtlv.core.job
 
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
-import okhttp3.Request
-import okhttp3.Response
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import org.gtlv.core.network.AccessTokenProvider
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.gtlv.core.network.NetworkClient
 import org.gtlv.core.settings.ServerSettingsRepository
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 
 class JobRepositoryImpl(
     private val networkClient: NetworkClient,
     private val serverSettingsRepository:
-    ServerSettingsRepository,
-    private val accessTokenProvider: AccessTokenProvider
+    ServerSettingsRepository
 ) : JobRepository {
 
     override suspend fun getJobs(): JobsResult =
@@ -132,24 +130,16 @@ class JobRepositoryImpl(
             "application/json".toMediaType()
         )
 
-        val requestBuilder = Request.Builder()
+        val request = Request.Builder()
             .url(actionUrl)
             .header("Origin", serverAddress)
             .header("Accept", "application/json")
             .post(emptyRequestBody)
-
-        accessTokenProvider.currentAccessToken()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { token ->
-                requestBuilder.header(
-                    "Authorization",
-                    "Bearer $token"
-                )
-            }
+            .build()
 
         try {
             networkClient.okHttpClient
-                .newCall(requestBuilder.build())
+                .newCall(request)
                 .execute()
                 .use { response ->
                     val responseText =
@@ -227,23 +217,16 @@ class JobRepositoryImpl(
         allowNotFound: Boolean = false,
         parse: (String) -> T
     ): EndpointResult<T> {
-        val requestBuilder = Request.Builder()
+        val request = Request.Builder()
             .url(url)
             .header("Origin", serverAddress)
+            .header("Accept", "application/json")
             .get()
-
-        accessTokenProvider.currentAccessToken()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { token ->
-                requestBuilder.header(
-                    "Authorization",
-                    "Bearer $token"
-                )
-            }
+            .build()
 
         return try {
             networkClient.okHttpClient
-                .newCall(requestBuilder.build())
+                .newCall(request)
                 .execute()
                 .use { response ->
                     response.toEndpointResult(
@@ -276,7 +259,9 @@ class JobRepositoryImpl(
             !isSuccessful -> {
                 EndpointResult.Failure.Server(
                     statusCode = code,
-                    message = readServerMessage(responseText)
+                    message = readServerMessage(
+                        responseText
+                    )
                 )
             }
 
