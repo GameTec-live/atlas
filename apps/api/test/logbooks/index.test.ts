@@ -58,17 +58,8 @@ const adminSession = {
 };
 
 const serializedFetchedLogbook = {
-    id: serializedLogbook.id,
-    vehicleId: serializedLogbook.vehicleId,
-    driverId: serializedLogbook.driverId,
+    ...serializedLogbook,
     driverName: first(exampleData.user, "user").name,
-    startOdometer: serializedLogbook.startOdometer,
-    endOdometer: serializedLogbook.endOdometer,
-    startedAt: serializedLogbook.startedAt,
-    endedAt: serializedLogbook.endedAt,
-    revenue: serializedLogbook.revenue,
-    createdAt: serializedLogbook.createdAt,
-    updatedAt: serializedLogbook.updatedAt,
     vehicle: {
         id: exampleVehicle.id,
         licensePlate: exampleVehicle.licensePlate,
@@ -119,8 +110,7 @@ const useJoinedLogbookRow = () => {
             logbookRow[1],
             logbookRow[2],
             driver.name,
-            ...logbookRow.slice(3, 8),
-            ...logbookRow.slice(9),
+            ...logbookRow.slice(3),
             vehicleRow[0],
             vehicleRow[5],
             vehicleRow[2],
