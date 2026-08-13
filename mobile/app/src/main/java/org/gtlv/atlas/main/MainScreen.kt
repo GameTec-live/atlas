@@ -37,6 +37,19 @@ import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import org.gtlv.atlas.main.composable.JobActionButtons
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.res.stringResource
 
 @Composable
 internal fun MainScreen(
@@ -44,11 +57,13 @@ internal fun MainScreen(
     role: ShiftRole,
     locationState: LocationState,
     onLogout: () -> Unit,
-    modifier: Modifier = Modifier,
     jobState: MainScreenUiState,
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
-    serverAddress: String
+    onStartNextJob: () -> Unit,
+    onCancelCurrentJob: () -> Unit,
+    serverAddress: String,
+    modifier: Modifier = Modifier
 ) {
     val styleUrl = MapConfiguration.createStyleUrl(
         serverAddress = serverAddress
@@ -68,6 +83,35 @@ internal fun MainScreen(
 
     BackHandler(enabled = isProfileOpen) {
         isProfileOpen = false
+    }
+
+    val jobErrorSnackbarHostState = remember {
+        SnackbarHostState()
+    }
+
+    val jobActionErrorMessage = when {
+        jobState.startNextJobFailed -> {
+            stringResource(
+                R.string.job_action_start_failed
+            )
+        }
+
+        jobState.cancelCurrentJobFailed -> {
+            stringResource(
+                R.string.job_action_cancel_failed
+            )
+        }
+
+        else -> null
+    }
+
+    LaunchedEffect(jobActionErrorMessage) {
+        jobActionErrorMessage?.let { message ->
+            jobErrorSnackbarHostState.showSnackbar(
+                message = message,
+                duration = SnackbarDuration.Short
+            )
+        }
     }
 
     Box(
@@ -100,6 +144,37 @@ internal fun MainScreen(
                         bottom = 8.dp
                     )
             )
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = 8.dp,
+                        bottom = 8.dp
+                    ),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(
+                    8.dp
+                )
+            ) {
+                SnackbarHost(
+                    hostState = jobErrorSnackbarHostState
+                )
+
+                JobActionButtons(
+                    hasCurrentJob =
+                        jobState.currentJob != null,
+                    hasNextJob =
+                        jobState.queuedJobs.isNotEmpty(),
+                    isStartingNextJob =
+                        jobState.isStartingNextJob,
+                    isCancellingCurrentJob =
+                        jobState.isCancellingCurrentJob,
+                    onNextJobClick = onStartNextJob,
+                    onCancelCurrentJobClick =
+                        onCancelCurrentJob
+                )
+            }
 
             if (
                 locationState is LocationState.Available &&

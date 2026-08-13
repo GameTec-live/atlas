@@ -185,6 +185,10 @@ class MainActivity : ComponentActivity() {
                                             mainScreenViewModel::toggleJobList,
                                         onRetryJobs =
                                             mainScreenViewModel::refresh,
+                                        onStartNextJob =
+                                            mainScreenViewModel::startNextJob,
+                                        onCancelCurrentJob =
+                                            mainScreenViewModel::cancelCurrentJob,
                                         onLogout = loginViewModel::logout
                                     )
                                 }

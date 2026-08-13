@@ -57,4 +57,10 @@
         <item quantity="one">Next Job (%1$d in queue)</item>
         <item quantity="other">Next Job (%1$d in queue)</item>
     </plurals>
+
+    <string name="job_action_next_job">Next Job</string>
+    <string name="job_action_person_collected">Person collected</string>
+    <string name="job_action_cancel">Cancel current job</string>
+    <string name="job_action_start_failed">Could not start the next job</string>
+    <string name="job_action_cancel_failed">Could not cancel the current job</string>
 </resources>

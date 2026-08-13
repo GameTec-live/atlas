@@ -94,8 +94,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     val roleRepository by lazy {
         RoleRepositoryImpl(
             networkClient = networkClient,
-            serverSettingsRepository = serverSettingsRepository,
-            accessTokenProvider = authRepository
+            serverSettingsRepository = serverSettingsRepository
         )
     }
 
@@ -111,8 +110,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         JobRepositoryImpl(
             networkClient = networkClient,
             serverSettingsRepository =
-                serverSettingsRepository,
-            accessTokenProvider = authRepository
+                serverSettingsRepository
         )
     }
 }
