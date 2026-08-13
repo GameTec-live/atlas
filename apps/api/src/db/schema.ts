@@ -225,6 +225,7 @@ export const logbook = pgTable(
             .notNull(),
         endedAt: timestamp("ended_at", { withTimezone: true }),
         revenue: real("revenue"),
+        invalid: boolean("invalid").default(false).notNull(),
         createdAt: timestamp("created_at", { withTimezone: true })
             .defaultNow()
             .notNull(),
