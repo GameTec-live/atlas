@@ -201,6 +201,7 @@ class MainScreenViewModel(
             else -> {
                 _uiState.update {
                     it.copy(
+                        isLoading = false,
                         isStartingNextJob = false,
                         isCancellingCurrentJob = false,
                         hasError = true
