@@ -14,8 +14,9 @@
         "format": "biome format --write .",
         "lint": "biome lint",
         "check": "biome check",
+        "generate-paraglide": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --emit-ts-declarations --silent",
         "precheck-types": "bun run --cwd ../api generate-types",
-        "check-types": "tsc --noEmit",
+        "check-types": "bun run generate-paraglide && tsc --noEmit",
         "machine-translate": "inlang machine translate --project project.inlang"
     },
     "dependencies": {
