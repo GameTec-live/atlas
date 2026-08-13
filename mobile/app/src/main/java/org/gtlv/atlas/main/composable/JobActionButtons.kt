@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
+import androidx.compose.material3.MaterialTheme
 
 @Composable
 internal fun JobActionButtons(
