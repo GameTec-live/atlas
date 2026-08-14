@@ -1,3 +1,4 @@
+import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 
@@ -19,6 +20,11 @@ const config = defineConfig({
         },
     },
     plugins: [
+        paraglideVitePlugin({
+            project: "./project.inlang",
+            outdir: "./src/paraglide",
+            emitTsDeclarations: true,
+        }),
         devtools(),
         tailwindcss(),
         tanstackRouter({ target: "react", autoCodeSplitting: true }),
