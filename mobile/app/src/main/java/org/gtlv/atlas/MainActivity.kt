@@ -45,7 +45,9 @@ class MainActivity : ComponentActivity() {
             MainScreenViewModel by viewModels {
         MainScreenViewModelFactory(
             jobRepository =
-                atlasApplication.jobRepository
+                atlasApplication.jobRepository,
+            geoServiceRepository =
+                atlasApplication.geoServiceRepository
         )
     }
 

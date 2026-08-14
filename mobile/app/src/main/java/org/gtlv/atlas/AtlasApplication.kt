@@ -19,6 +19,7 @@ import org.gtlv.core.settings.ServerSettingsProvider
 import org.gtlv.core.shift.DataStoreShiftSessionStore
 import org.gtlv.core.shift.ShiftSessionManager
 import org.gtlv.core.job.JobRepositoryImpl
+import org.gtlv.core.geoservice.GeoServiceRepositoryImpl
 
 class AtlasApplication : Application(), ShiftSessionProvider,
     ServerSettingsProvider, CarLocationProviderRegistry {
@@ -108,6 +109,14 @@ class AtlasApplication : Application(), ShiftSessionProvider,
 
     val jobRepository by lazy {
         JobRepositoryImpl(
+            networkClient = networkClient,
+            serverSettingsRepository =
+                serverSettingsRepository
+        )
+    }
+
+    val geoServiceRepository by lazy {
+        GeoServiceRepositoryImpl(
             networkClient = networkClient,
             serverSettingsRepository =
                 serverSettingsRepository

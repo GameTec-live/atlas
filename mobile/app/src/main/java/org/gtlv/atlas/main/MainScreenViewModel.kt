@@ -14,9 +14,14 @@ import org.gtlv.core.job.JobActionResult
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
 import kotlin.coroutines.coroutineContext
+import org.gtlv.atlas.address.AddressSearchUiState
+import org.gtlv.core.geoservice.GeoServiceRepository
+import org.gtlv.core.geoservice.ResolveAddressResult
+import org.gtlv.core.job.JobLocationField
 
 class MainScreenViewModel(
-    private val jobRepository: JobRepository
+    private val jobRepository: JobRepository,
+    private val geoServiceRepository: GeoServiceRepository
 ) : ViewModel() {
 
     private val _uiState =
@@ -29,6 +34,8 @@ class MainScreenViewModel(
     private var refreshJob: Job? = null
     private var jobActionTask: Job? = null
 
+    private var addressSearchTask: Job? = null
+
     fun loadJobsForUser(userId: String) {
         if (activeUserId == userId) {
             return
@@ -36,6 +43,7 @@ class MainScreenViewModel(
 
         refreshJob?.cancel()
         jobActionTask?.cancel()
+        addressSearchTask?.cancel()
 
         activeUserId = userId
         _uiState.value = MainScreenUiState()
@@ -240,6 +248,9 @@ class MainScreenViewModel(
         jobActionTask?.cancel()
         jobActionTask = null
 
+        addressSearchTask?.cancel()
+        addressSearchTask = null
+
         _uiState.value = MainScreenUiState(
             isLoading = false
         )
@@ -251,6 +262,118 @@ class MainScreenViewModel(
                 isJobListExpanded =
                     !it.isJobListExpanded
             )
+        }
+    }
+
+    fun openDestinationEditor() {
+        val currentJob = _uiState.value.currentJob
+            ?: return
+
+        addressSearchTask?.cancel()
+
+        _uiState.update {
+            it.copy(
+                isAddressEditorOpen = true,
+                editedLocationField =
+                    JobLocationField.TO,
+                addressSearch =
+                    AddressSearchUiState(
+                        query =
+                            currentJob.toAddress.orEmpty()
+                    )
+            )
+        }
+    }
+
+    fun closeAddressEditor() {
+        addressSearchTask?.cancel()
+        addressSearchTask = null
+
+        _uiState.update {
+            it.copy(
+                isAddressEditorOpen = false,
+                editedLocationField = null,
+                addressSearch =
+                    AddressSearchUiState()
+            )
+        }
+    }
+
+    fun onAddressQueryChanged(
+        query: String
+    ) {
+        if (!_uiState.value.isAddressEditorOpen) {
+            return
+        }
+
+        addressSearchTask?.cancel()
+
+        _uiState.update {
+            it.copy(
+                addressSearch =
+                    it.addressSearch.copy(
+                        query = query,
+                        suggestions = emptyList(),
+                        isLoading = query.isNotEmpty(),
+                        hasError = false,
+                        saveFailed = false
+                    )
+            )
+        }
+
+        if (query.isEmpty()) {
+            addressSearchTask = null
+            return
+        }
+
+        addressSearchTask = viewModelScope.launch {
+            val result =
+                geoServiceRepository.resolveAddress(
+                    address = query
+                )
+
+            /*
+             * A cancelled, older request must not replace
+             * results belonging to newer input.
+             */
+            coroutineContext.ensureActive()
+
+            if (
+                _uiState.value.addressSearch.query !=
+                query
+            ) {
+                return@launch
+            }
+
+            when (result) {
+                is ResolveAddressResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            addressSearch =
+                                it.addressSearch.copy(
+                                    suggestions =
+                                        result.suggestions,
+                                    isLoading = false,
+                                    hasError = false
+                                )
+                        )
+                    }
+                }
+
+                else -> {
+                    _uiState.update {
+                        it.copy(
+                            addressSearch =
+                                it.addressSearch.copy(
+                                    suggestions =
+                                        emptyList(),
+                                    isLoading = false,
+                                    hasError = true
+                                )
+                        )
+                    }
+                }
+            }
         }
     }
 }

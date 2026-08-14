@@ -1,6 +1,8 @@
 package org.gtlv.atlas.main
 
+import org.gtlv.atlas.address.AddressSearchUiState
 import org.gtlv.core.job.Job
+import org.gtlv.core.job.JobLocationField
 
 data class MainScreenUiState(
     val isLoading: Boolean = true,
@@ -11,5 +13,9 @@ data class MainScreenUiState(
     val isStartingNextJob: Boolean = false,
     val startNextJobFailed: Boolean = false,
     val isCancellingCurrentJob: Boolean = false,
-    val cancelCurrentJobFailed: Boolean = false
+    val cancelCurrentJobFailed: Boolean = false,
+    val isAddressEditorOpen: Boolean = false,
+    val editedLocationField: JobLocationField? = null,
+    val addressSearch: AddressSearchUiState =
+        AddressSearchUiState()
 )

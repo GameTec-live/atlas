@@ -11,6 +11,20 @@ interface JobRepository {
     suspend fun cancelJob(
         jobId: String
     ): JobActionResult
+
+    suspend fun updateJobLocation(
+        jobId: String,
+        field: JobLocationField,
+        latitude: Double,
+        longitude: Double
+    ): JobActionResult
+}
+
+enum class JobLocationField(
+    val apiName: String
+) {
+    FROM("from"),
+    TO("to")
 }
 
 sealed interface JobsResult {
