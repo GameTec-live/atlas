@@ -22,7 +22,13 @@ export const Route = createFileRoute("/_authenticated")({
         if (error) throw error;
 
         if (!session || !hasAdminRole(session.user.role)) {
-            if (session) await authClient.signOut();
+            if (session) {
+                try {
+                    await authClient.signOut();
+                } catch {
+                    // A failed sign-out must not prevent the authorization redirect.
+                }
+            }
 
             throw redirect({
                 to: "/login",
