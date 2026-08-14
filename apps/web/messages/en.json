@@ -1,4 +1,15 @@
 {
     "$schema": "https://inlang.com/schema/inlang-message-format",
-    "example_message": "Hello world {username}"
+    "example_message": "Hello world {username}",
+    "noble_lofty_otter_ripple": "Unable to sign in.",
+    "sweet_sleek_weasel_savor": "Unable to reach the authentication service.",
+    "due_agent_reindeer_trust": "Login to Atlas",
+    "house_bald_eagle_greet": "Enter your username below to login to your account",
+    "bland_formal_yak_climb": "Username",
+    "sad_proud_orangutan_fall": "Password",
+    "factual_fun_squid_fry": "Login",
+    "bland_novel_bee_scoop": "Authentication Error",
+    "teal_few_nils_cry": "Unable to verify your session.",
+    "mushy_salty_kitten_stab": "Retry",
+    "admin_access_required": "Only administrators can access this application."
 }

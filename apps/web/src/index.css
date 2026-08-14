@@ -5,6 +5,57 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@theme {
+    --animate-logo-happy: logo-happy 500ms cubic-bezier(0.34, 1.56, 0.64, 1)
+        both;
+    --animate-logo-turn: logo-turn 900ms linear infinite;
+    --animate-logo-fall: logo-fall 700ms cubic-bezier(0.55, 0.06, 0.68, 0.19)
+        both;
+
+    @keyframes logo-happy {
+        0%,
+        100% {
+            transform: translateY(0) rotate(0);
+        }
+        40% {
+            transform: translateY(-20%) rotate(-4deg);
+        }
+        65% {
+            transform: translateY(0) rotate(4deg);
+        }
+        82% {
+            transform: translateY(-6%) rotate(-2deg);
+        }
+    }
+
+    @keyframes logo-turn {
+        from {
+            transform: rotate3d(1, -1, 0, 0deg);
+        }
+        to {
+            transform: rotate3d(1, -1, 0, 360deg);
+        }
+    }
+
+    @keyframes logo-fall {
+        0% {
+            transform: translate(0);
+        }
+        18% {
+            transform: translate(-25%, -5%);
+        }
+        82% {
+            transform: translate(-55%, 48%);
+        }
+        92% {
+            transform: translate(-55%, 41%);
+        }
+        100% {
+            transform: translate(-55%, 48%);
+        }
+    }
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: "Geist Variable", sans-serif;

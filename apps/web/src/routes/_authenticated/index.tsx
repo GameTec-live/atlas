@@ -1,15 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { ModeToggle } from "@/components/mode-toggle";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { api, unwrapEden } from "@/lib/api-client";
 import { authClient } from "@/lib/auth-client";
+import { queryClient } from "@/lib/query-client";
 import { m } from "@/paraglide/messages";
 import { getLocale, setLocale } from "@/paraglide/runtime";
 
-export const Route = createFileRoute("/")({ component: Home });
+export const Route = createFileRoute("/_authenticated/")({
+    component: Dashboard,
+});
 
-function Home() {
+function Dashboard() {
     const {
         data: session,
         isPending: isSessionPending,
@@ -19,14 +23,17 @@ function Home() {
         queryKey: ["api", "info"],
         queryFn: () => unwrapEden(api.get()),
     });
+    const router = useRouter();
 
     return (
         <main>
+            <h1>Dashboard</h1>
             <div>
                 <p>{getLocale()}</p>
                 <Button onClick={() => setLocale("en")}>EN</Button>
                 <Button onClick={() => setLocale("de")}>DE</Button>
             </div>
+            <ModeToggle />
             <div>
                 {isSessionPending && <p>Loading session…</p>}
                 {sessionError && (
@@ -37,11 +44,22 @@ function Home() {
                     </Alert>
                 )}
                 {session && (
-                    <p>
-                        {m.example_message({
-                            username: session.user.name,
-                        })}
-                    </p>
+                    <>
+                        <p>
+                            {m.example_message({
+                                username: session.user.name,
+                            })}
+                        </p>
+                        <Button
+                            onClick={async () => {
+                                await authClient.signOut();
+                                queryClient.clear();
+                                await router.invalidate();
+                            }}
+                        >
+                            Sign out
+                        </Button>
+                    </>
                 )}
             </div>
 
