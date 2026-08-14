@@ -77,7 +77,9 @@ function Dashboard() {
                         <dt className="text-muted-foreground">Version</dt>
                         <dd>{data.build.version}</dd>
                         <dt className="text-muted-foreground">Built</dt>
-                        <dd>{data.build.time}</dd>
+                        <dd>
+                            {data.build.time?.toLocaleString() ?? "unknown"}
+                        </dd>
                         <dt className="text-muted-foreground">Commit</dt>
                         <dd className="truncate font-mono text-xs">
                             {data.build.commit}

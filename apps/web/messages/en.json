@@ -8,8 +8,7 @@
     "bland_formal_yak_climb": "Username",
     "sad_proud_orangutan_fall": "Password",
     "factual_fun_squid_fry": "Login",
-    "bland_novel_bee_scoop": "Authentication Error",
-    "teal_few_nils_cry": "Unable to verify your session.",
+    "application_error": "Application Error",
     "mushy_salty_kitten_stab": "Retry",
     "admin_access_required": "Only administrators can access this application."
 }

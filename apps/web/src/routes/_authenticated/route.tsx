@@ -1,8 +1,8 @@
 import {
     createFileRoute,
+    type ErrorComponentProps,
     Outlet,
     redirect,
-    useRouter,
 } from "@tanstack/react-router";
 import {
     Alert,
@@ -42,23 +42,18 @@ export const Route = createFileRoute("/_authenticated")({
 
         return { session };
     },
-    errorComponent: AuthenticationError,
+    errorComponent: RouteError,
     component: Outlet,
 });
 
-function AuthenticationError() {
-    const router = useRouter();
-
+function RouteError({ error, reset }: ErrorComponentProps) {
     return (
         <main className="mx-auto flex min-h-svh max-w-md items-center p-6">
             <Alert variant="destructive">
-                <AlertTitle>{m.bland_novel_bee_scoop()}</AlertTitle>
-                <AlertDescription>{m.teal_few_nils_cry()}</AlertDescription>
+                <AlertTitle>{m.application_error()}</AlertTitle>
+                <AlertDescription>{error.message}</AlertDescription>
                 <AlertAction>
-                    <Button
-                        variant="outline"
-                        onClick={() => void router.invalidate()}
-                    >
+                    <Button variant="outline" onClick={reset}>
                         {m.mushy_salty_kitten_stab()}
                     </Button>
                 </AlertAction>
