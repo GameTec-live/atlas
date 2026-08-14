@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { ModeToggle } from "@/components/mode-toggle";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { api, unwrapEden } from "@/lib/api-client";
@@ -32,6 +33,7 @@ function Dashboard() {
                 <Button onClick={() => setLocale("en")}>EN</Button>
                 <Button onClick={() => setLocale("de")}>DE</Button>
             </div>
+            <ModeToggle />
             <div>
                 {isSessionPending && <p>Loading session…</p>}
                 {sessionError && (
