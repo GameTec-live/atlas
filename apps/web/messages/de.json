@@ -1,4 +1,15 @@
 {
     "$schema": "https://inlang.com/schema/inlang-message-format",
-    "example_message": "Guten Tag {username}"
+    "example_message": "Guten Tag {username}",
+    "noble_lofty_otter_ripple": "Fehler bei der Anmeldung.",
+    "sweet_sleek_weasel_savor": "Der Authentifizierungsdienst kann nicht erreicht werden.",
+    "due_agent_reindeer_trust": "Bei Atlas anmelden",
+    "house_bald_eagle_greet": "Geben Sie ihren Nutzernamen ein um sich anzumelden",
+    "bland_formal_yak_climb": "Benutzername",
+    "sad_proud_orangutan_fall": "Passwort",
+    "factual_fun_squid_fry": "Anmelden",
+    "bland_novel_bee_scoop": "Authentifizierungsfehler",
+    "teal_few_nils_cry": "Sitzung konnte nicht überprüft werden.",
+    "mushy_salty_kitten_stab": "Neuladen",
+    "admin_access_required": "Nur Administratoren können auf diese Anwendung zugreifen."
 }
