@@ -33,11 +33,15 @@ export function LoginForm({
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formError, setFormError] = useState(initialError);
+    const [logoState, setLogoState] = useState<
+        "idle" | "submitting" | "success" | "error"
+    >("idle");
 
     async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
         setFormError(undefined);
         setIsSubmitting(true);
+        setLogoState("submitting");
 
         const formData = new FormData(event.currentTarget);
         const username = formData.get("username");
@@ -45,6 +49,7 @@ export function LoginForm({
 
         if (typeof username !== "string" || typeof password !== "string") {
             setFormError("Enter your username and password.");
+            setLogoState("error");
             setIsSubmitting(false);
             return;
         }
@@ -57,18 +62,23 @@ export function LoginForm({
 
             if (error) {
                 setFormError(error.message ?? m.noble_lofty_otter_ripple());
+                setLogoState("error");
                 return;
             }
 
             if (!data || !hasAdminRole(data.user.role)) {
                 await authClient.signOut();
                 setFormError(m.admin_access_required());
+                setLogoState("error");
                 return;
             }
 
+            setLogoState("success");
+            await new Promise((resolve) => setTimeout(resolve, 150));
             router.history.replace(redirectTo);
         } catch {
             setFormError(m.sweet_sleek_weasel_savor());
+            setLogoState("error");
         } finally {
             setIsSubmitting(false);
         }
@@ -76,14 +86,30 @@ export function LoginForm({
 
     return (
         <div className={cn("flex flex-col gap-6", className)} {...props}>
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                className="max-w-1/2 mx-auto"
+            <div
+                className={cn(
+                    "mx-auto w-1/2 transform-gpu",
+                    logoState === "success" && "animate-logo-happy",
+                )}
             >
-                <title>Logo</title>
-                <path d="M17.36,2.64L15.95,4.06C17.26,5.37 18,7.14 18,9A7,7 0 0,1 11,16C9.15,16 7.37,15.26 6.06,13.95L4.64,15.36C6.08,16.8 7.97,17.71 10,17.93V20H6V22H16V20H12V17.94C16.55,17.43 20,13.58 20,9C20,6.62 19.05,4.33 17.36,2.64M11,3.5A5.5,5.5 0 0,0 5.5,9A5.5,5.5 0 0,0 11,14.5A5.5,5.5 0 0,0 16.5,9A5.5,5.5 0 0,0 11,3.5M11,5.5C12.94,5.5 14.5,7.07 14.5,9A3.5,3.5 0 0,1 11,12.5A3.5,3.5 0 0,1 7.5,9A3.5,3.5 0 0,1 11,5.5Z" />
-            </svg>
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    className="w-full overflow-visible"
+                >
+                    <title>Logo</title>
+                    <path d="M17.36,2.64L15.95,4.06C17.26,5.37 18,7.14 18,9A7,7 0 0,1 11,16C9.15,16 7.37,15.26 6.06,13.95L4.64,15.36C6.08,16.8 7.97,17.71 10,17.93V20H6V22H16V20H12V17.94C16.55,17.43 20,13.58 20,9C20,6.62 19.05,4.33 17.36,2.64" />
+                    <g
+                        className={cn(
+                            "transform-gpu origin-[11px_9px]",
+                            logoState === "submitting" && "animate-logo-turn",
+                            logoState === "error" && "animate-logo-fall",
+                        )}
+                    >
+                        <path d="M11,3.5A5.5,5.5 0 0,0 5.5,9A5.5,5.5 0 0,0 11,14.5A5.5,5.5 0 0,0 16.5,9A5.5,5.5 0 0,0 11,3.5M11,5.5C12.94,5.5 14.5,7.07 14.5,9A3.5,3.5 0 0,1 11,12.5A3.5,3.5 0 0,1 7.5,9A3.5,3.5 0 0,1 11,5.5Z" />
+                    </g>
+                </svg>
+            </div>
             <Card>
                 <CardHeader>
                     <CardTitle>{m.due_agent_reindeer_trust()}</CardTitle>
