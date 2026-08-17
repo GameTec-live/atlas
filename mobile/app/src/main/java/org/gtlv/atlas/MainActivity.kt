@@ -183,14 +183,14 @@ class MainActivity : ComponentActivity() {
                                         serverAddress = loginState.serverAddress,
                                         locationState = locationState,
                                         mainScreenState = mainScreenState,
-                                        onToggleJobList =
-                                            mainScreenViewModel::toggleJobList,
-                                        onRetryJobs =
-                                            mainScreenViewModel::refresh,
-                                        onStartNextJob =
-                                            mainScreenViewModel::startNextJob,
-                                        onCancelCurrentJob =
-                                            mainScreenViewModel::cancelCurrentJob,
+                                        onToggleJobList = mainScreenViewModel::toggleJobList,
+                                        onRetryJobs = mainScreenViewModel::refresh,
+                                        onStartNextJob = mainScreenViewModel::startNextJob,
+                                        onCancelCurrentJob = mainScreenViewModel::cancelCurrentJob,
+                                        onEditDestination = mainScreenViewModel::openDestinationEditor,
+                                        onAddressQueryChanged = mainScreenViewModel::onAddressQueryChanged,
+                                        onAddressSuggestionSelected = mainScreenViewModel::selectAddressSuggestion,
+                                        onCloseAddressEditor = mainScreenViewModel::closeAddressEditor,
                                         onLogout = loginViewModel::logout
                                     )
                                 }

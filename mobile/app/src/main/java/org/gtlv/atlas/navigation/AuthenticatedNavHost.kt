@@ -9,6 +9,7 @@ import org.gtlv.atlas.main.MainScreen
 import org.gtlv.atlas.main.MainScreenUiState
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
+import org.gtlv.core.geoservice.AddressSuggestion
 
 @Composable
 internal fun AuthenticatedNavHost(
@@ -22,6 +23,11 @@ internal fun AuthenticatedNavHost(
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
     onCancelCurrentJob: () -> Unit,
+    onEditDestination: () -> Unit,
+    onAddressQueryChanged: (String) -> Unit,
+    onAddressSuggestionSelected:
+        (AddressSuggestion) -> Unit,
+    onCloseAddressEditor: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
@@ -42,6 +48,10 @@ internal fun AuthenticatedNavHost(
                 onRetryJobs = onRetryJobs,
                 onStartNextJob = onStartNextJob,
                 onCancelCurrentJob = onCancelCurrentJob,
+                onEditDestination = onEditDestination,
+                onAddressQueryChanged = onAddressQueryChanged,
+                onAddressSuggestionSelected = onAddressSuggestionSelected,
+                onCloseAddressEditor = onCloseAddressEditor,
                 onLogout = onLogout
             )
         }

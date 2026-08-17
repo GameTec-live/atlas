@@ -8,15 +8,23 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -28,28 +36,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
+import org.gtlv.atlas.address.AddressSearchField
+import org.gtlv.atlas.main.composable.JobActionButtons
 import org.gtlv.atlas.main.composable.JobPanel
 import org.gtlv.atlas.main.composable.ProfileButton
 import org.gtlv.atlas.main.composable.ProfileSidebar
 import org.gtlv.atlas.map.AtlasMap
 import org.gtlv.atlas.map.MapConfiguration
+import org.gtlv.core.geoservice.AddressSuggestion
+import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import org.gtlv.atlas.main.composable.JobActionButtons
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.ui.res.stringResource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.ui.res.stringResource
 
 @Composable
 internal fun MainScreen(
@@ -63,11 +60,17 @@ internal fun MainScreen(
     onStartNextJob: () -> Unit,
     onCancelCurrentJob: () -> Unit,
     serverAddress: String,
+    onEditDestination: () -> Unit,
+    onAddressQueryChanged: (String) -> Unit,
+    onAddressSuggestionSelected:
+        (AddressSuggestion) -> Unit,
+    onCloseAddressEditor: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val styleUrl = MapConfiguration.createStyleUrl(
-        serverAddress = serverAddress
-    )
+    val styleUrl =
+        MapConfiguration.createStyleUrl(
+            serverAddress = serverAddress
+        )
 
     var isFollowingLocation by rememberSaveable {
         mutableStateOf(true)
@@ -77,12 +80,29 @@ internal fun MainScreen(
         mutableIntStateOf(0)
     }
 
-    var isProfileOpen by rememberSaveable(userName) {
+    var isProfileOpen by rememberSaveable(
+        userName
+    ) {
         mutableStateOf(false)
     }
 
-    BackHandler(enabled = isProfileOpen) {
-        isProfileOpen = false
+    BackHandler(
+        enabled =
+            isProfileOpen ||
+                    (
+                            jobState.isAddressEditorOpen &&
+                                    !jobState.addressSearch.isSaving
+                            )
+    ) {
+        when {
+            isProfileOpen -> {
+                isProfileOpen = false
+            }
+
+            jobState.isAddressEditorOpen -> {
+                onCloseAddressEditor()
+            }
+        }
     }
 
     val jobErrorSnackbarHostState = remember {
@@ -105,12 +125,16 @@ internal fun MainScreen(
         else -> null
     }
 
-    LaunchedEffect(jobActionErrorMessage) {
+    LaunchedEffect(
+        jobActionErrorMessage
+    ) {
         jobActionErrorMessage?.let { message ->
-            jobErrorSnackbarHostState.showSnackbar(
-                message = message,
-                duration = SnackbarDuration.Short
-            )
+            jobErrorSnackbarHostState
+                .showSnackbar(
+                    message = message,
+                    duration =
+                        SnackbarDuration.Short
+                )
         }
     }
 
@@ -119,8 +143,10 @@ internal fun MainScreen(
     ) {
         AtlasMap(
             locationState = locationState,
-            recenterRequestId = recenterRequestId,
-            isFollowingLocation = isFollowingLocation,
+            recenterRequestId =
+                recenterRequestId,
+            isFollowingLocation =
+                isFollowingLocation,
             onUserCameraMove = {
                 isFollowingLocation = false
             },
@@ -135,10 +161,15 @@ internal fun MainScreen(
         ) {
             JobPanel(
                 state = jobState,
-                onToggleExpanded = onToggleJobList,
+                onToggleExpanded =
+                    onToggleJobList,
                 onRetry = onRetryJobs,
+                onEditDestination =
+                    onEditDestination,
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
+                    .align(
+                        Alignment.BottomStart
+                    )
                     .padding(
                         start = 8.dp,
                         bottom = 8.dp
@@ -147,37 +178,46 @@ internal fun MainScreen(
 
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(
+                        Alignment.BottomEnd
+                    )
                     .padding(
                         end = 8.dp,
                         bottom = 8.dp
                     ),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(
-                    8.dp
-                )
+                horizontalAlignment =
+                    Alignment.End,
+                verticalArrangement =
+                    Arrangement.spacedBy(8.dp)
             ) {
                 SnackbarHost(
-                    hostState = jobErrorSnackbarHostState
+                    hostState =
+                        jobErrorSnackbarHostState
                 )
 
                 JobActionButtons(
                     hasCurrentJob =
                         jobState.currentJob != null,
                     hasNextJob =
-                        jobState.queuedJobs.isNotEmpty(),
+                        jobState.queuedJobs
+                            .isNotEmpty(),
                     isStartingNextJob =
-                        jobState.isStartingNextJob,
+                        jobState
+                            .isStartingNextJob,
                     isCancellingCurrentJob =
-                        jobState.isCancellingCurrentJob,
-                    onNextJobClick = onStartNextJob,
+                        jobState
+                            .isCancellingCurrentJob,
+                    onNextJobClick =
+                        onStartNextJob,
                     onCancelCurrentJobClick =
                         onCancelCurrentJob
                 )
             }
 
             if (
-                locationState is LocationState.Available &&
+                !jobState.isAddressEditorOpen &&
+                locationState
+                        is LocationState.Available &&
                 !isFollowingLocation
             ) {
                 FloatingActionButton(
@@ -186,26 +226,36 @@ internal fun MainScreen(
                         recenterRequestId += 1
                     },
                     modifier = Modifier
-                        .align(Alignment.TopStart)
+                        .align(
+                            Alignment.TopStart
+                        )
                         .padding(16.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.MyLocation,
-                        contentDescription = stringResource(
-                            R.string.map_recenter_location
-                        )
+                        imageVector =
+                            Icons.Default.MyLocation,
+                        contentDescription =
+                            stringResource(
+                                R.string
+                                    .map_recenter_location
+                            )
                     )
                 }
             }
 
-            if (!isProfileOpen) {
+            if (
+                !isProfileOpen &&
+                !jobState.isAddressEditorOpen
+            ) {
                 ProfileButton(
                     userName = userName,
                     onClick = {
                         isProfileOpen = true
                     },
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
+                        .align(
+                            Alignment.TopEnd
+                        )
                         .padding(16.dp)
                 )
             }
@@ -215,9 +265,10 @@ internal fun MainScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .clickable(
-                            interactionSource = remember {
-                                MutableInteractionSource()
-                            },
+                            interactionSource =
+                                remember {
+                                    MutableInteractionSource()
+                                },
                             indication = null,
                             onClick = {
                                 isProfileOpen = false
@@ -228,12 +279,18 @@ internal fun MainScreen(
 
             AnimatedVisibility(
                 visible = isProfileOpen,
-                modifier = Modifier.align(Alignment.TopEnd),
+                modifier = Modifier.align(
+                    Alignment.TopEnd
+                ),
                 enter = slideInHorizontally(
-                    initialOffsetX = { width -> width }
+                    initialOffsetX = { width ->
+                        width
+                    }
                 ) + fadeIn(),
                 exit = slideOutHorizontally(
-                    targetOffsetX = { width -> width }
+                    targetOffsetX = { width ->
+                        width
+                    }
                 ) + fadeOut()
             ) {
                 ProfileSidebar(
@@ -248,13 +305,56 @@ internal fun MainScreen(
                     }
                 )
             }
+
+            if (
+                jobState.isAddressEditorOpen
+            ) {
+                val addressLabel = when (
+                    jobState.editedLocationField
+                ) {
+                    JobLocationField.FROM -> {
+                        stringResource(
+                            R.string
+                                .address_search_origin
+                        )
+                    }
+
+                    JobLocationField.TO,
+                    null -> {
+                        stringResource(
+                            R.string
+                                .address_search_destination
+                        )
+                    }
+                }
+
+                AddressSearchField(
+                    state =
+                        jobState.addressSearch,
+                    label = addressLabel,
+                    onQueryChanged =
+                        onAddressQueryChanged,
+                    onSuggestionSelected =
+                        onAddressSuggestionSelected,
+                    onClose =
+                        onCloseAddressEditor,
+                    modifier = Modifier
+                        .align(
+                            Alignment.TopCenter
+                        )
+                        .padding(
+                            horizontal = 16.dp,
+                            vertical = 16.dp
+                        )
+                        .widthIn(
+                            max = 600.dp
+                        )
+                        .fillMaxWidth()
+                )
+            }
         }
     }
 }
-
-
-
-
 
 fun String.initial(): String {
     return trim()

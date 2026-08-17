@@ -10,18 +10,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.gtlv.core.job.JobActionResult
-import org.gtlv.core.job.JobRepository
-import org.gtlv.core.job.JobsResult
-import kotlin.coroutines.coroutineContext
 import org.gtlv.atlas.address.AddressSearchUiState
+import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.geoservice.GeoServiceRepository
 import org.gtlv.core.geoservice.ResolveAddressResult
+import org.gtlv.core.job.JobActionResult
 import org.gtlv.core.job.JobLocationField
+import org.gtlv.core.job.JobRepository
+import org.gtlv.core.job.JobsResult
 
 class MainScreenViewModel(
     private val jobRepository: JobRepository,
-    private val geoServiceRepository: GeoServiceRepository
+    private val geoServiceRepository:
+    GeoServiceRepository
 ) : ViewModel() {
 
     private val _uiState =
@@ -31,19 +32,20 @@ class MainScreenViewModel(
         _uiState.asStateFlow()
 
     private var activeUserId: String? = null
+
     private var refreshJob: Job? = null
     private var jobActionTask: Job? = null
-
     private var addressSearchTask: Job? = null
+    private var locationUpdateTask: Job? = null
 
-    fun loadJobsForUser(userId: String) {
+    fun loadJobsForUser(
+        userId: String
+    ) {
         if (activeUserId == userId) {
             return
         }
 
-        refreshJob?.cancel()
-        jobActionTask?.cancel()
-        addressSearchTask?.cancel()
+        cancelAllTasks()
 
         activeUserId = userId
         _uiState.value = MainScreenUiState()
@@ -57,7 +59,8 @@ class MainScreenViewModel(
         if (
             activeUserId == null ||
             state.isStartingNextJob ||
-            state.isCancellingCurrentJob
+            state.isCancellingCurrentJob ||
+            state.addressSearch.isSaving
         ) {
             return
         }
@@ -76,7 +79,8 @@ class MainScreenViewModel(
 
             val result = jobRepository.getJobs()
 
-            coroutineContext.ensureActive()
+            currentCoroutineContext()
+                .ensureActive()
 
             when (result) {
                 is JobsResult.Success -> {
@@ -104,7 +108,9 @@ class MainScreenViewModel(
             state.queuedJobs.isEmpty() ||
             state.isLoading ||
             state.isStartingNextJob ||
-            state.isCancellingCurrentJob
+            state.isCancellingCurrentJob ||
+            state.isAddressEditorOpen ||
+            state.addressSearch.isSaving
         ) {
             return
         }
@@ -123,18 +129,19 @@ class MainScreenViewModel(
                 )
             }
 
-            when (
-                jobRepository.startJob(
-                    jobId = nextJob.id
-                )
-            ) {
+            val result = jobRepository.startJob(
+                jobId = nextJob.id
+            )
+
+            currentCoroutineContext()
+                .ensureActive()
+
+            when (result) {
                 JobActionResult.Success -> {
                     reloadJobsAfterAction()
                 }
 
                 else -> {
-                    coroutineContext.ensureActive()
-
                     _uiState.update {
                         it.copy(
                             isStartingNextJob = false,
@@ -154,7 +161,9 @@ class MainScreenViewModel(
             state.currentJob == null ||
             state.isLoading ||
             state.isStartingNextJob ||
-            state.isCancellingCurrentJob
+            state.isCancellingCurrentJob ||
+            state.isAddressEditorOpen ||
+            state.addressSearch.isSaving
         ) {
             return
         }
@@ -173,22 +182,26 @@ class MainScreenViewModel(
                 )
             }
 
-            when (
+            val result =
                 jobRepository.cancelJob(
                     jobId = currentJobId
                 )
-            ) {
+
+            currentCoroutineContext()
+                .ensureActive()
+
+            when (result) {
                 JobActionResult.Success -> {
                     reloadJobsAfterAction()
                 }
 
                 else -> {
-                    coroutineContext.ensureActive()
-
                     _uiState.update {
                         it.copy(
-                            isCancellingCurrentJob = false,
-                            cancelCurrentJobFailed = true
+                            isCancellingCurrentJob =
+                                false,
+                            cancelCurrentJobFailed =
+                                true
                         )
                     }
                 }
@@ -199,7 +212,8 @@ class MainScreenViewModel(
     private suspend fun reloadJobsAfterAction() {
         val result = jobRepository.getJobs()
 
-        currentCoroutineContext().ensureActive()
+        currentCoroutineContext()
+            .ensureActive()
 
         when (result) {
             is JobsResult.Success -> {
@@ -211,7 +225,8 @@ class MainScreenViewModel(
                     it.copy(
                         isLoading = false,
                         isStartingNextJob = false,
-                        isCancellingCurrentJob = false,
+                        isCancellingCurrentJob =
+                            false,
                         hasError = true
                     )
                 }
@@ -239,23 +254,6 @@ class MainScreenViewModel(
         }
     }
 
-    fun clearJobs() {
-        activeUserId = null
-
-        refreshJob?.cancel()
-        refreshJob = null
-
-        jobActionTask?.cancel()
-        jobActionTask = null
-
-        addressSearchTask?.cancel()
-        addressSearchTask = null
-
-        _uiState.value = MainScreenUiState(
-            isLoading = false
-        )
-    }
-
     fun toggleJobList() {
         _uiState.update {
             it.copy(
@@ -266,10 +264,21 @@ class MainScreenViewModel(
     }
 
     fun openDestinationEditor() {
-        val currentJob = _uiState.value.currentJob
+        val state = _uiState.value
+        val currentJob = state.currentJob
             ?: return
 
+        if (
+            state.isLoading ||
+            state.isStartingNextJob ||
+            state.isCancellingCurrentJob ||
+            state.addressSearch.isSaving
+        ) {
+            return
+        }
+
         addressSearchTask?.cancel()
+        addressSearchTask = null
 
         _uiState.update {
             it.copy(
@@ -279,13 +288,18 @@ class MainScreenViewModel(
                 addressSearch =
                     AddressSearchUiState(
                         query =
-                            currentJob.toAddress.orEmpty()
+                            currentJob.toAddress
+                                .orEmpty()
                     )
             )
         }
     }
 
     fun closeAddressEditor() {
+        if (_uiState.value.addressSearch.isSaving) {
+            return
+        }
+
         addressSearchTask?.cancel()
         addressSearchTask = null
 
@@ -302,11 +316,19 @@ class MainScreenViewModel(
     fun onAddressQueryChanged(
         query: String
     ) {
-        if (!_uiState.value.isAddressEditorOpen) {
+        val state = _uiState.value
+
+        if (
+            !state.isAddressEditorOpen ||
+            state.addressSearch.isSaving
+        ) {
             return
         }
 
         addressSearchTask?.cancel()
+        addressSearchTask = null
+
+        val shouldSearch = query.isNotBlank()
 
         _uiState.update {
             it.copy(
@@ -314,66 +336,202 @@ class MainScreenViewModel(
                     it.addressSearch.copy(
                         query = query,
                         suggestions = emptyList(),
-                        isLoading = query.isNotEmpty(),
+                        isLoading = shouldSearch,
                         hasError = false,
                         saveFailed = false
                     )
             )
         }
 
-        if (query.isEmpty()) {
-            addressSearchTask = null
+        if (!shouldSearch) {
             return
         }
 
-        addressSearchTask = viewModelScope.launch {
-            val result =
-                geoServiceRepository.resolveAddress(
-                    address = query
-                )
-
-            /*
-             * A cancelled, older request must not replace
-             * results belonging to newer input.
-             */
-            coroutineContext.ensureActive()
-
-            if (
-                _uiState.value.addressSearch.query !=
-                query
-            ) {
-                return@launch
-            }
-
-            when (result) {
-                is ResolveAddressResult.Success -> {
-                    _uiState.update {
-                        it.copy(
-                            addressSearch =
-                                it.addressSearch.copy(
-                                    suggestions =
-                                        result.suggestions,
-                                    isLoading = false,
-                                    hasError = false
-                                )
+        addressSearchTask =
+            viewModelScope.launch {
+                val result =
+                    geoServiceRepository
+                        .resolveAddress(
+                            address = query
                         )
-                    }
+
+                /*
+                 * An older cancelled request must never
+                 * replace the results for newer input.
+                 */
+                currentCoroutineContext()
+                    .ensureActive()
+
+                if (
+                    _uiState.value
+                        .addressSearch
+                        .query != query
+                ) {
+                    return@launch
                 }
 
-                else -> {
-                    _uiState.update {
-                        it.copy(
-                            addressSearch =
-                                it.addressSearch.copy(
-                                    suggestions =
-                                        emptyList(),
-                                    isLoading = false,
-                                    hasError = true
-                                )
-                        )
+                when (result) {
+                    is ResolveAddressResult.Success -> {
+                        _uiState.update {
+                            it.copy(
+                                addressSearch =
+                                    it.addressSearch.copy(
+                                        suggestions =
+                                            result.suggestions,
+                                        isLoading = false,
+                                        hasError = false
+                                    )
+                            )
+                        }
                     }
+
+                    else -> {
+                        _uiState.update {
+                            it.copy(
+                                addressSearch =
+                                    it.addressSearch.copy(
+                                        suggestions =
+                                            emptyList(),
+                                        isLoading = false,
+                                        hasError = true
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+    }
+
+    fun selectAddressSuggestion(
+        suggestion: AddressSuggestion
+    ) {
+        val state = _uiState.value
+        val currentJob = state.currentJob
+            ?: return
+        val locationField =
+            state.editedLocationField
+                ?: return
+
+        if (
+            !state.isAddressEditorOpen ||
+            state.addressSearch.isSaving
+        ) {
+            return
+        }
+
+        addressSearchTask?.cancel()
+        addressSearchTask = null
+
+        locationUpdateTask?.cancel()
+
+        locationUpdateTask =
+            viewModelScope.launch {
+                _uiState.update {
+                    it.copy(
+                        addressSearch =
+                            it.addressSearch.copy(
+                                query =
+                                    suggestion.displayName,
+                                suggestions =
+                                    emptyList(),
+                                isLoading = false,
+                                hasError = false,
+                                isSaving = true,
+                                saveFailed = false
+                            )
+                    )
+                }
+
+                val updateResult =
+                    jobRepository
+                        .updateJobLocation(
+                            jobId = currentJob.id,
+                            field = locationField,
+                            latitude =
+                                suggestion.latitude,
+                            longitude =
+                                suggestion.longitude
+                        )
+
+                currentCoroutineContext()
+                    .ensureActive()
+
+                when (updateResult) {
+                    JobActionResult.Success -> {
+                        reloadJobsAfterLocationUpdate()
+                    }
+
+                    else -> {
+                        _uiState.update {
+                            it.copy(
+                                addressSearch =
+                                    it.addressSearch.copy(
+                                        isSaving = false,
+                                        saveFailed = true
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+    }
+
+    private suspend fun
+            reloadJobsAfterLocationUpdate() {
+        val result = jobRepository.getJobs()
+
+        currentCoroutineContext()
+            .ensureActive()
+
+        when (result) {
+            is JobsResult.Success -> {
+                applyJobs(result)
+
+                _uiState.update {
+                    it.copy(
+                        isAddressEditorOpen = false,
+                        editedLocationField = null,
+                        addressSearch =
+                            AddressSearchUiState()
+                    )
+                }
+            }
+
+            else -> {
+                _uiState.update {
+                    it.copy(
+                        isAddressEditorOpen = false,
+                        editedLocationField = null,
+                        addressSearch =
+                            AddressSearchUiState(),
+                        hasError = true
+                    )
                 }
             }
         }
+    }
+
+    fun clearJobs() {
+        activeUserId = null
+
+        cancelAllTasks()
+
+        _uiState.value = MainScreenUiState(
+            isLoading = false
+        )
+    }
+
+    private fun cancelAllTasks() {
+        refreshJob?.cancel()
+        refreshJob = null
+
+        jobActionTask?.cancel()
+        jobActionTask = null
+
+        addressSearchTask?.cancel()
+        addressSearchTask = null
+
+        locationUpdateTask?.cancel()
+        locationUpdateTask = null
     }
 }

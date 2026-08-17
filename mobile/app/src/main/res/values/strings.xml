@@ -52,6 +52,7 @@
     <string name="job_panel_no_current_job">No current job</string>
     <string name="job_panel_total_jobs">Total: %1$d</string>
     <string name="job_panel_current_job">Current Job</string>
+    <string name="job_panel_edit_destination">Edit destination</string>
 
     <plurals name="job_panel_next_job">
         <item quantity="one">Next Job (%1$d in queue)</item>
@@ -63,4 +64,12 @@
     <string name="job_action_cancel">Cancel current job</string>
     <string name="job_action_start_failed">Could not start the next job</string>
     <string name="job_action_cancel_failed">Could not cancel the current job</string>
+
+    <string name="address_search_hint">Enter address</string>
+    <string name="address_search_close">Close address search</string>
+    <string name="address_search_destination">Destination</string>
+    <string name="address_search_origin">Starting location</string>
+    <string name="address_search_load_error">Could not load address suggestions</string>
+    <string name="address_search_save_error">Could not update the job location</string>
+    <string name="address_search_no_results">No matching addresses found</string>
 </resources>
