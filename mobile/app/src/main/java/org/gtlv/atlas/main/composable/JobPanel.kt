@@ -341,8 +341,7 @@ private fun CurrentJobSection(
             )
 
             Row(
-                modifier =
-                    Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment =
                     Alignment.CenterVertically
             ) {
@@ -350,31 +349,28 @@ private fun CurrentJobSection(
                     labelResource =
                         R.string.job_panel_to,
                     address =
-                        currentJob
-                            .toDisplayAddress(),
+                        currentJob.toDisplayAddress(),
                     compact = compact,
-                    modifier =
-                        Modifier.weight(1f)
+                    modifier = Modifier.weight(1f)
                 )
 
-                IconButton(
-                    onClick =
-                        onEditDestination,
-                    modifier =
-                        Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector =
-                            Icons.Default.Edit,
-                        contentDescription =
-                            stringResource(
-                                R.string
-                                    .job_panel_edit_destination
-                            ),
-                        modifier =
-                            Modifier.size(18.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription =
+                        stringResource(
+                            R.string
+                                .job_panel_edit_destination
+                        ),
+                    modifier = Modifier
+                        .padding(start = 4.dp)
+                        .size(18.dp)
+                        .clickable(
+                            onClick = onEditDestination
+                        ),
+                    tint =
+                        MaterialTheme.colorScheme
+                            .onSurfaceVariant
+                )
             }
         }
     }
@@ -426,7 +422,12 @@ private fun AddressLine(
         color =
             MaterialTheme.colorScheme
                 .onSurfaceVariant,
-        maxLines = 1,
+        maxLines = if (compact) {
+            1
+        } else {
+            2
+        },
+        softWrap = true,
         overflow = TextOverflow.Ellipsis
     )
 }

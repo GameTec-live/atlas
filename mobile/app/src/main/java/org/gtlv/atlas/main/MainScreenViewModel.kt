@@ -265,10 +265,9 @@ class MainScreenViewModel(
 
     fun openDestinationEditor() {
         val state = _uiState.value
-        val currentJob = state.currentJob
-            ?: return
 
         if (
+            state.currentJob == null ||
             state.isLoading ||
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
@@ -286,11 +285,7 @@ class MainScreenViewModel(
                 editedLocationField =
                     JobLocationField.TO,
                 addressSearch =
-                    AddressSearchUiState(
-                        query =
-                            currentJob.toAddress
-                                .orEmpty()
-                    )
+                    AddressSearchUiState()
             )
         }
     }
