@@ -2,10 +2,12 @@ package org.gtlv.atlas.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import org.gtlv.core.geoservice.GeoServiceRepository
 import org.gtlv.core.job.JobRepository
 
 class MainScreenViewModelFactory(
-    private val jobRepository: JobRepository
+    private val jobRepository: JobRepository,
+    private val geoServiceRepository: GeoServiceRepository
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -18,7 +20,9 @@ class MainScreenViewModelFactory(
             )
         ) {
             return MainScreenViewModel(
-                jobRepository = jobRepository
+                jobRepository = jobRepository,
+                geoServiceRepository =
+                    geoServiceRepository
             ) as T
         }
 
