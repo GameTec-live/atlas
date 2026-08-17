@@ -13,6 +13,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedAppRouteRouteImport } from './routes/_authenticated/_app/route'
 import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/_app/index'
+import { Route as AuthenticatedAppRealtimeRouteRouteImport } from './routes/_authenticated/_app/realtime/route'
 import { Route as AuthenticatedAppSettingsRouteRouteImport } from './routes/_authenticated/_app/settings/route'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -33,6 +34,12 @@ const AuthenticatedAppIndexRoute = AuthenticatedAppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedAppRouteRoute,
 } as any)
+const AuthenticatedAppRealtimeRouteRoute =
+  AuthenticatedAppRealtimeRouteRouteImport.update({
+    id: '/realtime',
+    path: '/realtime',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 const AuthenticatedAppSettingsRouteRoute =
   AuthenticatedAppSettingsRouteRouteImport.update({
     id: '/settings',
@@ -43,11 +50,13 @@ const AuthenticatedAppSettingsRouteRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedAppIndexRoute
   '/login': typeof LoginRoute
+  '/realtime': typeof AuthenticatedAppRealtimeRouteRoute
   '/settings': typeof AuthenticatedAppSettingsRouteRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedAppIndexRoute
   '/login': typeof LoginRoute
+  '/realtime': typeof AuthenticatedAppRealtimeRouteRoute
   '/settings': typeof AuthenticatedAppSettingsRouteRoute
 }
 export interface FileRoutesById {
@@ -55,19 +64,21 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/_authenticated/_app': typeof AuthenticatedAppRouteRouteWithChildren
+  '/_authenticated/_app/realtime': typeof AuthenticatedAppRealtimeRouteRoute
   '/_authenticated/_app/settings': typeof AuthenticatedAppSettingsRouteRoute
   '/_authenticated/_app/': typeof AuthenticatedAppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/settings'
+  fullPaths: '/' | '/login' | '/realtime' | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/settings'
+  to: '/' | '/login' | '/realtime' | '/settings'
   id:
     | '__root__'
     | '/_authenticated'
     | '/login'
     | '/_authenticated/_app'
+    | '/_authenticated/_app/realtime'
     | '/_authenticated/_app/settings'
     | '/_authenticated/_app/'
   fileRoutesById: FileRoutesById
@@ -107,6 +118,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/_app/realtime': {
+      id: '/_authenticated/_app/realtime'
+      path: '/realtime'
+      fullPath: '/realtime'
+      preLoaderRoute: typeof AuthenticatedAppRealtimeRouteRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/_app/settings': {
       id: '/_authenticated/_app/settings'
       path: '/settings'
@@ -118,11 +136,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedAppRouteRouteChildren {
+  AuthenticatedAppRealtimeRouteRoute: typeof AuthenticatedAppRealtimeRouteRoute
   AuthenticatedAppSettingsRouteRoute: typeof AuthenticatedAppSettingsRouteRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
 }
 
 const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
+  AuthenticatedAppRealtimeRouteRoute: AuthenticatedAppRealtimeRouteRoute,
   AuthenticatedAppSettingsRouteRoute: AuthenticatedAppSettingsRouteRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
 }

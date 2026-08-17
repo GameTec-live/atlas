@@ -24,7 +24,7 @@ function RootComponent() {
             </ThemeProvider>
             <TanStackDevtools
                 config={{
-                    position: "bottom-right",
+                    position: "bottom-left",
                 }}
                 plugins={[
                     {
