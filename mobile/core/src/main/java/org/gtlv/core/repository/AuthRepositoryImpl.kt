@@ -1,34 +1,28 @@
 package org.gtlv.core.repository
 
-
-
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.gtlv.core.network.AccessTokenProvider
 import org.gtlv.core.network.NetworkClient
 import org.gtlv.core.session.SecureSessionStore
 import org.gtlv.core.session.SessionRestoreResult
 import org.gtlv.core.settings.ServerSettingsRepository
 import org.json.JSONObject
-import java.io.IOException
 
 class AuthRepositoryImpl(
     private val networkClient: NetworkClient,
     private val serverSettingsRepository: ServerSettingsRepository,
     private val secureSessionStore: SecureSessionStore
-) : AuthRepository, AccessTokenProvider {
-
-    private var accessToken: String? = null
+) : AuthRepository {
 
     override suspend fun login(
         username: String,
         password: String
     ): AuthResult = withContext(Dispatchers.IO) {
-
         val serverAddress = serverSettingsRepository
             .serverAddress
             .first()
@@ -69,12 +63,16 @@ class AuthRepositoryImpl(
                         !response.isSuccessful -> {
                             AuthResult.ServerError(
                                 statusCode = response.code,
-                                message = readServerMessage(responseText)
+                                message = readServerMessage(
+                                    responseText
+                                )
                             )
                         }
 
                         else -> {
-                            parseSuccessfulLogin(responseText)
+                            parseSuccessfulLogin(
+                                responseText
+                            )
                         }
                     }
                 }
@@ -83,71 +81,72 @@ class AuthRepositoryImpl(
         }
     }
 
-    override suspend fun restoreStoredSession(): SessionRestoreResult =
-        withContext(Dispatchers.IO) {
-            val storedSession = secureSessionStore.restore()
-                ?: return@withContext SessionRestoreResult.NoStoredSession
+    override suspend fun restoreStoredSession():
+            SessionRestoreResult = withContext(Dispatchers.IO) {
+        val storedSession = secureSessionStore.restore()
+            ?: return@withContext SessionRestoreResult.NoStoredSession
 
-            networkClient.cookieJar.restore(
-                storedSession.cookies
+        networkClient.cookieJar.restore(
+            storedSession.cookies
+        )
+
+        val serverAddress = serverSettingsRepository
+            .serverAddress
+            .first()
+            .removeSuffix("/")
+
+        val request = Request.Builder()
+            .url(
+                "$serverAddress/api/api/auth/get-session"
             )
+            .header("Origin", serverAddress)
+            .get()
+            .build()
 
-            accessToken = storedSession.token
+        try {
+            networkClient.okHttpClient
+                .newCall(request)
+                .execute()
+                .use { response ->
+                    val responseText =
+                        response.body?.string().orEmpty()
 
-            val serverAddress = serverSettingsRepository
-                .serverAddress
-                .first()
-                .removeSuffix("/")
+                    when {
+                        response.code == 401 -> {
+                            clearLocalSession()
+                            SessionRestoreResult.Expired
+                        }
 
-            val request = Request.Builder()
-                .url("$serverAddress/api/api/auth/get-session")
-                .header("Origin", serverAddress)
-                .get()
-                .build()
+                        !response.isSuccessful -> {
+                            SessionRestoreResult.ServerError(
+                                statusCode = response.code
+                            )
+                        }
 
-            try {
-                networkClient.okHttpClient
-                    .newCall(request)
-                    .execute()
-                    .use { response ->
-                        val responseText =
-                            response.body?.string().orEmpty()
+                        responseText.isBlank() ||
+                                responseText.trim() == "null" -> {
+                            clearLocalSession()
+                            SessionRestoreResult.Expired
+                        }
 
-                        when {
-                            response.code == 401 -> {
-                                clearLocalSession()
-                                SessionRestoreResult.Expired
-                            }
-
-                            !response.isSuccessful -> {
-                                SessionRestoreResult.ServerError(
-                                    statusCode = response.code
-                                )
-                            }
-
-                            responseText.isBlank() ||
-                                    responseText.trim() == "null" -> {
-                                clearLocalSession()
-                                SessionRestoreResult.Expired
-                            }
-
-                            else -> {
-                                parseRestoredSession(responseText)
-                            }
+                        else -> {
+                            parseRestoredSession(
+                                responseText
+                            )
                         }
                     }
-            } catch (_: IOException) {
-                SessionRestoreResult.NetworkError
-            }
+                }
+        } catch (_: IOException) {
+            SessionRestoreResult.NetworkError
         }
+    }
 
     private suspend fun clearLocalSession() {
-        accessToken = null
         networkClient.cookieJar.clear()
         secureSessionStore.clear()
     }
 
-    private suspend fun parseRestoredSession(
+    private fun parseRestoredSession(
         responseText: String
     ): SessionRestoreResult {
         return try {
@@ -179,7 +178,6 @@ class AuthRepositoryImpl(
     ): AuthResult {
         return try {
             val root = JSONObject(responseText)
-            val token = root.optString("token")
             val user = root.optJSONObject("user")
                 ?: return AuthResult.InvalidResponse
 
@@ -189,34 +187,31 @@ class AuthRepositoryImpl(
                 .optString("name")
                 .ifBlank { email }
 
-            if (
-                token.isBlank() ||
-                userId.isBlank() ||
-                name.isBlank()
-            ) {
+            if (userId.isBlank() || name.isBlank()) {
                 return AuthResult.InvalidResponse
             }
 
-            val cookies = networkClient.cookieJar.snapshot()
+            val cookies =
+                networkClient.cookieJar.snapshot()
+
+            if (cookies.isEmpty()) {
+                return AuthResult.InvalidResponse
+            }
 
             secureSessionStore.save(
-                token = token,
                 cookies = cookies
             )
-
-            accessToken = token
 
             AuthResult.Success(
                 userId = userId,
                 userName = name
             )
         } catch (_: Exception) {
-            accessToken = null
-            networkClient.cookieJar.clear()
-
+            clearLocalSession()
             AuthResult.InvalidResponse
         }
     }
+
     private fun readServerMessage(
         responseText: String
     ): String? {
@@ -225,10 +220,6 @@ class AuthRepositoryImpl(
                 .optString("message")
                 .ifBlank { null }
         }.getOrNull()
-    }
-
-    override fun currentAccessToken(): String? {
-        return accessToken
     }
 
     override suspend fun logout() =

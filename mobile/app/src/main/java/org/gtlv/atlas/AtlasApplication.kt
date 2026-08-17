@@ -23,6 +23,7 @@ import org.gtlv.core.shift.DataStoreShiftSessionStore
 import org.gtlv.core.shift.ShiftSessionManager
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryProviderRegistry
+import org.gtlv.core.job.JobRepositoryImpl
 
 class AtlasApplication : Application(), ShiftSessionProvider,
     ServerSettingsProvider, CarLocationProviderRegistry,
@@ -125,8 +126,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     val roleRepository by lazy {
         RoleRepositoryImpl(
             networkClient = networkClient,
-            serverSettingsRepository = serverSettingsRepository,
-            accessTokenProvider = authRepository
+            serverSettingsRepository = serverSettingsRepository
         )
     }
 
@@ -135,6 +135,14 @@ class AtlasApplication : Application(), ShiftSessionProvider,
             authRepository = authRepository,
             roleRepository = roleRepository,
             shiftSessionManager = shiftSessionManager
+        )
+    }
+
+    val jobRepository by lazy {
+        JobRepositoryImpl(
+            networkClient = networkClient,
+            serverSettingsRepository =
+                serverSettingsRepository
         )
     }
 }

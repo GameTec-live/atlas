@@ -8,6 +8,7 @@ export const env = createEnv({
         CONFIG_FILE: v.optional(v.pipe(v.string(), v.minLength(1))),
         DATA_STORAGE_PATH: v.optional(v.pipe(v.string(), v.minLength(1))),
         DATABASE_URL: v.pipe(v.string(), v.minLength(1)),
+        GEODATA_URL: v.pipe(v.string(), v.url()),
         GEOCODER_URL: v.pipe(v.string(), v.url()),
         ROUTER_URL: v.pipe(v.string(), v.url()),
         JOBTOKEN: v.pipe(v.string(), v.minLength(1)),

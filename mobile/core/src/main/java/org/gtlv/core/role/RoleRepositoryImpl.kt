@@ -6,7 +6,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.gtlv.core.network.AccessTokenProvider
 import org.gtlv.core.network.NetworkClient
 import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
@@ -16,20 +15,14 @@ import java.io.IOException
 class RoleRepositoryImpl(
     private val networkClient: NetworkClient,
     private val serverSettingsRepository: ServerSettingsRepository,
-    private val accessTokenProvider: AccessTokenProvider
 ) : RoleRepository {
 
     override suspend fun getAvailability(): RoleAvailabilityResult =
         withContext(Dispatchers.IO) {
             val requestData = createRequestData()
-                ?: return@withContext RoleAvailabilityResult.Unauthorized
 
             val request = Request.Builder()
                 .url("${requestData.serverAddress}/api/roles/")
-                .header(
-                    "Authorization",
-                    "Bearer ${requestData.accessToken}"
-                )
                 .header(
                     "Origin",
                     requestData.serverAddress
@@ -71,7 +64,6 @@ class RoleRepositoryImpl(
         role: ShiftRole
     ): SelectRoleResult = withContext(Dispatchers.IO) {
         val requestData = createRequestData()
-            ?: return@withContext SelectRoleResult.Unauthorized
 
         val requestJson = JSONObject()
             .put("role", role.apiValue)
@@ -83,10 +75,6 @@ class RoleRepositoryImpl(
 
         val request = Request.Builder()
             .url("${requestData.serverAddress}/api/roles/")
-            .header(
-                "Authorization",
-                "Bearer ${requestData.accessToken}"
-            )
             .header(
                 "Origin",
                 requestData.serverAddress
@@ -130,12 +118,7 @@ class RoleRepositoryImpl(
         }
     }
 
-    private suspend fun createRequestData(): RequestData? {
-        val token = accessTokenProvider
-            .currentAccessToken()
-            ?.takeIf { it.isNotBlank() }
-            ?: return null
-
+    private suspend fun createRequestData(): RequestData {
         val serverAddress = serverSettingsRepository
             .serverAddress
             .first()
@@ -143,8 +126,7 @@ class RoleRepositoryImpl(
             .removeSuffix("/")
 
         return RequestData(
-            serverAddress = serverAddress,
-            accessToken = token
+            serverAddress = serverAddress
         )
     }
 
@@ -236,7 +218,6 @@ class RoleRepositoryImpl(
     }
 
     private data class RequestData(
-        val serverAddress: String,
-        val accessToken: String
+        val serverAddress: String
     )
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "logbook" ADD COLUMN "invalid" boolean DEFAULT false NOT NULL;

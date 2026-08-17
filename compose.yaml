@@ -22,8 +22,10 @@ services:
     build:
       context: .
       dockerfile: assistive/router/Dockerfile
+    labels:
+      live.gametec.atlas.geodata-consumer: router
     volumes:
-      - router-data:/data
+      - router-data:/custom_files
       - geodata:/pbf:ro
     restart: unless-stopped
 
@@ -43,10 +45,59 @@ services:
     read_only: true
     cap_drop:
       - ALL
+    labels:
+      live.gametec.atlas.geodata-consumer: geocoder
     security_opt:
       - no-new-privileges:true
     volumes:
       - geodata:/data:ro
+    restart: unless-stopped
+
+  geodata-api:
+    image: ghcr.io/gametec-live/atlas-geodata-api:latest
+    build:
+      context: ./apps/geodataAPI
+      dockerfile: Dockerfile
+      target: geodata-api
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    environment:
+      GEODATA_RELOADER_URL: "http://geodata-reloader:8080"
+    volumes:
+      - geodata:/data
+    networks:
+      - default
+      - geodata-control
+    depends_on:
+      geodata-reloader:
+        condition: service_healthy
+    restart: unless-stopped
+
+  geodata-reloader:
+    image: ghcr.io/gametec-live/atlas-geodata-reloader:latest
+    build:
+      context: ./apps/geodataAPI
+      dockerfile: Dockerfile
+      target: reloader
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - label=disable
+    group_add:
+      - "${CONTAINER_SOCKET_GID:-0}"
+    volumes:
+      - "${CONTAINER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock"
+    networks:
+      - geodata-control
     restart: unless-stopped
 
   api:
@@ -63,6 +114,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:?BETTER_AUTH_URL is required}
       DATABASE_URL: "postgres://atlas:atlas@db:5432/atlas"
+      GEODATA_URL: "http://geodata-api:8080"
       GEOCODER_URL: "http://geocoder:8080"
       ROUTER_URL: "http://router:8002"
       JOBTOKEN: ${JOBTOKEN:?JOBTOKEN is required}
@@ -105,3 +157,7 @@ volumes:
   router-data:
   map-data:
   geodata:
+
+networks:
+  geodata-control:
+    internal: true

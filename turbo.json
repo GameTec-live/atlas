@@ -1,6 +1,26 @@
 {
     "$schema": "https://turborepo.dev/schema.json",
     "ui": "tui",
+    "globalEnv": ["CGO_ENABLED", "GOARCH", "GOFLAGS", "GOOS"],
+    "globalPassThroughEnv": [
+        "GOCACHE",
+        "GOENV",
+        "GOMODCACHE",
+        "GONOPROXY",
+        "GONOSUMDB",
+        "GOPATH",
+        "GOPRIVATE",
+        "GOPROXY",
+        "GOROOT",
+        "GOSUMDB",
+        "HOME",
+        "LOCALAPPDATA",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "USERPROFILE",
+        "XDG_CACHE_HOME"
+    ],
     "tasks": {
         "build": {
             "dependsOn": ["^build"],
@@ -18,6 +38,9 @@
         },
         "test": {
             "dependsOn": ["^test"]
+        },
+        "format": {
+            "cache": false
         },
         "dev": {
             "cache": false,
