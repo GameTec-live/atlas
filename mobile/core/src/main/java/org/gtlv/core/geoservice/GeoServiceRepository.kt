@@ -19,6 +19,10 @@ sealed interface ResolveAddressResult {
 
     data object InvalidResponse : ResolveAddressResult
 
+    data class ServiceError(
+        val message: String?
+    ) : ResolveAddressResult
+
     data class ServerError(
         val statusCode: Int,
         val message: String?

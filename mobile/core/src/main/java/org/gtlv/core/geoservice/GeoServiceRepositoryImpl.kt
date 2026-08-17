@@ -97,9 +97,32 @@ class GeoServiceRepositoryImpl(
     ): ResolveAddressResult {
         return try {
             val root = JSONObject(responseText)
-            val results = root.getJSONArray(
+            val results = root.optJSONArray(
                 "results"
             )
+
+            if (results == null) {
+                val hasServiceError =
+                    root.has("error") ||
+                            root.has("message")
+
+                if (!hasServiceError) {
+                    return ResolveAddressResult
+                        .InvalidResponse
+                }
+
+                val message = root
+                    .optString("error")
+                    .ifBlank {
+                        root.optString("message")
+                    }
+                    .ifBlank { null }
+
+                return ResolveAddressResult
+                    .ServiceError(
+                        message = message
+                    )
+            }
 
             val suggestions = buildList {
                 for (
@@ -139,7 +162,8 @@ class GeoServiceRepositoryImpl(
                     add(
                         AddressSuggestion(
                             id = sourceId.ifBlank {
-                                "$displayName:$latitude:$longitude"
+                                "$displayName:" +
+                                        "$latitude:$longitude"
                             },
                             displayName = displayName,
                             latitude = latitude,
