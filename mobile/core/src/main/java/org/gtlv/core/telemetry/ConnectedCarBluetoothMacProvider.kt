@@ -115,18 +115,32 @@ internal class ConnectedCarBluetoothMacProvider(
 
     @SuppressLint("MissingPermission")
     fun stop() {
+        started = false
+
         if (receiverRegistered) {
             runCatching {
-                applicationContext.unregisterReceiver(connectionReceiver)
+                applicationContext.unregisterReceiver(
+                    connectionReceiver
+                )
             }
             receiverRegistered = false
         }
 
-        profileProxies.forEach(::closeProfileProxy)
+        /*
+         * Closing a profile proxy can synchronously call
+         * onServiceDisconnected(), which modifies profileProxies.
+         * Therefore, copy and clear the map before closing anything.
+         */
+        val proxiesToClose = profileProxies.toList()
+
         profileProxies.clear()
         addressesByProfile.clear()
         pendingProfiles.clear()
-        started = false
+
+        proxiesToClose.forEach { (profile, proxy) ->
+            closeProfileProxy(profile, proxy)
+        }
+
         onMacAddressChanged(null)
     }
 

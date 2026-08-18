@@ -1,12 +1,10 @@
 package org.gtlv.atlas
 
 import android.app.Application
+import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import org.gtlv.core.location.CarAwareLocationProvider
 import org.gtlv.core.location.CarLocationProviderRegistry
 import org.gtlv.core.location.LocationProvider
@@ -23,8 +21,10 @@ import org.gtlv.core.shift.DataStoreShiftSessionStore
 import org.gtlv.core.shift.ShiftSessionManager
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryProviderRegistry
+import org.gtlv.core.telemetry.Telemetry
 import org.gtlv.core.job.JobRepositoryImpl
 import org.gtlv.core.geoservice.GeoServiceRepositoryImpl
+import org.gtlv.core.telemetry.TelemetryWebSocketSender
 
 class AtlasApplication : Application(), ShiftSessionProvider,
     ServerSettingsProvider, CarLocationProviderRegistry,
@@ -50,17 +50,14 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     val locationProvider: LocationProvider
         get() = carAwareLocationProvider
 
-    override val telemetryLocationProvider: LocationProvider
-        get() = locationProvider
+    private val applicationTelemetry by lazy {
+        Telemetry(
+            locationProvider = locationProvider
+        )
+    }
 
-    private val _telemetryProviderState =
-        MutableStateFlow<TelemetryProvider?>(null)
-
-    val telemetryProviderState: StateFlow<TelemetryProvider?> =
-        _telemetryProviderState.asStateFlow()
-
-    val telemetryProvider: TelemetryProvider?
-        get() = _telemetryProviderState.value
+    override val telemetryProvider: TelemetryProvider
+        get() = applicationTelemetry
 
     override fun registerCarLocationProvider(
         provider: LocationProvider
@@ -74,18 +71,12 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         carAwareLocationProvider.unregisterCarLocationProvider(provider)
     }
 
-    override fun registerTelemetryProvider(
-        provider: TelemetryProvider
-    ) {
-        _telemetryProviderState.value = provider
+    override fun connectCarTelemetry(carContext: Context) {
+        applicationTelemetry.connectCar(carContext)
     }
 
-    override fun unregisterTelemetryProvider(
-        provider: TelemetryProvider
-    ) {
-        if (_telemetryProviderState.value === provider) {
-            _telemetryProviderState.value = null
-        }
+    override fun disconnectCarTelemetry(carContext: Context) {
+        applicationTelemetry.disconnectCar(carContext)
     }
 
     val networkClient by lazy {
@@ -153,5 +144,22 @@ class AtlasApplication : Application(), ShiftSessionProvider,
             serverSettingsRepository =
                 serverSettingsRepository
         )
+    }
+
+    private val telemetryWebSocketSender by lazy {
+        TelemetryWebSocketSender(
+            networkClient = networkClient,
+            serverSettingsRepository = serverSettingsRepository,
+            sessionManager = sessionManager,
+            shiftSessionManager = shiftSessionManager,
+            telemetryProvider = telemetryProvider,
+            scope = applicationScope
+        )
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        applicationTelemetry.start()
+        telemetryWebSocketSender.start()
     }
 }

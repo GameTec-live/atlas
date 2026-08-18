@@ -1,6 +1,7 @@
 package org.gtlv.core.telemetry
 
 import android.Manifest
+import android.content.Context
 import android.util.Log
 import androidx.annotation.MainThread
 import androidx.car.app.CarContext
@@ -23,9 +24,11 @@ import org.gtlv.core.location.AtlasLocation
 import org.gtlv.core.location.LocationProvider
 import org.gtlv.core.location.LocationState
 
-/** Reads location, fuel level, and odometer data from Android Auto. */
+/**
+ * Builds process-wide telemetry from the existing location provider and
+ * enriches it with optional Android Auto vehicle data while a car is attached.
+ */
 class Telemetry(
-    private val carContext: CarContext,
     private val locationProvider: LocationProvider,
     initialState: TelemetryVehicleState = TelemetryVehicleState.FREE
 ) : TelemetryProvider {
@@ -42,18 +45,13 @@ class Telemetry(
 
     private var scope: CoroutineScope? = null
     private var locationJob: Job? = null
+    private var connectedCarContext: CarContext? = null
+    private var bluetoothMacProvider:
+            ConnectedCarBluetoothMacProvider? = null
     private var carInfo: CarInfo? = null
     private var fuelListenerRegistered = false
     private var mileageListenerRegistered = false
     private var started = false
-
-    private val bluetoothMacProvider =
-        ConnectedCarBluetoothMacProvider(carContext) { macAddress ->
-            vehicleId = macAddress?.let(
-                BluetoothVehicleId::fromMacAddress
-            )
-            publishTelemetry()
-        }
 
     private val mileageListener =
         OnCarDataAvailableListener<Mileage> { mileage ->
@@ -75,6 +73,7 @@ class Telemetry(
             publishTelemetry()
         }
 
+    /** Starts observing the existing car-aware location provider. */
     @MainThread
     override fun start() {
         if (started) return
@@ -93,7 +92,81 @@ class Telemetry(
             }
         }
 
-        bluetoothMacProvider.start()
+        startCarTelemetryIfConnected()
+    }
+
+    @MainThread
+    override fun stop() {
+        if (!started) return
+
+        connectedCarContext?.let(::disconnectCar)
+        locationJob?.cancel()
+        scope?.cancel()
+
+        locationJob = null
+        scope = null
+        started = false
+        location = null
+        _telemetry.value = null
+    }
+
+    /** Adds optional vehicle information without changing location selection. */
+    @MainThread
+    fun connectCar(context: Context) {
+        val carContext = context as? CarContext ?: return
+
+        if (connectedCarContext === carContext) {
+            startCarTelemetryIfConnected()
+            return
+        }
+
+        connectedCarContext?.let(::disconnectCar)
+        connectedCarContext = carContext
+        bluetoothMacProvider =
+            ConnectedCarBluetoothMacProvider(carContext) { macAddress ->
+                vehicleId = macAddress?.let(
+                    BluetoothVehicleId::fromMacAddress
+                )
+                publishTelemetry()
+            }
+
+        startCarTelemetryIfConnected()
+    }
+
+    /** Clears only values that require an attached Android Auto car. */
+    @MainThread
+    fun disconnectCar(context: Context) {
+        if (connectedCarContext !== context) return
+
+        vehicleId = null
+        fuelLevel = null
+        odometer = null
+        stopCarTelemetry()
+        connectedCarContext = null
+        bluetoothMacProvider = null
+        publishTelemetry()
+    }
+
+    @MainThread
+    override fun setVehicleState(state: TelemetryVehicleState) {
+        vehicleState = state
+        publishTelemetry()
+    }
+
+    @MainThread
+    override fun refreshVehicleId() {
+        bluetoothMacProvider?.refresh()
+    }
+
+    @MainThread
+    private fun startCarTelemetryIfConnected() {
+        if (!started) return
+
+        val carContext = connectedCarContext ?: return
+
+        bluetoothMacProvider?.start()
+
+        if (carInfo != null) return
 
         if (carContext.carAppApiLevel < MIN_CAR_API_LEVEL) {
             Log.w(TAG, "Vehicle telemetry requires Car App API level 3")
@@ -130,9 +203,7 @@ class Telemetry(
     }
 
     @MainThread
-    override fun stop() {
-        if (!started) return
-
+    private fun stopCarTelemetry() {
         if (fuelListenerRegistered) {
             runCatching {
                 carInfo?.removeEnergyLevelListener(fuelListener)
@@ -145,31 +216,10 @@ class Telemetry(
             }
         }
 
-        locationJob?.cancel()
-        scope?.cancel()
-        bluetoothMacProvider.stop()
-
-        locationJob = null
-        scope = null
+        bluetoothMacProvider?.stop()
         carInfo = null
         fuelListenerRegistered = false
         mileageListenerRegistered = false
-        started = false
-        location = null
-        fuelLevel = null
-        odometer = null
-        _telemetry.value = null
-    }
-
-    @MainThread
-    override fun setVehicleState(state: TelemetryVehicleState) {
-        vehicleState = state
-        publishTelemetry()
-    }
-
-    @MainThread
-    override fun refreshVehicleId() {
-        bluetoothMacProvider.refresh()
     }
 
     private fun publishTelemetry() {
@@ -194,14 +244,14 @@ class Telemetry(
         Log.d(
             TAG,
             "Telemetry snapshot: " +
-                "type=${TelemetryData.TYPE}, " +
-                "latitude=${currentLocation?.latitude}, " +
-                "longitude=${currentLocation?.longitude}, " +
-                "state=${currentState.wireValue}, " +
-                "vehicleId=$vehicleId, " +
-                "fuelLevel=$fuelLevel, " +
-                "odometer=$odometer, " +
-                "readyToSend=${updatedTelemetry != null}"
+                    "type=${TelemetryData.TYPE}, " +
+                    "latitude=${currentLocation?.latitude}, " +
+                    "longitude=${currentLocation?.longitude}, " +
+                    "state=${currentState.wireValue}, " +
+                    "vehicleId=$vehicleId, " +
+                    "fuelLevel=$fuelLevel, " +
+                    "odometer=$odometer, " +
+                    "readyToSend=${updatedTelemetry != null}"
         )
     }
 
