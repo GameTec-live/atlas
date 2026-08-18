@@ -60,7 +60,9 @@ function RouteComponent() {
                                 </NavigationMenuTrigger>
                                 <NavigationMenuContent>
                                     <NavigationMenuLink
-                                        render={<Link to="/" />}
+                                        render={
+                                            <Link to="/settings/shortnames" />
+                                        }
                                     >
                                         <Link2Icon />
                                         {m.long_topical_wolf_embrace()}

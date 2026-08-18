@@ -28,5 +28,18 @@
     "inclusive_bright_halibut_flop": "Besetzt",
     "small_house_grizzly_view": "Abwesend",
     "extra_still_giraffe_fetch": "Treibstoff",
-    "happy_flat_kudu_stop": "Kilometerstand"
+    "happy_flat_kudu_stop": "Kilometerstand",
+    "shortnames_title": "Adresskürzel",
+    "shortnames_description": "Verwenden Sie einprägsame Kürzel für häufig genutzte Adressen.",
+    "shortname_column": "Kürzel",
+    "address_column": "Adresse",
+    "new_shortname_placeholder": "Neues Kürzel…",
+    "new_address_placeholder": "Adresse suchen…",
+    "address_search_prompt": "Mindestens 3 Zeichen eingeben",
+    "address_searching": "Adressen werden gesucht…",
+    "address_search_error": "Adressen konnten nicht gesucht werden.",
+    "address_search_empty": "Keine Adressen gefunden.",
+    "shortname_save_error": "Dieses Kürzel konnte nicht gespeichert werden.",
+    "shortname_saved": "Kürzel gespeichert",
+    "shortname_deleted": "Kürzel gelöscht"
 }
