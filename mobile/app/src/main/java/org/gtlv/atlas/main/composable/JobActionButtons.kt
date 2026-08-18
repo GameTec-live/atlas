@@ -28,6 +28,7 @@ internal fun JobActionButtons(
     isStartingNextJob: Boolean,
     isCancellingCurrentJob: Boolean,
     isPersonCollected: Boolean,
+    isPersonCollectionEnabled: Boolean,
     onNextJobClick: () -> Unit,
     onCancelCurrentJobClick: () -> Unit,
     onPersonCollectedClick: () -> Unit,
@@ -59,14 +60,9 @@ internal fun JobActionButtons(
                 }
             }
 
-            /*
-             * Person-collected logic will be implemented later.
-             */
             Button(
                 onClick = onPersonCollectedClick,
-                enabled =
-                    !isPersonCollected &&
-                            !isCancellingCurrentJob,
+                enabled = isPersonCollectionEnabled,
                 modifier = Modifier.widthIn(
                     min = 108.dp
                 )

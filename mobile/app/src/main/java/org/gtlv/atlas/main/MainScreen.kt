@@ -207,6 +207,12 @@ internal fun MainScreen(
                         jobState.isCancellingCurrentJob,
                     isPersonCollected =
                         jobState.isPersonCollected,
+                    isPersonCollectionEnabled =
+                                !jobState.isLoading &&
+                                !jobState.isStartingNextJob &&
+                                !jobState.isCancellingCurrentJob &&
+                                !jobState.isPersonCollected &&
+                                !jobState.addressSearch.isSaving,
                     onNextJobClick =
                         onStartNextJob,
                     onCancelCurrentJobClick =
