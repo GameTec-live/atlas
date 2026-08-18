@@ -6,6 +6,7 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import "../index.css";
 import NotFound from "@/components/404";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { RouterContext } from "@/router";
 
@@ -21,6 +22,7 @@ function RootComponent() {
                 <TooltipProvider>
                     <Outlet />
                 </TooltipProvider>
+                <Toaster />
             </ThemeProvider>
             <TanStackDevtools
                 config={{

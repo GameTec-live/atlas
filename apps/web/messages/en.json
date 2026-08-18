@@ -28,5 +28,18 @@
     "inclusive_bright_halibut_flop": "Occupied",
     "small_house_grizzly_view": "Away",
     "extra_still_giraffe_fetch": "Fuel",
-    "happy_flat_kudu_stop": "Odometer"
+    "happy_flat_kudu_stop": "Odometer",
+    "shortnames_title": "Address shortnames",
+    "shortnames_description": "Use memorable names in place of frequently used addresses.",
+    "shortname_column": "Shortname",
+    "address_column": "Address",
+    "new_shortname_placeholder": "New shortname…",
+    "new_address_placeholder": "Search for an address…",
+    "address_search_prompt": "Type at least 3 characters to search",
+    "address_searching": "Searching addresses…",
+    "address_search_error": "Unable to search addresses.",
+    "address_search_empty": "No addresses found.",
+    "shortname_save_error": "Unable to save this shortname.",
+    "shortname_saved": "Shortname saved",
+    "shortname_deleted": "Shortname deleted"
 }
