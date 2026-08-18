@@ -20,7 +20,7 @@ import org.gtlv.core.shift.ShiftSessionProvider
 import org.gtlv.core.settings.ServerSettingsProvider
 import org.gtlv.core.location.CarLocationProvider
 import org.gtlv.core.location.CarLocationProviderRegistry
-import org.gtlv.core.telemetry.Telemetry
+import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryProviderRegistry
 
 class AtlasCarAppService : CarAppService() {
@@ -37,7 +37,7 @@ class AtlasCarAppService : CarAppService() {
 class AtlasSession : Session(), DefaultLifecycleObserver {
     private var carLocationProvider: CarLocationProvider? = null
     private var carLocationProviderRegistry: CarLocationProviderRegistry? = null
-    private var telemetryProvider: Telemetry? = null
+    private var telemetryProvider: TelemetryProvider? = null
     private var telemetryProviderRegistry: TelemetryProviderRegistry? = null
     private var telemetryPermissionScreen: TelemetryPermissionScreen? = null
 
@@ -77,24 +77,18 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
 
     override fun onStart(owner: LifecycleOwner) {
         carLocationProvider?.start()
-        telemetryProvider?.start()
+        telemetryProviderRegistry?.connectCarTelemetry(carContext)
         showTelemetryPermissionScreenIfNeeded()
     }
 
     override fun onStop(owner: LifecycleOwner) {
-        telemetryProvider?.stop()
+        telemetryProviderRegistry?.disconnectCarTelemetry(carContext)
         carLocationProvider?.stop()
     }
 
     override fun onDestroy(owner: LifecycleOwner) {
         val currentLocationProvider = carLocationProvider
-        val currentTelemetryProvider = telemetryProvider
-
-        if (currentTelemetryProvider != null) {
-            currentTelemetryProvider.stop()
-            telemetryProviderRegistry
-                ?.unregisterTelemetryProvider(currentTelemetryProvider)
-        }
+        telemetryProviderRegistry?.disconnectCarTelemetry(carContext)
 
         if (currentLocationProvider != null) {
             currentLocationProvider.stop()
@@ -114,7 +108,7 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
         if (carLocationProvider != null) return
 
         val registry = carContext.applicationContext
-            as? CarLocationProviderRegistry
+                as? CarLocationProviderRegistry
             ?: return
 
         val provider = CarLocationProvider(carContext)
@@ -129,17 +123,11 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
         if (telemetryProvider != null) return
 
         val registry = carContext.applicationContext
-            as? TelemetryProviderRegistry
+                as? TelemetryProviderRegistry
             ?: return
 
-        val provider = Telemetry(
-            carContext = carContext,
-            locationProvider = registry.telemetryLocationProvider
-        )
-
         telemetryProviderRegistry = registry
-        telemetryProvider = provider
-        registry.registerTelemetryProvider(provider)
+        telemetryProvider = registry.telemetryProvider
     }
 
     private fun showTelemetryPermissionScreenIfNeeded() {
@@ -159,8 +147,11 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
         val permissionScreen = TelemetryPermissionScreen(
             carContext = carContext,
             onPermissionsGranted = {
-                provider.stop()
-                provider.start()
+                telemetryProviderRegistry
+                    ?.disconnectCarTelemetry(carContext)
+                telemetryProviderRegistry
+                    ?.connectCarTelemetry(carContext)
+                provider.refreshVehicleId()
             },
             onDestroyed = {
                 telemetryPermissionScreen = null

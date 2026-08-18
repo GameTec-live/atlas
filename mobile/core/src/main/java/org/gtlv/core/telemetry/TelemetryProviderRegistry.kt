@@ -1,12 +1,12 @@
 package org.gtlv.core.telemetry
 
-import org.gtlv.core.location.LocationProvider
+import android.content.Context
 
-/** Connects car-session telemetry to the application process. */
+/** Connects optional Android Auto vehicle data to process-wide telemetry. */
 interface TelemetryProviderRegistry {
-    val telemetryLocationProvider: LocationProvider
+    val telemetryProvider: TelemetryProvider
 
-    fun registerTelemetryProvider(provider: TelemetryProvider)
+    fun connectCarTelemetry(carContext: Context)
 
-    fun unregisterTelemetryProvider(provider: TelemetryProvider)
+    fun disconnectCarTelemetry(carContext: Context)
 }
