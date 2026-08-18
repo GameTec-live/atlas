@@ -157,7 +157,7 @@ class TelemetryWebSocketSender(
 
             override fun onFailure(
                 webSocket: WebSocket,
-                throwable: Throwable,
+                t: Throwable,
                 response: Response?
             ) {
                 socketReference.compareAndSet(
@@ -177,7 +177,7 @@ class TelemetryWebSocketSender(
                             } else {
                                 " with HTTP $statusCode"
                             },
-                    throwable
+                    t
                 )
             }
         }
