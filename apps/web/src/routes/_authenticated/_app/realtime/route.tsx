@@ -10,6 +10,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { type LiveDriver, useLiveDrivers } from "@/hooks/use-live-drivers";
+import { m } from "@/paraglide/messages";
 
 const markerColors = {
     free: "bg-emerald-500",
@@ -19,10 +20,10 @@ const markerColors = {
 } satisfies Record<LiveDriver["state"], string>;
 
 const stateLabels = {
-    free: "Free",
-    onTheWay: "On the way",
-    occupied: "Occupied",
-    away: "Away",
+    free: m.dizzy_silly_gopher_boil(),
+    onTheWay: m.fit_mild_halibut_grace(),
+    occupied: m.inclusive_bright_halibut_flop(),
+    away: m.small_house_grizzly_view(),
 } satisfies Record<LiveDriver["state"], string>;
 
 export const Route = createFileRoute("/_authenticated/_app/realtime")({
@@ -80,25 +81,32 @@ function RealtimeMap() {
                                     <Badge>{stateLabels[driver.state]}</Badge>
                                 </div>
 
-                                <dl className="grid grid-cols-2 gap-2 border-muted-foreground border-t pt-2">
-                                    {driver.fuelLevel !== undefined && (
-                                        <>
-                                            <dt>Fuel</dt>
-                                            <dd className="text-right tabular-nums">
-                                                {driver.fuelLevel}%
-                                            </dd>
-                                        </>
-                                    )}
+                                {driver.fuelLevel !== undefined ||
+                                driver.odometer !== undefined ? (
+                                    <dl className="grid grid-cols-2 gap-2 border-muted-foreground border-t pt-2">
+                                        {driver.fuelLevel !== undefined && (
+                                            <>
+                                                <dt>
+                                                    {m.extra_still_giraffe_fetch()}
+                                                </dt>
+                                                <dd className="text-right tabular-nums">
+                                                    {driver.fuelLevel}%
+                                                </dd>
+                                            </>
+                                        )}
 
-                                    {driver.odometer !== undefined && (
-                                        <>
-                                            <dt>Odometer</dt>
-                                            <dd className="text-right tabular-nums">
-                                                {driver.odometer} km
-                                            </dd>
-                                        </>
-                                    )}
-                                </dl>
+                                        {driver.odometer !== undefined && (
+                                            <>
+                                                <dt>
+                                                    {m.happy_flat_kudu_stop()}
+                                                </dt>
+                                                <dd className="text-right tabular-nums">
+                                                    {driver.odometer} km
+                                                </dd>
+                                            </>
+                                        )}
+                                    </dl>
+                                ) : null}
                             </TooltipContent>
                         </Tooltip>
                     </Marker>
@@ -110,7 +118,7 @@ function RealtimeMap() {
                 nativeButton={false}
                 render={<Link to="/" />}
             >
-                New job
+                {m.super_crazy_anaconda_wave()}
                 <ArrowRight data-icon="inline-end" />
             </Button>
         </div>
