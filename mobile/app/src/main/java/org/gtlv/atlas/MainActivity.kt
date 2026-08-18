@@ -47,7 +47,11 @@ class MainActivity : ComponentActivity() {
             jobRepository =
                 atlasApplication.jobRepository,
             geoServiceRepository =
-                atlasApplication.geoServiceRepository
+                atlasApplication.geoServiceRepository,
+            telemetryProvider =
+                atlasApplication.telemetryProvider,
+            collectedJobStore =
+                atlasApplication.collectedJobStore
         )
     }
 
@@ -187,6 +191,7 @@ class MainActivity : ComponentActivity() {
                                         onRetryJobs = mainScreenViewModel::refresh,
                                         onStartNextJob = mainScreenViewModel::startNextJob,
                                         onCancelCurrentJob = mainScreenViewModel::cancelCurrentJob,
+                                        onPersonCollected = mainScreenViewModel::personCollected,
                                         onEditDestination = mainScreenViewModel::openDestinationEditor,
                                         onAddressQueryChanged = mainScreenViewModel::onAddressQueryChanged,
                                         onAddressSuggestionSelected = mainScreenViewModel::selectAddressSuggestion,

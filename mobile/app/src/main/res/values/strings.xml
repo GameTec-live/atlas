@@ -64,6 +64,7 @@
     <string name="job_action_cancel">Cancel current job</string>
     <string name="job_action_start_failed">Could not start the next job</string>
     <string name="job_action_cancel_failed">Could not cancel the current job</string>
+    <string name="job_action_job_finished">Job finished</string>
 
     <string name="address_search_hint">Enter address</string>
     <string name="address_search_close">Close address search</string>

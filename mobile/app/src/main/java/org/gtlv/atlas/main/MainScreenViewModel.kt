@@ -14,15 +14,22 @@ import org.gtlv.atlas.address.AddressSearchUiState
 import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.geoservice.GeoServiceRepository
 import org.gtlv.core.geoservice.ResolveAddressResult
+import org.gtlv.core.job.CollectedJobStore
 import org.gtlv.core.job.JobActionResult
 import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
+import org.gtlv.core.telemetry.TelemetryProvider
+import org.gtlv.core.telemetry.TelemetryVehicleState
 
 class MainScreenViewModel(
     private val jobRepository: JobRepository,
     private val geoServiceRepository:
-    GeoServiceRepository
+    GeoServiceRepository,
+    private val telemetryProvider:
+    TelemetryProvider,
+    private val collectedJobStore:
+    CollectedJobStore
 ) : ViewModel() {
 
     private val _uiState =
@@ -32,11 +39,11 @@ class MainScreenViewModel(
         _uiState.asStateFlow()
 
     private var activeUserId: String? = null
-
     private var refreshJob: Job? = null
     private var jobActionTask: Job? = null
     private var addressSearchTask: Job? = null
     private var locationUpdateTask: Job? = null
+    private var collectedJobId: String? = null
 
     fun loadJobsForUser(
         userId: String
@@ -48,7 +55,14 @@ class MainScreenViewModel(
         cancelAllTasks()
 
         activeUserId = userId
+        collectedJobId =
+            collectedJobStore.getCollectedJobId(userId)
+
         _uiState.value = MainScreenUiState()
+
+        telemetryProvider.setVehicleState(
+            TelemetryVehicleState.FREE
+        )
 
         refresh()
     }
@@ -209,6 +223,56 @@ class MainScreenViewModel(
         }
     }
 
+    fun personCollected() {
+        val state = _uiState.value
+        val currentJob = state.currentJob ?: return
+        val userId = activeUserId ?: return
+
+        if (
+            state.isLoading ||
+            state.isStartingNextJob ||
+            state.isCancellingCurrentJob ||
+            state.isPersonCollected ||
+            state.addressSearch.isSaving
+        ) {
+            return
+        }
+
+        collectedJobId = currentJob.id
+
+        collectedJobStore.setCollectedJobId(
+            userId = userId,
+            jobId = currentJob.id
+        )
+
+        telemetryProvider.setVehicleState(
+            TelemetryVehicleState.OCCUPIED
+        )
+
+        val destinationIsMissing =
+            currentJob.to == null &&
+                    currentJob.toAddress.isNullOrBlank()
+
+        addressSearchTask?.cancel()
+        addressSearchTask = null
+
+        _uiState.update {
+            it.copy(
+                isPersonCollected = true,
+                isAddressEditorOpen =
+                    destinationIsMissing,
+                editedLocationField =
+                    if (destinationIsMissing) {
+                        JobLocationField.TO
+                    } else {
+                        null
+                    },
+                addressSearch =
+                    AddressSearchUiState()
+            )
+        }
+    }
+
     private suspend fun reloadJobsAfterAction() {
         val result = jobRepository.getJobs()
 
@@ -237,10 +301,46 @@ class MainScreenViewModel(
     private fun applyJobs(
         result: JobsResult.Success
     ) {
+        val currentJob = result.currentJob
+        val userId = activeUserId
+
+        val personCollected =
+            currentJob != null &&
+                    currentJob.id == collectedJobId
+
+        if (
+            collectedJobId != null &&
+            !personCollected
+        ) {
+            if (userId != null) {
+                collectedJobStore.clearCollectedJobId(
+                    userId
+                )
+            }
+
+            collectedJobId = null
+        }
+
+        telemetryProvider.setVehicleState(
+            when {
+                currentJob == null -> {
+                    TelemetryVehicleState.FREE
+                }
+
+                personCollected -> {
+                    TelemetryVehicleState.OCCUPIED
+                }
+
+                else -> {
+                    TelemetryVehicleState.ON_THE_WAY
+                }
+            }
+        )
+
         _uiState.update {
             it.copy(
                 isLoading = false,
-                currentJob = result.currentJob,
+                currentJob = currentJob,
                 queuedJobs = result.queuedJobs,
                 isJobListExpanded =
                     it.isJobListExpanded &&
@@ -249,7 +349,8 @@ class MainScreenViewModel(
                 isStartingNextJob = false,
                 startNextJobFailed = false,
                 isCancellingCurrentJob = false,
-                cancelCurrentJobFailed = false
+                cancelCurrentJobFailed = false,
+                isPersonCollected = personCollected
             )
         }
     }
@@ -508,6 +609,12 @@ class MainScreenViewModel(
 
     fun clearJobs() {
         activeUserId = null
+
+        collectedJobId = null
+
+        telemetryProvider.setVehicleState(
+            TelemetryVehicleState.FREE
+        )
 
         cancelAllTasks()
 

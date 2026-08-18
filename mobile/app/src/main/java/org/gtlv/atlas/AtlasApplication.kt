@@ -25,6 +25,7 @@ import org.gtlv.core.telemetry.Telemetry
 import org.gtlv.core.job.JobRepositoryImpl
 import org.gtlv.core.geoservice.GeoServiceRepositoryImpl
 import org.gtlv.core.telemetry.TelemetryWebSocketSender
+import org.gtlv.core.job.CollectedJobStore
 
 class AtlasApplication : Application(), ShiftSessionProvider,
     ServerSettingsProvider, CarLocationProviderRegistry,
@@ -154,6 +155,12 @@ class AtlasApplication : Application(), ShiftSessionProvider,
             shiftSessionManager = shiftSessionManager,
             telemetryProvider = telemetryProvider,
             scope = applicationScope
+        )
+    }
+
+    val collectedJobStore by lazy {
+        CollectedJobStore(
+            context = applicationContext
         )
     }
 
