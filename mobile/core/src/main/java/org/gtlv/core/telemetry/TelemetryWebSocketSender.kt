@@ -103,7 +103,7 @@ class TelemetryWebSocketSender(
                     TAG,
                     "Reconnecting in $retryDelayMillis ms"
                 )
-                delay(retryDelayMillis)
+                delay(retryDelayMillis.milliseconds)
             }
         }
     }
