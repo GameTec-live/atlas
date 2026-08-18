@@ -130,13 +130,22 @@ function EditableShortnameRow({
                 title: change.key ? m.shortname_saved() : m.shortname_deleted(),
             });
         },
-        onError: () =>
+        onError: (_, change) => {
+            const persistedKey = change.originalKey;
+            if (persistedKey !== null && change.key !== persistedKey) {
+                setDraft((current) => ({
+                    ...current,
+                    key: persistedKey,
+                }));
+            }
+
             toast.add({
                 id: "shortname-save",
                 type: "error",
                 title: m.shortname_save_error(),
                 priority: "high",
-            }),
+            });
+        },
     });
     const { isPending, mutate } = mutation;
     const { debounce: debounceSave, cancel: cancelSave } = useDebouncedCallback(
