@@ -9,9 +9,6 @@ import { defineConfig } from "vite";
 
 const config = defineConfig({
     resolve: { tsconfigPaths: true },
-    optimizeDeps: {
-        exclude: ["maplibre-gl"],
-    },
     server: {
         port: 3001,
         proxy: {

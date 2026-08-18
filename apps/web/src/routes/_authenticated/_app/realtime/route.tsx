@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
+import { setWorkerUrl } from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import MapLibre, { Marker } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +13,8 @@ import {
 } from "@/components/ui/tooltip";
 import { type LiveDriver, useLiveDrivers } from "@/hooks/use-live-drivers";
 import { m } from "@/paraglide/messages";
+
+setWorkerUrl(maplibreWorkerUrl);
 
 const markerColors = {
     free: "bg-emerald-500",
