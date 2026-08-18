@@ -50,6 +50,13 @@ function RouteComponent() {
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
                             <NavigationMenuItem>
+                                <NavigationMenuLink
+                                    render={<Link to="/jobs" />}
+                                >
+                                    {m.keen_plane_bobcat_value()}
+                                </NavigationMenuLink>
+                            </NavigationMenuItem>
+                            <NavigationMenuItem>
                                 <NavigationMenuLink render={<Link to="/" />}>
                                     {m.cool_only_manatee_pout()}
                                 </NavigationMenuLink>

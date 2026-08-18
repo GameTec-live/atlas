@@ -167,6 +167,18 @@ const updateRequest = (
     );
 };
 
+const deleteJobRequest = (authenticated = true, id = jobId) => {
+    const headers = new Headers();
+    if (authenticated) headers.set("authorization", "Bearer test-token");
+
+    return app.handle(
+        new Request(`http://localhost/jobs/${id}`, {
+            method: "DELETE",
+            headers,
+        }),
+    );
+};
+
 const getJobRequest = (authenticated = true, id = jobId, geocode = false) => {
     const headers = new Headers();
     if (authenticated) headers.set("authorization", "Bearer test-token");
@@ -2395,6 +2407,52 @@ describe("PUT /jobs/:id", () => {
     });
 });
 
+describe("DELETE /jobs/:id", () => {
+    it("returns 401 without a session and does not delete the job", async () => {
+        const response = await deleteJobRequest(false);
+
+        expect(response.status).toBe(401);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 403 for an authenticated non-admin", async () => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await deleteJobRequest();
+
+        expect(response.status).toBe(403);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("deletes an unassigned job", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRowCount("delete", 1);
+
+        const response = await deleteJobRequest();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+            message: "Job deleted successfully",
+        });
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain('delete from "job"');
+        expect(sql).toContain('"job"."assigned_driver_id" is null');
+        expect(values).toEqual([jobId]);
+    });
+
+    it("returns 404 when no unassigned job matches", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await deleteJobRequest();
+
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({
+            error: "Unassigned job not found",
+        });
+    });
+});
+
 describe("GET /jobs/:id", () => {
     it("returns 401 without a session and does not query the database", async () => {
         const response = await getJobRequest(false);
@@ -2502,17 +2560,30 @@ describe("GET /jobs/all", () => {
         ['filter="all"', "all"],
     ])("returns every job newest first for %s", async (_description, filter) => {
         getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRows(
+            "select",
+            getDbMockTableRows("job").map((row) => [
+                ...row,
+                exampleData.user[0]?.name,
+            ]),
+        );
 
         const response = await allJobsRequest(filter);
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual([serializedJob]);
+        expect(await response.json()).toEqual([
+            {
+                ...serializedJob,
+                assignedDriverName: exampleData.user[0]?.name,
+            },
+        ]);
         expect(getSessionMock).toHaveBeenCalledTimes(1);
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
         expect(fetchMock).not.toHaveBeenCalled();
 
         const { sql, values } = getFirstQuery();
-        expect(sql).toContain('from "job" order by "job"."created_at" desc');
+        expect(sql).toContain('from "job" left join "user"');
+        expect(sql).toContain('order by "job"."created_at" desc');
         expect(sql).not.toContain(" where ");
         expect(values).toEqual([]);
     });
@@ -2527,9 +2598,8 @@ describe("GET /jobs/all", () => {
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
         const { sql, values } = getFirstQuery();
-        expect(sql).toContain(
-            'from "job" where ("job"."assigned_driver_id" is not null)',
-        );
+        expect(sql).toContain('left join "user"');
+        expect(sql).toContain('"job"."assigned_driver_id" is not null');
         expect(sql).toContain('order by "job"."created_at" desc');
         expect(values).toEqual([]);
     });
@@ -2560,9 +2630,8 @@ describe("GET /jobs/all", () => {
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
 
         const { sql, values } = getFirstQuery();
-        expect(sql).toContain(
-            'from "job" where ("job"."assigned_driver_id" is null)',
-        );
+        expect(sql).toContain('left join "user"');
+        expect(sql).toContain('"job"."assigned_driver_id" is null');
         expect(sql).toContain('order by "job"."created_at" desc');
         expect(values).toEqual([]);
     });

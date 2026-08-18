@@ -1,11 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
 import { setWorkerUrl } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import MapLibre, { Marker } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { NewJobButton } from "@/components/new-job-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
     Tooltip,
     TooltipContent,
@@ -117,14 +116,7 @@ function RealtimeMap() {
                 ))}
             </MapLibre>
 
-            <Button
-                className="absolute right-4 bottom-4 z-10 h-10 px-4 shadow-lg"
-                nativeButton={false}
-                render={<Link to="/" />}
-            >
-                {m.super_crazy_anaconda_wave()}
-                <ArrowRight data-icon="inline-end" />
-            </Button>
+            <NewJobButton className="absolute right-4 bottom-4 z-10 shadow-lg" />
         </div>
     );
 }
