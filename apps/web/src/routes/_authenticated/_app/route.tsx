@@ -19,8 +19,8 @@ export const Route = createFileRoute("/_authenticated/_app")({
 
 function RouteComponent() {
     return (
-        <>
-            <nav className="border-b flex flex-row items-center justify-between gap-2 p-2 flex-wrap">
+        <div className="flex h-svh flex-col">
+            <nav className="flex shrink-0 flex-row flex-wrap items-center justify-between gap-2 border-b p-2">
                 <div className="flex flex-row items-center gap-2">
                     <Link to="/">
                         <svg
@@ -43,7 +43,9 @@ function RouteComponent() {
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
                             <NavigationMenuItem>
-                                <NavigationMenuLink render={<Link to="/" />}>
+                                <NavigationMenuLink
+                                    render={<Link to="/realtime" />}
+                                >
                                     {m.simple_awful_coyote_quiz()}
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
@@ -80,7 +82,9 @@ function RouteComponent() {
                     <SignoutButton />
                 </div>
             </nav>
-            <Outlet />
-        </>
+            <div className="min-h-0 flex-1">
+                <Outlet />
+            </div>
+        </div>
     );
 }

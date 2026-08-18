@@ -9,6 +9,9 @@ import { defineConfig } from "vite";
 
 const config = defineConfig({
     resolve: { tsconfigPaths: true },
+    optimizeDeps: {
+        exclude: ["maplibre-gl"],
+    },
     server: {
         port: 3001,
         proxy: {
@@ -16,6 +19,11 @@ const config = defineConfig({
                 target: "http://localhost:3000",
                 ws: true,
                 rewrite: (path) => path.replace(/^\/api/, ""),
+            },
+            "/map": {
+                target: "https://atlas.gametec-live.com",
+                changeOrigin: true,
+                secure: false,
             },
         },
     },
