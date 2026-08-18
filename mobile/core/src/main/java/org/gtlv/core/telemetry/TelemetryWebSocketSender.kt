@@ -28,6 +28,8 @@ import org.gtlv.core.shift.ShiftSessionManager
 import org.gtlv.core.shift.ShiftSessionState
 import org.json.JSONObject
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /**
  * Sends the latest available telemetry snapshot to the configured server.
@@ -222,14 +224,16 @@ class TelemetryWebSocketSender(
         try {
             connectionFinished.await()
         } finally {
-            sendJob.cancelAndJoin()
-
             socketReference
                 .getAndSet(null)
                 ?.close(
                     NORMAL_CLOSURE_CODE,
                     "Telemetry sender stopped"
                 )
+
+            withContext(NonCancellable) {
+                sendJob.cancelAndJoin()
+            }
         }
 
         connectionOpened.get()
