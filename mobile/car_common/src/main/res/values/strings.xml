@@ -4,4 +4,9 @@
     <string name="waiting_screen_explanation">Log in and select your role in the Atlas app on your connected phone. \n This screen will continue automatically after your role is available.</string>
     <string name="main_screen_title">Atlas</string>
     <string name="main_screen_message">You are signed in.</string>
+    <string name="telemetry_permission_title">Vehicle data</string>
+    <string name="telemetry_permission_explanation">Allow access to connected Bluetooth devices, fuel level, and mileage so Atlas can provide vehicle telemetry.</string>
+    <string name="telemetry_permission_waiting">Waiting for vehicle data permissions on your phone.</string>
+    <string name="telemetry_permission_denied">Not all vehicle data permissions were granted. Missing values cannot be provided.</string>
+    <string name="telemetry_permission_action">Allow vehicle data</string>
 </resources>

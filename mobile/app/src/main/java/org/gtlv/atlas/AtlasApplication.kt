@@ -4,6 +4,9 @@ import android.app.Application
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.gtlv.core.location.CarAwareLocationProvider
 import org.gtlv.core.location.CarLocationProviderRegistry
 import org.gtlv.core.location.LocationProvider
@@ -18,11 +21,14 @@ import org.gtlv.core.settings.DataStoreServerSettingsRepository
 import org.gtlv.core.settings.ServerSettingsProvider
 import org.gtlv.core.shift.DataStoreShiftSessionStore
 import org.gtlv.core.shift.ShiftSessionManager
+import org.gtlv.core.telemetry.TelemetryProvider
+import org.gtlv.core.telemetry.TelemetryProviderRegistry
 import org.gtlv.core.job.JobRepositoryImpl
 import org.gtlv.core.geoservice.GeoServiceRepositoryImpl
 
 class AtlasApplication : Application(), ShiftSessionProvider,
-    ServerSettingsProvider, CarLocationProviderRegistry {
+    ServerSettingsProvider, CarLocationProviderRegistry,
+    TelemetryProviderRegistry {
 
     private val applicationScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate
@@ -44,6 +50,18 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     val locationProvider: LocationProvider
         get() = carAwareLocationProvider
 
+    override val telemetryLocationProvider: LocationProvider
+        get() = locationProvider
+
+    private val _telemetryProviderState =
+        MutableStateFlow<TelemetryProvider?>(null)
+
+    val telemetryProviderState: StateFlow<TelemetryProvider?> =
+        _telemetryProviderState.asStateFlow()
+
+    val telemetryProvider: TelemetryProvider?
+        get() = _telemetryProviderState.value
+
     override fun registerCarLocationProvider(
         provider: LocationProvider
     ) {
@@ -54,6 +72,20 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         provider: LocationProvider
     ) {
         carAwareLocationProvider.unregisterCarLocationProvider(provider)
+    }
+
+    override fun registerTelemetryProvider(
+        provider: TelemetryProvider
+    ) {
+        _telemetryProviderState.value = provider
+    }
+
+    override fun unregisterTelemetryProvider(
+        provider: TelemetryProvider
+    ) {
+        if (_telemetryProviderState.value === provider) {
+            _telemetryProviderState.value = null
+        }
     }
 
     val networkClient by lazy {
