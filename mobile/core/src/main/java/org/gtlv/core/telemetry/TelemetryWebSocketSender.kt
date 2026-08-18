@@ -268,7 +268,7 @@ class TelemetryWebSocketSender(
 
         /*
          * OkHttp's newWebSocket performs a secure WebSocket upgrade
-         * when the request URL uses HTTPS.
+         * when the request URL uses HTTPS. ...
          */
         return Request.Builder()
             .url(endpointUrl)
