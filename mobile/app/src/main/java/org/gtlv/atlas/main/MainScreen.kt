@@ -59,6 +59,7 @@ internal fun MainScreen(
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
     onCancelCurrentJob: () -> Unit,
+    onPersonCollected: () -> Unit,
     serverAddress: String,
     onEditDestination: () -> Unit,
     onAddressQueryChanged: (String) -> Unit,
@@ -199,18 +200,25 @@ internal fun MainScreen(
                     hasCurrentJob =
                         jobState.currentJob != null,
                     hasNextJob =
-                        jobState.queuedJobs
-                            .isNotEmpty(),
+                        jobState.queuedJobs.isNotEmpty(),
                     isStartingNextJob =
-                        jobState
-                            .isStartingNextJob,
+                        jobState.isStartingNextJob,
                     isCancellingCurrentJob =
-                        jobState
-                            .isCancellingCurrentJob,
+                        jobState.isCancellingCurrentJob,
+                    isPersonCollected =
+                        jobState.isPersonCollected,
+                    isPersonCollectionEnabled =
+                                !jobState.isLoading &&
+                                !jobState.isStartingNextJob &&
+                                !jobState.isCancellingCurrentJob &&
+                                !jobState.isPersonCollected &&
+                                !jobState.addressSearch.isSaving,
                     onNextJobClick =
                         onStartNextJob,
                     onCancelCurrentJobClick =
-                        onCancelCurrentJob
+                        onCancelCurrentJob,
+                    onPersonCollectedClick =
+                        onPersonCollected
                 )
             }
 

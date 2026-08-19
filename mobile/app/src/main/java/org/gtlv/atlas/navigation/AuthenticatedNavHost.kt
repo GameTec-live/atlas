@@ -23,6 +23,7 @@ internal fun AuthenticatedNavHost(
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
     onCancelCurrentJob: () -> Unit,
+    onPersonCollected: () -> Unit,
     onEditDestination: () -> Unit,
     onAddressQueryChanged: (String) -> Unit,
     onAddressSuggestionSelected:
@@ -48,6 +49,7 @@ internal fun AuthenticatedNavHost(
                 onRetryJobs = onRetryJobs,
                 onStartNextJob = onStartNextJob,
                 onCancelCurrentJob = onCancelCurrentJob,
+                onPersonCollected = onPersonCollected,
                 onEditDestination = onEditDestination,
                 onAddressQueryChanged = onAddressQueryChanged,
                 onAddressSuggestionSelected = onAddressSuggestionSelected,

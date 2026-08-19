@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
@@ -26,8 +27,11 @@ internal fun JobActionButtons(
     hasNextJob: Boolean,
     isStartingNextJob: Boolean,
     isCancellingCurrentJob: Boolean,
+    isPersonCollected: Boolean,
+    isPersonCollectionEnabled: Boolean,
     onNextJobClick: () -> Unit,
     onCancelCurrentJobClick: () -> Unit,
+    onPersonCollectedClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -56,19 +60,20 @@ internal fun JobActionButtons(
                 }
             }
 
-            /*
-             * Person-collected logic will be implemented later.
-             */
             Button(
-                onClick = {},
-                enabled = false,
+                onClick = onPersonCollectedClick,
+                enabled = isPersonCollectionEnabled,
                 modifier = Modifier.widthIn(
                     min = 108.dp
                 )
             ) {
                 Text(
                     text = stringResource(
-                        R.string.job_action_person_collected
+                        if (isPersonCollected) {
+                            R.string.job_action_job_finished
+                        } else {
+                            R.string.job_action_person_collected
+                        }
                     )
                 )
             }
@@ -96,7 +101,7 @@ internal fun JobActionButtons(
 
                     Icon(
                         imageVector =
-                            Icons.Default.KeyboardArrowRight,
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = null
                     )
                 }
