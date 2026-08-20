@@ -2,7 +2,7 @@ type: http_request
 model: http_request
 id: rq_uCbiBhoYqX
 createdAt: 2026-07-21T07:20:50.703489700
-updatedAt: 2026-08-05T09:11:20.384871700
+updatedAt: 2026-08-20T11:01:49.579599100
 workspaceId: wk_gbXsp49jy7
 folderId: fl_Pe9scVD4yF
 authentication:
@@ -11,8 +11,10 @@ authenticationType: bearer
 body:
   text: |-
     {
-      "email": "test@gametec.live",
-      "password": "12345678"
+      "email": "test5@gametec.live",
+      "password": "12345678",
+      "rememberMe": "<boolean>",
+      "callbackURL": "<string>"
     }
 bodyType: application/json
 description: Sign in with email and password

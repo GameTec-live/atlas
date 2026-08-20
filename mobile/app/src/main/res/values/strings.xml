@@ -66,6 +66,17 @@
     <string name="job_action_cancel_failed">Could not cancel the current job</string>
     <string name="job_action_job_finished">Job finished</string>
 
+    <string name="job_notification_channel">Assigned jobs</string>
+    <string name="job_notification_channel_description">Notifications about newly assigned jobs</string>
+    <string name="job_notification_title">New Job</string>
+    <string name="job_notification_from">From: %1$s</string>
+    <string name="job_notification_to">To: %1$s</string>
+    <string name="job_notification_decline">Decline job</string>
+    <string name="job_notification_decline_failed">Could not decline the assigned job</string>
+    <string name="job_notification_decline_dialog_title">Decline job?</string>
+    <string name="job_notification_decline_dialog_message">Do you really want to decline the job from %1$s to %2$s?</string>
+    <string name="job_notification_confirm_decline">Decline</string>
+
     <string name="address_search_hint">Enter address</string>
     <string name="address_search_close">Close address search</string>
     <string name="address_search_destination">Destination</string>
@@ -73,4 +84,9 @@
     <string name="address_search_load_error">Could not load address suggestions</string>
     <string name="address_search_save_error">Could not update the job location</string>
     <string name="address_search_no_results">No matching addresses found</string>
+
+    <string name="active_shift_channel">Active shift</string>
+    <string name="active_shift_channel_description">Keeps Atlas connected while a shift is active</string>
+    <string name="active_shift_notification_title">Atlas shift active</string>
+    <string name="active_shift_notification_text">Receiving jobs and sharing live location</string>
 </resources>

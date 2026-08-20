@@ -253,7 +253,8 @@ private fun ExpandedJobs(
         }
 
         LazyColumn(
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            reverseLayout = true
         ) {
             if (state.queuedJobs.isEmpty()) {
                 item {

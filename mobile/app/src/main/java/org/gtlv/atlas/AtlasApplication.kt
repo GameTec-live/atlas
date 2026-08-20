@@ -26,6 +26,9 @@ import org.gtlv.core.job.JobRepositoryImpl
 import org.gtlv.core.geoservice.GeoServiceRepositoryImpl
 import org.gtlv.core.telemetry.TelemetryWebSocketSender
 import org.gtlv.core.job.CollectedJobStore
+import org.gtlv.atlas.notification.AppVisibilityTracker
+import org.gtlv.atlas.notification.JobNotificationWebSocket
+import org.gtlv.atlas.notification.JobSystemNotificationManager
 
 class AtlasApplication : Application(), ShiftSessionProvider,
     ServerSettingsProvider, CarLocationProviderRegistry,
@@ -78,6 +81,31 @@ class AtlasApplication : Application(), ShiftSessionProvider,
 
     override fun disconnectCarTelemetry(carContext: Context) {
         applicationTelemetry.disconnectCar(carContext)
+    }
+
+    val appVisibilityTracker =
+        AppVisibilityTracker()
+
+    val jobSystemNotificationManager by lazy {
+        JobSystemNotificationManager(
+            context = applicationContext
+        )
+    }
+
+    val jobNotificationWebSocket by lazy {
+        JobNotificationWebSocket(
+            networkClient = networkClient,
+            serverSettingsRepository =
+                serverSettingsRepository,
+            sessionManager = sessionManager,
+            shiftSessionManager =
+                shiftSessionManager,
+            visibilityTracker =
+                appVisibilityTracker,
+            systemNotificationManager =
+                jobSystemNotificationManager,
+            scope = applicationScope
+        )
     }
 
     val networkClient by lazy {
@@ -166,7 +194,16 @@ class AtlasApplication : Application(), ShiftSessionProvider,
 
     override fun onCreate() {
         super.onCreate()
+
+        registerActivityLifecycleCallbacks(
+            appVisibilityTracker
+        )
+
+        jobSystemNotificationManager
+            .createChannel()
+
         applicationTelemetry.start()
         telemetryWebSocketSender.start()
+        jobNotificationWebSocket.start()
     }
 }

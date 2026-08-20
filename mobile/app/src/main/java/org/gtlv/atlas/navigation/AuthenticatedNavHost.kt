@@ -7,9 +7,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import org.gtlv.atlas.main.MainScreen
 import org.gtlv.atlas.main.MainScreenUiState
+import org.gtlv.atlas.notification.JobNotificationUiState
+import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
-import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.telemetry.LiveMapUser
 
 @Composable
@@ -21,6 +22,7 @@ internal fun AuthenticatedNavHost(
     onLogout: () -> Unit,
     serverAddress: String,
     mainScreenState: MainScreenUiState,
+    jobNotificationState: JobNotificationUiState,
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
@@ -31,6 +33,10 @@ internal fun AuthenticatedNavHost(
     onAddressSuggestionSelected:
         (AddressSuggestion) -> Unit,
     onCloseAddressEditor: () -> Unit,
+    onDismissJobNotification: () -> Unit,
+    onDeclineJobNotification: () -> Unit,
+    onDismissDeclineConfirmation: () -> Unit,
+    onConfirmDecline: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
@@ -48,6 +54,7 @@ internal fun AuthenticatedNavHost(
                 locationState = locationState,
                 liveMapUsers = liveMapUsers,
                 jobState = mainScreenState,
+                jobNotificationState = jobNotificationState,
                 onToggleJobList = onToggleJobList,
                 onRetryJobs = onRetryJobs,
                 onStartNextJob = onStartNextJob,
@@ -57,6 +64,10 @@ internal fun AuthenticatedNavHost(
                 onAddressQueryChanged = onAddressQueryChanged,
                 onAddressSuggestionSelected = onAddressSuggestionSelected,
                 onCloseAddressEditor = onCloseAddressEditor,
+                onDismissJobNotification = onDismissJobNotification,
+                onDeclineJobNotification = onDeclineJobNotification,
+                onDismissDeclineConfirmation = onDismissDeclineConfirmation,
+                onConfirmDecline = onConfirmDecline,
                 onLogout = onLogout
             )
         }
