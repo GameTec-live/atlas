@@ -368,6 +368,28 @@ export const jobs = new Elysia({
             auth: true,
         },
     )
+    .delete(
+        "/:id",
+        async ({ params }) => {
+            const deleteResult = await db
+                .delete(job)
+                .where(
+                    and(eq(job.id, params.id), isNull(job.assignedDriverId)),
+                );
+
+            if (deleteResult.rowCount === 0) {
+                return status(404, { error: "Unassigned job not found" });
+            }
+
+            return { message: "Job deleted successfully" };
+        },
+        {
+            params: t.Object({
+                id: t.String({ format: "uuid" }),
+            }),
+            admin: true,
+        },
+    )
     .get(
         "/:id",
         async ({ params, query }) => {
@@ -397,8 +419,22 @@ export const jobs = new Elysia({
         "/all",
         async ({ query }) => {
             const jobs = await db
-                .select()
+                .select({
+                    id: job.id,
+                    assignedDriverId: job.assignedDriverId,
+                    vehicleId: job.vehicleId,
+                    from: job.from,
+                    to: job.to,
+                    dueDate: job.dueDate,
+                    note: job.note,
+                    startedAt: job.startedAt,
+                    completedAt: job.completedAt,
+                    createdAt: job.createdAt,
+                    updatedAt: job.updatedAt,
+                    assignedDriverName: user.name,
+                })
                 .from(job)
+                .leftJoin(user, eq(job.assignedDriverId, user.id))
                 .orderBy(desc(job.createdAt))
                 .where(
                     query.filter === "assigned"
