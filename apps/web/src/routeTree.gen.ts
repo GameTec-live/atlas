@@ -16,6 +16,7 @@ import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedAppRealtimeRouteRouteImport } from './routes/_authenticated/_app/realtime/route'
 import { Route as AuthenticatedAppFleetIndexRouteImport } from './routes/_authenticated/_app/fleet/index'
 import { Route as AuthenticatedAppJobsIndexRouteImport } from './routes/_authenticated/_app/jobs/index'
+import { Route as AuthenticatedAppJobsJobIdRouteImport } from './routes/_authenticated/_app/jobs/$jobId'
 import { Route as AuthenticatedAppSettingsIndexRouteImport } from './routes/_authenticated/_app/settings/index'
 import { Route as AuthenticatedAppSettingsShortnamesRouteImport } from './routes/_authenticated/_app/settings/shortnames'
 
@@ -55,6 +56,12 @@ const AuthenticatedAppJobsIndexRoute =
     path: '/jobs/',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
+const AuthenticatedAppJobsJobIdRoute =
+  AuthenticatedAppJobsJobIdRouteImport.update({
+    id: '/jobs/$jobId',
+    path: '/jobs/$jobId',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 const AuthenticatedAppSettingsIndexRoute =
   AuthenticatedAppSettingsIndexRouteImport.update({
     id: '/settings/',
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedAppIndexRoute
   '/login': typeof LoginRoute
   '/realtime': typeof AuthenticatedAppRealtimeRouteRoute
+  '/jobs/$jobId': typeof AuthenticatedAppJobsJobIdRoute
   '/settings/shortnames': typeof AuthenticatedAppSettingsShortnamesRoute
   '/fleet/': typeof AuthenticatedAppFleetIndexRoute
   '/jobs/': typeof AuthenticatedAppJobsIndexRoute
@@ -81,6 +89,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedAppIndexRoute
   '/login': typeof LoginRoute
   '/realtime': typeof AuthenticatedAppRealtimeRouteRoute
+  '/jobs/$jobId': typeof AuthenticatedAppJobsJobIdRoute
   '/settings/shortnames': typeof AuthenticatedAppSettingsShortnamesRoute
   '/fleet': typeof AuthenticatedAppFleetIndexRoute
   '/jobs': typeof AuthenticatedAppJobsIndexRoute
@@ -93,6 +102,7 @@ export interface FileRoutesById {
   '/_authenticated/_app': typeof AuthenticatedAppRouteRouteWithChildren
   '/_authenticated/_app/realtime': typeof AuthenticatedAppRealtimeRouteRoute
   '/_authenticated/_app/': typeof AuthenticatedAppIndexRoute
+  '/_authenticated/_app/jobs/$jobId': typeof AuthenticatedAppJobsJobIdRoute
   '/_authenticated/_app/settings/shortnames': typeof AuthenticatedAppSettingsShortnamesRoute
   '/_authenticated/_app/fleet/': typeof AuthenticatedAppFleetIndexRoute
   '/_authenticated/_app/jobs/': typeof AuthenticatedAppJobsIndexRoute
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/realtime'
+    | '/jobs/$jobId'
     | '/settings/shortnames'
     | '/fleet/'
     | '/jobs/'
@@ -113,6 +124,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/realtime'
+    | '/jobs/$jobId'
     | '/settings/shortnames'
     | '/fleet'
     | '/jobs'
@@ -124,6 +136,7 @@ export interface FileRouteTypes {
     | '/_authenticated/_app'
     | '/_authenticated/_app/realtime'
     | '/_authenticated/_app/'
+    | '/_authenticated/_app/jobs/$jobId'
     | '/_authenticated/_app/settings/shortnames'
     | '/_authenticated/_app/fleet/'
     | '/_authenticated/_app/jobs/'
@@ -186,6 +199,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppJobsIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/_app/jobs/$jobId': {
+      id: '/_authenticated/_app/jobs/$jobId'
+      path: '/jobs/$jobId'
+      fullPath: '/jobs/$jobId'
+      preLoaderRoute: typeof AuthenticatedAppJobsJobIdRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/_app/settings/': {
       id: '/_authenticated/_app/settings/'
       path: '/settings'
@@ -206,6 +226,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppRealtimeRouteRoute: typeof AuthenticatedAppRealtimeRouteRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
+  AuthenticatedAppJobsJobIdRoute: typeof AuthenticatedAppJobsJobIdRoute
   AuthenticatedAppSettingsShortnamesRoute: typeof AuthenticatedAppSettingsShortnamesRoute
   AuthenticatedAppFleetIndexRoute: typeof AuthenticatedAppFleetIndexRoute
   AuthenticatedAppJobsIndexRoute: typeof AuthenticatedAppJobsIndexRoute
@@ -215,6 +236,7 @@ interface AuthenticatedAppRouteRouteChildren {
 const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppRealtimeRouteRoute: AuthenticatedAppRealtimeRouteRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
+  AuthenticatedAppJobsJobIdRoute: AuthenticatedAppJobsJobIdRoute,
   AuthenticatedAppSettingsShortnamesRoute:
     AuthenticatedAppSettingsShortnamesRoute,
   AuthenticatedAppFleetIndexRoute: AuthenticatedAppFleetIndexRoute,

@@ -21,6 +21,14 @@ export function formatDateTime(
     }).format(value);
 }
 
+/** Formats a timestamp as local time without repeating its date. */
+export function formatTime(value: Date, locale: string) {
+    return new Intl.DateTimeFormat(locale, {
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(value);
+}
+
 /** Returns a stable key for the date containing a timestamp in local time. */
 export function localDateKey(value: Date) {
     return `${value.getFullYear()}-${value.getMonth()}-${value.getDate()}`;

@@ -30,7 +30,14 @@ const config = defineConfig({
             outdir: "./src/paraglide",
             emitTsDeclarations: true,
         }),
-        devtools(),
+        devtools({
+            injectSource: {
+                enabled: true,
+                // react-map-gl forwards unknown props into MapLibre style specs.
+                // Source-location attributes are invalid on sources and layers.
+                ignore: { components: ["Source", "Layer"] },
+            },
+        }),
         tailwindcss(),
         tanstackRouter({ target: "react", autoCodeSplitting: true }),
         viteReact(),

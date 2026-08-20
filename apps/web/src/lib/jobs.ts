@@ -1,6 +1,6 @@
-import type { Job } from "@/queries/jobs";
+import type { Coordinates } from "@/lib/route";
 
-export function getJobAddresses(job: Job) {
+export function getJobAddresses(job: object) {
     const from =
         "fromAddress" in job && typeof job.fromAddress === "string"
             ? job.fromAddress
@@ -15,7 +15,7 @@ export function getJobAddresses(job: Job) {
 
 export function formatJobLocation(
     address: string | null | undefined,
-    coordinates: [number, number] | null,
+    coordinates: Coordinates | null,
     fallback: string,
 ) {
     if (address) return address;
