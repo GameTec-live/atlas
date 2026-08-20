@@ -1,8 +1,14 @@
 package org.gtlv.atlas.map
 
 import android.annotation.SuppressLint
+import android.content.res.Configuration
+import android.graphics.Color
+import android.util.Log
+import android.view.Gravity
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -19,16 +25,23 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.gson.JsonObject
 import org.gtlv.atlas.R
 import org.gtlv.atlas.location.toAndroidLocation
 import org.gtlv.core.location.AtlasLocation
 import org.gtlv.core.location.LocationState
+import org.gtlv.core.telemetry.LiveMapUser
+import org.gtlv.core.telemetry.TelemetryVehicleState
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -41,19 +54,22 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
-import android.content.res.Configuration
-import android.view.Gravity
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.dp
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.Point
+import androidx.core.graphics.toColorInt
 
 @SuppressLint("MissingPermission")
 @Composable
 internal fun AtlasMap(
     locationState: LocationState,
+    liveMapUsers: Collection<LiveMapUser>,
     recenterRequestId: Int,
     isFollowingLocation: Boolean,
     onUserCameraMove: () -> Unit,
@@ -61,7 +77,6 @@ internal fun AtlasMap(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
@@ -99,7 +114,9 @@ internal fun AtlasMap(
         stringResource(R.string.map_load_error)
 
     val locationDisplayError =
-        stringResource(R.string.map_location_display_error)
+        stringResource(
+            R.string.map_location_display_error
+        )
 
     var loadState by remember {
         mutableStateOf<MapLoadState>(
@@ -117,7 +134,8 @@ internal fun AtlasMap(
         compassTopMargin
     ) {
         readyMap?.uiSettings?.apply {
-            compassGravity = Gravity.TOP or Gravity.START
+            compassGravity =
+                Gravity.TOP or Gravity.START
 
             setCompassMargins(
                 compassLeftMargin,
@@ -132,18 +150,9 @@ internal fun AtlasMap(
         mutableStateOf(false)
     }
 
-    /*
-     * The MapLibre listener is registered outside normal
-     * recomposition. This ensures that it always calls the latest
-     * callback supplied by MainScreen.
-     */
-    val currentOnUserCameraMove by rememberUpdatedState(
-        onUserCameraMove
-    )
+    val currentOnUserCameraMove by
+    rememberUpdatedState(onUserCameraMove)
 
-    /*
-     * These values preserve the camera after configuration changes.
-     */
     var savedLatitude by rememberSaveable {
         mutableDoubleStateOf(
             MapConfiguration.INITIAL_LATITUDE
@@ -170,20 +179,22 @@ internal fun AtlasMap(
         mutableDoubleStateOf(0.0)
     }
 
-    val initialCameraPosition = CameraPosition.Builder()
-        .target(
-            LatLng(
-                savedLatitude,
-                savedLongitude
+    val initialCameraPosition =
+        CameraPosition.Builder()
+            .target(
+                LatLng(
+                    savedLatitude,
+                    savedLongitude
+                )
             )
-        )
-        .zoom(savedZoom)
-        .bearing(savedBearing)
-        .tilt(savedTilt)
-        .build()
+            .zoom(savedZoom)
+            .bearing(savedBearing)
+            .tilt(savedTilt)
+            .build()
 
     val mapView = rememberMapViewWithLifecycle(
-        initialCameraPosition = initialCameraPosition
+        initialCameraPosition =
+            initialCameraPosition
     )
 
     LaunchedEffect(mapView, styleUrl) {
@@ -197,7 +208,9 @@ internal fun AtlasMap(
         }
 
         mapView.getMapAsync { map ->
-            map.uiSettings.isAttributionEnabled = false
+            map.uiSettings.isAttributionEnabled =
+                false
+
             map.uiSettings.isLogoEnabled = false
 
             map.setStyle(
@@ -217,7 +230,9 @@ internal fun AtlasMap(
                             .locationComponentOptions(
                                 componentOptions
                             )
-                            .useDefaultLocationEngine(false)
+                            .useDefaultLocationEngine(
+                                false
+                            )
                             .build()
 
                     map.locationComponent
@@ -226,11 +241,9 @@ internal fun AtlasMap(
                         )
 
                     map.locationComponent
-                        .isLocationComponentEnabled = true
+                        .isLocationComponentEnabled =
+                        true
 
-                    /*
-                     * The app controls camera following manually.
-                     */
                     map.locationComponent.cameraMode =
                         CameraMode.NONE
 
@@ -240,19 +253,33 @@ internal fun AtlasMap(
 
                 if (activationResult.isFailure) {
                     loadState = MapLoadState.Error(
-                        message = locationDisplayError
+                        message =
+                            locationDisplayError
                     )
 
                     return@setStyle
                 }
 
+                val layerResult = runCatching {
+                    addLiveMapUserLayers(style)
+                }
+
+                layerResult.exceptionOrNull()?.let {
+                        exception ->
+                }
+
                 map.addOnCameraIdleListener {
-                    val camera = map.cameraPosition
+                    val camera =
+                        map.cameraPosition
+
                     val target = camera.target
 
                     if (target != null) {
-                        savedLatitude = target.latitude
-                        savedLongitude = target.longitude
+                        savedLatitude =
+                            target.latitude
+
+                        savedLongitude =
+                            target.longitude
                     }
 
                     savedZoom = camera.zoom
@@ -260,16 +287,14 @@ internal fun AtlasMap(
                     savedTilt = camera.tilt
                 }
 
-                map.addOnCameraMoveStartedListener { reason ->
+                map.addOnCameraMoveStartedListener {
+                        reason ->
                     if (
-                        reason == MapLibreMap
+                        reason ==
+                        MapLibreMap
                             .OnCameraMoveStartedListener
                             .REASON_API_GESTURE
                     ) {
-                        /*
-                         * Only user interaction stops camera
-                         * following. Programmatic movement does not.
-                         */
                         currentOnUserCameraMove()
                     }
                 }
@@ -284,31 +309,22 @@ internal fun AtlasMap(
         (locationState as? LocationState.Available)
             ?.location
 
-    /*
-     * Every location update moves the puck.
-     *
-     * The first available location also uses the same center and
-     * zoom operation as the recenter button. Later updates follow
-     * the puck without resetting the zoom.
-     *
-     * After the user moves the camera, isFollowingLocation becomes
-     * false. The puck continues moving, but the camera stays where
-     * the user placed it.
-     */
     LaunchedEffect(
         readyMap,
         availableLocation
     ) {
-        val map = readyMap
-            ?: return@LaunchedEffect
+        val map =
+            readyMap ?: return@LaunchedEffect
 
-        val location = availableLocation
-            ?: return@LaunchedEffect
+        val location =
+            availableLocation
+                ?: return@LaunchedEffect
 
         runCatching {
-            map.locationComponent.forceLocationUpdate(
-                location.toAndroidLocation()
-            )
+            map.locationComponent
+                .forceLocationUpdate(
+                    location.toAndroidLocation()
+                )
         }
 
         if (isFollowingLocation) {
@@ -321,11 +337,6 @@ internal fun AtlasMap(
         }
     }
 
-    /*
-     * Pressing the recenter button centers and zooms the camera.
-     * MainScreen also changes isFollowingLocation to true, so future
-     * location updates continue following the puck.
-     */
     LaunchedEffect(
         readyMap,
         recenterRequestId
@@ -334,14 +345,73 @@ internal fun AtlasMap(
             return@LaunchedEffect
         }
 
-        val map = readyMap
-            ?: return@LaunchedEffect
+        val map =
+            readyMap ?: return@LaunchedEffect
 
-        val location = availableLocation
-            ?: return@LaunchedEffect
+        val location =
+            availableLocation
+                ?: return@LaunchedEffect
 
         hasInitiallyCentered = true
         map.centerOnLocation(location)
+    }
+
+    LaunchedEffect(
+        readyMap,
+        liveMapUsers
+    ) {
+        val style =
+            readyMap?.style
+                ?: return@LaunchedEffect
+
+        val users = liveMapUsers.toList()
+
+        updateLiveMapSource(
+            style = style,
+            sourceId =
+                LIVE_MAP_USERS_FREE_SOURCE_ID,
+            users = users.filter {
+                it.state ==
+                        TelemetryVehicleState.FREE
+            }
+        )
+
+        updateLiveMapSource(
+            style = style,
+            sourceId =
+                LIVE_MAP_USERS_ON_THE_WAY_SOURCE_ID,
+            users = users.filter {
+                it.state ==
+                        TelemetryVehicleState.ON_THE_WAY
+            }
+        )
+
+        updateLiveMapSource(
+            style = style,
+            sourceId =
+                LIVE_MAP_USERS_OCCUPIED_SOURCE_ID,
+            users = users.filter {
+                it.state ==
+                        TelemetryVehicleState.OCCUPIED
+            }
+        )
+
+        updateLiveMapSource(
+            style = style,
+            sourceId =
+                LIVE_MAP_USERS_AWAY_SOURCE_ID,
+            users = users.filter {
+                it.state ==
+                        TelemetryVehicleState.AWAY
+            }
+        )
+
+        updateLiveMapSource(
+            style = style,
+            sourceId =
+                LIVE_MAP_USERS_LABEL_SOURCE_ID,
+            users = users
+        )
     }
 
     Box(
@@ -369,9 +439,13 @@ internal fun AtlasMap(
                         Alignment.Center
                     ),
                     color =
-                        MaterialTheme.colorScheme.errorContainer,
+                        MaterialTheme
+                            .colorScheme
+                            .errorContainer,
                     contentColor =
-                        MaterialTheme.colorScheme.onErrorContainer
+                        MaterialTheme
+                            .colorScheme
+                            .onErrorContainer
                 ) {
                     Text(
                         text = state.message
@@ -380,6 +454,200 @@ internal fun AtlasMap(
             }
         }
     }
+}
+
+private fun addLiveMapUserLayers(
+    style: Style
+) {
+    addLiveMapSource(
+        style = style,
+        sourceId =
+            LIVE_MAP_USERS_FREE_SOURCE_ID
+    )
+
+    addLiveMapSource(
+        style = style,
+        sourceId =
+            LIVE_MAP_USERS_ON_THE_WAY_SOURCE_ID
+    )
+
+    addLiveMapSource(
+        style = style,
+        sourceId =
+            LIVE_MAP_USERS_OCCUPIED_SOURCE_ID
+    )
+
+    addLiveMapSource(
+        style = style,
+        sourceId =
+            LIVE_MAP_USERS_AWAY_SOURCE_ID
+    )
+
+    addLiveMapSource(
+        style = style,
+        sourceId =
+            LIVE_MAP_USERS_LABEL_SOURCE_ID
+    )
+
+    addCircleLayer(
+        style = style,
+        layerId =
+            LIVE_MAP_USERS_FREE_LAYER_ID,
+        sourceId =
+            LIVE_MAP_USERS_FREE_SOURCE_ID,
+        color = "#10B981".toColorInt()
+    )
+
+    addCircleLayer(
+        style = style,
+        layerId =
+            LIVE_MAP_USERS_ON_THE_WAY_LAYER_ID,
+        sourceId =
+            LIVE_MAP_USERS_ON_THE_WAY_SOURCE_ID,
+        color = "#3B82F6".toColorInt()
+    )
+
+    addCircleLayer(
+        style = style,
+        layerId =
+            LIVE_MAP_USERS_OCCUPIED_LAYER_ID,
+        sourceId =
+            LIVE_MAP_USERS_OCCUPIED_SOURCE_ID,
+        color = "#F59E0B".toColorInt()
+    )
+
+    addCircleLayer(
+        style = style,
+        layerId =
+            LIVE_MAP_USERS_AWAY_LAYER_ID,
+        sourceId =
+            LIVE_MAP_USERS_AWAY_SOURCE_ID,
+        color = "#94A3B8".toColorInt()
+    )
+
+    style.addLayer(
+        SymbolLayer(
+            LIVE_MAP_USERS_LABEL_LAYER_ID,
+            LIVE_MAP_USERS_LABEL_SOURCE_ID
+        ).withProperties(
+            PropertyFactory.textField(
+                Expression.toString(
+                    Expression.get(
+                        MAP_USER_NAME_PROPERTY
+                    )
+                )
+            ),
+            PropertyFactory.textFont(
+                arrayOf("Noto Sans Regular")
+            ),
+            PropertyFactory.textSize(14f),
+            PropertyFactory.textColor(
+                Color.BLACK
+            ),
+            PropertyFactory.textHaloColor(
+                Color.WHITE
+            ),
+            PropertyFactory.textHaloWidth(2f),
+            PropertyFactory.textAnchor(
+                Property.TEXT_ANCHOR_TOP
+            ),
+            PropertyFactory.textOffset(
+                arrayOf(0f, 1.4f)
+            ),
+            PropertyFactory.textAllowOverlap(
+                true
+            ),
+            PropertyFactory.textIgnorePlacement(
+                true
+            ),
+            PropertyFactory.textOptional(true)
+        )
+    )
+}
+
+private fun addLiveMapSource(
+    style: Style,
+    sourceId: String
+) {
+    style.addSource(
+        GeoJsonSource(
+            sourceId,
+            emptyFeatureCollection()
+        )
+    )
+}
+
+private fun addCircleLayer(
+    style: Style,
+    layerId: String,
+    sourceId: String,
+    color: Int
+) {
+    style.addLayer(
+        CircleLayer(
+            layerId,
+            sourceId
+        ).withProperties(
+            PropertyFactory.circleRadius(6f),
+            PropertyFactory.circleColor(color),
+            PropertyFactory.circleStrokeColor(
+                Color.WHITE
+            ),
+            PropertyFactory.circleStrokeWidth(2f),
+            PropertyFactory.circleOpacity(1f)
+        )
+    )
+}
+
+private fun updateLiveMapSource(
+    style: Style,
+    sourceId: String,
+    users: Collection<LiveMapUser>
+) {
+    val source =
+        style.getSourceAs<GeoJsonSource>(
+            sourceId
+        )
+
+    if (source == null) {
+        return
+    }
+
+    source.setGeoJson(
+        users.toFeatureCollection()
+    )
+}
+
+private fun Collection<LiveMapUser>
+        .toFeatureCollection():
+        FeatureCollection {
+    val features = map { mapUser ->
+        val properties = JsonObject().apply {
+            addProperty(
+                MAP_USER_NAME_PROPERTY,
+                mapUser.userName
+            )
+        }
+
+        Feature.fromGeometry(
+            Point.fromLngLat(
+                mapUser.longitude,
+                mapUser.latitude
+            ),
+            properties
+        )
+    }
+
+    return FeatureCollection.fromFeatures(
+        features.toTypedArray()
+    )
+}
+
+private fun emptyFeatureCollection():
+        FeatureCollection {
+    return FeatureCollection.fromFeatures(
+        emptyArray<Feature>()
+    )
 }
 
 private fun MapLibreMap.centerOnLocation(
@@ -414,6 +682,7 @@ private fun rememberMapViewWithLifecycle(
     initialCameraPosition: CameraPosition
 ): MapView {
     val context = LocalContext.current
+
     val lifecycle =
         LocalLifecycleOwner.current.lifecycle
 
@@ -422,9 +691,10 @@ private fun rememberMapViewWithLifecycle(
             context.applicationContext
         )
 
-        val options = MapLibreMapOptions
-            .createFromAttributes(context)
-            .camera(initialCameraPosition)
+        val options =
+            MapLibreMapOptions
+                .createFromAttributes(context)
+                .camera(initialCameraPosition)
 
         MapView(context, options)
     }
@@ -434,53 +704,54 @@ private fun rememberMapViewWithLifecycle(
         var started = false
         var resumed = false
 
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_CREATE -> {
-                    if (!created) {
-                        mapView.onCreate(null)
-                        created = true
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_CREATE -> {
+                        if (!created) {
+                            mapView.onCreate(null)
+                            created = true
+                        }
                     }
-                }
 
-                Lifecycle.Event.ON_START -> {
-                    if (!started) {
-                        mapView.onStart()
-                        started = true
+                    Lifecycle.Event.ON_START -> {
+                        if (!started) {
+                            mapView.onStart()
+                            started = true
+                        }
                     }
-                }
 
-                Lifecycle.Event.ON_RESUME -> {
-                    if (!resumed) {
-                        mapView.onResume()
-                        resumed = true
+                    Lifecycle.Event.ON_RESUME -> {
+                        if (!resumed) {
+                            mapView.onResume()
+                            resumed = true
+                        }
                     }
-                }
 
-                Lifecycle.Event.ON_PAUSE -> {
-                    if (resumed) {
-                        mapView.onPause()
-                        resumed = false
+                    Lifecycle.Event.ON_PAUSE -> {
+                        if (resumed) {
+                            mapView.onPause()
+                            resumed = false
+                        }
                     }
-                }
 
-                Lifecycle.Event.ON_STOP -> {
-                    if (started) {
-                        mapView.onStop()
-                        started = false
+                    Lifecycle.Event.ON_STOP -> {
+                        if (started) {
+                            mapView.onStop()
+                            started = false
+                        }
                     }
-                }
 
-                Lifecycle.Event.ON_DESTROY -> {
-                    if (created) {
-                        mapView.onDestroy()
-                        created = false
+                    Lifecycle.Event.ON_DESTROY -> {
+                        if (created) {
+                            mapView.onDestroy()
+                            created = false
+                        }
                     }
-                }
 
-                Lifecycle.Event.ON_ANY -> Unit
+                    Lifecycle.Event.ON_ANY -> Unit
+                }
             }
-        }
 
         lifecycle.addObserver(observer)
 
@@ -503,3 +774,38 @@ private fun rememberMapViewWithLifecycle(
 
     return mapView
 }
+
+private const val TAG = "AtlasMap"
+
+private const val LIVE_MAP_USERS_FREE_SOURCE_ID =
+    "atlas-live-map-users-free-source"
+
+private const val LIVE_MAP_USERS_ON_THE_WAY_SOURCE_ID =
+    "atlas-live-map-users-on-the-way-source"
+
+private const val LIVE_MAP_USERS_OCCUPIED_SOURCE_ID =
+    "atlas-live-map-users-occupied-source"
+
+private const val LIVE_MAP_USERS_AWAY_SOURCE_ID =
+    "atlas-live-map-users-away-source"
+
+private const val LIVE_MAP_USERS_LABEL_SOURCE_ID =
+    "atlas-live-map-users-label-source"
+
+private const val LIVE_MAP_USERS_FREE_LAYER_ID =
+    "atlas-live-map-users-free-layer"
+
+private const val LIVE_MAP_USERS_ON_THE_WAY_LAYER_ID =
+    "atlas-live-map-users-on-the-way-layer"
+
+private const val LIVE_MAP_USERS_OCCUPIED_LAYER_ID =
+    "atlas-live-map-users-occupied-layer"
+
+private const val LIVE_MAP_USERS_AWAY_LAYER_ID =
+    "atlas-live-map-users-away-layer"
+
+private const val LIVE_MAP_USERS_LABEL_LAYER_ID =
+    "atlas-live-map-users-label-layer"
+
+private const val MAP_USER_NAME_PROPERTY =
+    "userName"

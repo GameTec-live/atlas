@@ -147,7 +147,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         )
     }
 
-    private val telemetryWebSocketSender by lazy {
+    val telemetryWebSocketSender by lazy {
         TelemetryWebSocketSender(
             networkClient = networkClient,
             serverSettingsRepository = serverSettingsRepository,

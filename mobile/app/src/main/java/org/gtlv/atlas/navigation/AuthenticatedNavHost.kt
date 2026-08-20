@@ -10,12 +10,14 @@ import org.gtlv.atlas.main.MainScreenUiState
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.geoservice.AddressSuggestion
+import org.gtlv.core.telemetry.LiveMapUser
 
 @Composable
 internal fun AuthenticatedNavHost(
     userName: String,
     role: ShiftRole,
     locationState: LocationState,
+    liveMapUsers: Collection<LiveMapUser>,
     onLogout: () -> Unit,
     serverAddress: String,
     mainScreenState: MainScreenUiState,
@@ -44,6 +46,7 @@ internal fun AuthenticatedNavHost(
                 role = role,
                 serverAddress = serverAddress,
                 locationState = locationState,
+                liveMapUsers = liveMapUsers,
                 jobState = mainScreenState,
                 onToggleJobList = onToggleJobList,
                 onRetryJobs = onRetryJobs,
