@@ -112,9 +112,11 @@ describe("fleet authentication", () => {
     it.each([
         ["GET", "/vehicles", undefined],
         ["GET", `/vehicles/${vehicleId}`, undefined],
+        ["GET", `/vehicles/${vehicleId}/maintenance`, undefined],
         ["POST", "/vehicles", vehicleBody],
         ["PUT", `/vehicles/${vehicleId}`, { model: "Crafter" }],
         ["DELETE", `/vehicles/${vehicleId}`, undefined],
+        ["POST", `/vehicles/${vehicleId}/maintenance`, { odometer: 13_000 }],
         ["GET", "/fingerprint/device-123", undefined],
         ["GET", "/fingerprint/candidates", undefined],
         ["POST", "/fingerprint/pair", { vehicleId, fingerprint: "device-123" }],
@@ -139,6 +141,7 @@ describe("fleet authentication", () => {
         ["POST", "/vehicles", vehicleBody],
         ["PUT", `/vehicles/${vehicleId}`, { model: "Crafter" }],
         ["DELETE", `/vehicles/${vehicleId}`, undefined],
+        ["POST", `/vehicles/${vehicleId}/maintenance`, { odometer: 13_000 }],
     ])("returns 403 for an authenticated non-admin %s %s", async (method, path, body) => {
         getSessionMock.mockResolvedValue(session);
 
@@ -473,6 +476,121 @@ describe("DELETE /fleet/vehicles/:id", () => {
 
         expect(response.status).toBe(422);
         expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("GET /fleet/vehicles/:id/maintenance", () => {
+    it("returns the complete maintenance history newest first", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        const maintenanceRow = first(
+            getDbMockTableRows("maintenance"),
+            "maintenance row",
+        );
+        setDbMockRows("select", [maintenanceRow]);
+
+        const response = await request(`/vehicles/${vehicleId}/maintenance`);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([serializedMaintenance]);
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain(
+            'where "maintenance"."vehicle_id" = $1 order by "maintenance"."created_at" desc',
+        );
+        expect(values).toEqual([vehicleId]);
+    });
+
+    it("returns an empty history when the vehicle has no records", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRows("select", []);
+
+        const response = await request(`/vehicles/${vehicleId}/maintenance`);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+    });
+
+    it("returns 422 for a non-UUID id without querying the database", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await request("/vehicles/not-a-uuid/maintenance");
+
+        expect(response.status).toBe(422);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("POST /fleet/vehicles/:id/maintenance", () => {
+    it("creates a maintenance record for the vehicle", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        const maintenanceRow = first(
+            getDbMockTableRows("maintenance"),
+            "maintenance row",
+        );
+        maintenanceRow[2] = "Annual service";
+        maintenanceRow[3] = 13_000;
+        maintenanceRow[4] = "Atlas Workshop";
+        setDbMockRows("insert", [maintenanceRow]);
+
+        const response = await jsonRequest(
+            `/vehicles/${vehicleId}/maintenance`,
+            "POST",
+            {
+                note: "Annual service",
+                odometer: 13_000,
+                mechanic: "Atlas Workshop",
+            },
+        );
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+            ...serializedMaintenance,
+            note: "Annual service",
+            odometer: 13_000,
+            mechanic: "Atlas Workshop",
+        });
+
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain('insert into "maintenance"');
+        expect(sql).toContain("returning");
+        expect(values).toEqual([
+            vehicleId,
+            "Annual service",
+            13_000,
+            "Atlas Workshop",
+        ]);
+    });
+
+    it.each([
+        ["a non-UUID vehicle id", "/vehicles/not-a-uuid/maintenance", {}],
+        [
+            "a negative odometer",
+            `/vehicles/${vehicleId}/maintenance`,
+            { odometer: -1 },
+        ],
+    ])("returns 422 for %s", async (_description, path, body) => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await jsonRequest(path, "POST", body);
+
+        expect(response.status).toBe(422);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 when the maintenance record is not returned", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        setDbMockRows("insert", []);
+
+        const response = await jsonRequest(
+            `/vehicles/${vehicleId}/maintenance`,
+            "POST",
+            {},
+        );
+
+        expect(response.status).toBe(500);
+        expect(await response.json()).toEqual({
+            error: "Failed to create maintenance record",
+        });
     });
 });
 

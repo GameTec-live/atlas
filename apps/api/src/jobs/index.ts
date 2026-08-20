@@ -173,12 +173,14 @@ export const jobs = new Elysia({
     )
     .post(
         "/create",
-        async ({ body }) => {
+        async ({ body, server }) => {
             const [newJob] = await db.insert(job).values(body).returning();
 
             if (!newJob) {
                 return status(500, { error: "Failed to create job" });
             }
+
+            notifyAssignedDriverInBackground(server, newJob);
 
             return newJob;
         },

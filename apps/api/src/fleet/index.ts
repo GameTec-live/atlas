@@ -113,6 +113,45 @@ export const fleet = new Elysia({
         },
     )
     .get(
+        "/vehicles/:id/maintenance",
+        async ({ params }) =>
+            db
+                .select()
+                .from(maintenance)
+                .where(eq(maintenance.vehicleId, params.id))
+                .orderBy(desc(maintenance.createdAt)),
+        {
+            params: t.Object({
+                id: t.String({ format: "uuid" }),
+            }),
+            admin: true,
+        },
+    )
+    .post(
+        "/vehicles/:id/maintenance",
+        async ({ params, body }) => {
+            const [newMaintenance] = await db
+                .insert(maintenance)
+                .values({ vehicleId: params.id, ...body })
+                .returning();
+
+            if (!newMaintenance) {
+                return status(500, {
+                    error: "Failed to create maintenance record",
+                });
+            }
+
+            return newMaintenance;
+        },
+        {
+            params: t.Object({
+                id: t.String({ format: "uuid" }),
+            }),
+            body: FleetModel.maintenanceInsertModel,
+            admin: true,
+        },
+    )
+    .get(
         "/fingerprint/:fingerprint",
         async ({ params }) => {
             const fingerprint = params.fingerprint;

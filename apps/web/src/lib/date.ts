@@ -1,3 +1,12 @@
+/** Formats a date in the browser's local timezone without a time. */
+export function formatDate(value: Date | null, locale: string, fallback = "") {
+    if (!value) return fallback;
+
+    return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(
+        value,
+    );
+}
+
 /** Formats a server timestamp in the browser's local timezone. */
 export function formatDateTime(
     value: Date | null,
