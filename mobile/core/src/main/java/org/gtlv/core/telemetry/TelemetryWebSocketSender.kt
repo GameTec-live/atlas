@@ -30,12 +30,14 @@ import org.json.JSONObject
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
- * Sends the latest available telemetry snapshot to the configured server.
- *
- * The connection is active only while the user is signed in and has an
- * active role. Incoming application messages are intentionally ignored.
+ * Sends local telemetry and tracks live users received from the
+ * configured telemetry WebSocket.
  */
 class TelemetryWebSocketSender(
     private val networkClient: NetworkClient,
@@ -46,6 +48,15 @@ class TelemetryWebSocketSender(
     private val scope: CoroutineScope
 ) {
     private var lifecycleJob: Job? = null
+
+    private val _liveMapUsers =
+        MutableStateFlow<Map<String, LiveMapUser>>(
+            emptyMap()
+        )
+
+    val liveMapUsers:
+            StateFlow<Map<String, LiveMapUser>> =
+        _liveMapUsers.asStateFlow()
 
     fun start() {
         if (lifecycleJob != null) return
@@ -72,6 +83,8 @@ class TelemetryWebSocketSender(
                             serverAddress =
                                 requirement.serverAddress
                         )
+                    } else {
+                        clearLiveMapUsers()
                     }
                 }
         }
@@ -99,10 +112,6 @@ class TelemetryWebSocketSender(
             }
 
             if (currentCoroutineContext().isActive) {
-                Log.d(
-                    TAG,
-                    "Reconnecting in $retryDelayMillis ms"
-                )
                 delay(retryDelayMillis.milliseconds)
             }
         }
@@ -122,11 +131,13 @@ class TelemetryWebSocketSender(
             ) {
                 socketReference.set(webSocket)
                 connectionOpened.set(true)
+            }
 
-                Log.d(
-                    TAG,
-                    "Telemetry WebSocket connected"
-                )
+            override fun onMessage(
+                webSocket: WebSocket,
+                text: String
+            ) {
+                handleIncomingMessage(text)
             }
 
             override fun onClosing(
@@ -147,12 +158,6 @@ class TelemetryWebSocketSender(
                     null
                 )
                 connectionFinished.complete(Unit)
-
-                Log.d(
-                    TAG,
-                    "Telemetry WebSocket closed: " +
-                            "code=$code, reason=$reason"
-                )
             }
 
             override fun onFailure(
@@ -233,10 +238,124 @@ class TelemetryWebSocketSender(
 
             withContext(NonCancellable) {
                 sendJob.cancelAndJoin()
+                clearLiveMapUsers()
             }
         }
 
         connectionOpened.get()
+    }
+
+    private fun handleIncomingMessage(
+        text: String
+    ) {
+        val message = runCatching {
+            JSONObject(text)
+        }.getOrElse { exception ->
+            Log.w(
+                TAG,
+                "Ignoring invalid WebSocket message",
+                exception
+            )
+
+            return
+        }
+
+        when (message.optString("type")) {
+            UPDATE_MESSAGE_TYPE -> {
+                handleLiveUserUpdate(message)
+            }
+
+            CONNECTION_CHANGE_MESSAGE_TYPE -> {
+                handleConnectionChange(message)
+            }
+        }
+    }
+
+    private fun handleLiveUserUpdate(
+        message: JSONObject
+    ) {
+        val userId = message
+            .optString("userId")
+            .trim()
+
+        val userName = message
+            .optString("userName")
+            .trim()
+
+        val latitude = message.optDouble(
+            "latitude",
+            Double.NaN
+        )
+
+        val longitude = message.optDouble(
+            "longitude",
+            Double.NaN
+        )
+
+        val vehicleState =
+            TelemetryVehicleState.entries
+                .firstOrNull { state ->
+                    state.wireValue ==
+                            message.optString("state")
+                }
+
+        if (
+            userId.isBlank() ||
+            userName.isBlank() ||
+            !latitude.isFinite() ||
+            !longitude.isFinite() ||
+            latitude !in TelemetryData.LATITUDE_RANGE ||
+            longitude !in TelemetryData.LONGITUDE_RANGE ||
+            vehicleState == null
+        ) {
+            Log.w(
+                TAG,
+                "Ignoring incomplete telemetry update"
+            )
+
+            return
+        }
+
+        val liveMapUser = LiveMapUser(
+            userId = userId,
+            userName = userName,
+            latitude = latitude,
+            longitude = longitude,
+            state = vehicleState
+        )
+
+        _liveMapUsers.update { currentUsers ->
+            currentUsers + (
+                    userId to liveMapUser
+                    )
+        }
+    }
+
+    private fun handleConnectionChange(
+        message: JSONObject
+    ) {
+        if (
+            message.optString("state") !=
+            DISCONNECTED_STATE
+        ) {
+            return
+        }
+
+        val userId = message
+            .optString("userId")
+            .trim()
+
+        if (userId.isBlank()) {
+            return
+        }
+
+        _liveMapUsers.update { currentUsers ->
+            currentUsers - userId
+        }
+    }
+
+    private fun clearLiveMapUsers() {
+        _liveMapUsers.value = emptyMap()
     }
 
     private fun createRequest(
@@ -245,10 +364,6 @@ class TelemetryWebSocketSender(
         val serverUrl = serverAddress.toHttpUrlOrNull()
 
         if (serverUrl == null || serverUrl.scheme != "https") {
-            Log.e(
-                TAG,
-                "Telemetry requires a valid HTTPS server address"
-            )
             return null
         }
 
@@ -306,6 +421,12 @@ class TelemetryWebSocketSender(
     private companion object {
         const val TAG = "TelemetryWebSocket"
         const val REALTIME_PATH = "api/realtime/track"
+        const val UPDATE_MESSAGE_TYPE = "update"
+
+        const val CONNECTION_CHANGE_MESSAGE_TYPE =
+            "connectionChange"
+
+        const val DISCONNECTED_STATE = "disconnected"
         const val SEND_INTERVAL_MILLIS = 1_000L
         const val INITIAL_RETRY_DELAY_MILLIS = 1_000L
         const val MAX_RETRY_DELAY_MILLIS = 30_000L

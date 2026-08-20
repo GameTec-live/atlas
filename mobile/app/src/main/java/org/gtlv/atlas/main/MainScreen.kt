@@ -47,12 +47,14 @@ import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
+import org.gtlv.core.telemetry.LiveMapUser
 
 @Composable
 internal fun MainScreen(
     userName: String,
     role: ShiftRole,
     locationState: LocationState,
+    liveMapUsers: Collection<LiveMapUser>,
     onLogout: () -> Unit,
     jobState: MainScreenUiState,
     onToggleJobList: () -> Unit,
@@ -144,6 +146,7 @@ internal fun MainScreen(
     ) {
         AtlasMap(
             locationState = locationState,
+            liveMapUsers = liveMapUsers,
             recenterRequestId =
                 recenterRequestId,
             isFollowingLocation =

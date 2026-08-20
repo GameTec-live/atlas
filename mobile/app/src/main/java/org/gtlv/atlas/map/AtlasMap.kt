@@ -1,14 +1,18 @@
 package org.gtlv.atlas.map
 
 import android.annotation.SuppressLint
+import android.content.res.Configuration
+import android.util.Log
+import android.view.Gravity
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -19,17 +23,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.gtlv.atlas.R
 import org.gtlv.atlas.location.toAndroidLocation
 import org.gtlv.core.location.AtlasLocation
 import org.gtlv.core.location.LocationState
-import org.maplibre.android.MapLibre
+import org.gtlv.core.telemetry.LiveMapUser
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -38,22 +43,13 @@ import org.maplibre.android.location.LocationComponentOptions
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapLibreMapOptions
-import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
-import android.content.res.Configuration
-import android.view.Gravity
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.dp
 
 @SuppressLint("MissingPermission")
 @Composable
 internal fun AtlasMap(
     locationState: LocationState,
+    liveMapUsers: Collection<LiveMapUser>,
     recenterRequestId: Int,
     isFollowingLocation: Boolean,
     onUserCameraMove: () -> Unit,
@@ -61,7 +57,6 @@ internal fun AtlasMap(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
@@ -99,7 +94,9 @@ internal fun AtlasMap(
         stringResource(R.string.map_load_error)
 
     val locationDisplayError =
-        stringResource(R.string.map_location_display_error)
+        stringResource(
+            R.string.map_location_display_error
+        )
 
     var loadState by remember {
         mutableStateOf<MapLoadState>(
@@ -111,39 +108,10 @@ internal fun AtlasMap(
         mutableStateOf<MapLibreMap?>(null)
     }
 
-    LaunchedEffect(
-        readyMap,
-        compassLeftMargin,
-        compassTopMargin
-    ) {
-        readyMap?.uiSettings?.apply {
-            compassGravity = Gravity.TOP or Gravity.START
-
-            setCompassMargins(
-                compassLeftMargin,
-                compassTopMargin,
-                0,
-                0
-            )
-        }
-    }
-
     var hasInitiallyCentered by rememberSaveable {
         mutableStateOf(false)
     }
 
-    /*
-     * The MapLibre listener is registered outside normal
-     * recomposition. This ensures that it always calls the latest
-     * callback supplied by MainScreen.
-     */
-    val currentOnUserCameraMove by rememberUpdatedState(
-        onUserCameraMove
-    )
-
-    /*
-     * These values preserve the camera after configuration changes.
-     */
     var savedLatitude by rememberSaveable {
         mutableDoubleStateOf(
             MapConfiguration.INITIAL_LATITUDE
@@ -170,21 +138,44 @@ internal fun AtlasMap(
         mutableDoubleStateOf(0.0)
     }
 
-    val initialCameraPosition = CameraPosition.Builder()
-        .target(
-            LatLng(
-                savedLatitude,
-                savedLongitude
+    val currentOnUserCameraMove by
+    rememberUpdatedState(onUserCameraMove)
+
+    val initialCameraPosition =
+        CameraPosition.Builder()
+            .target(
+                LatLng(
+                    savedLatitude,
+                    savedLongitude
+                )
             )
-        )
-        .zoom(savedZoom)
-        .bearing(savedBearing)
-        .tilt(savedTilt)
-        .build()
+            .zoom(savedZoom)
+            .bearing(savedBearing)
+            .tilt(savedTilt)
+            .build()
 
     val mapView = rememberMapViewWithLifecycle(
-        initialCameraPosition = initialCameraPosition
+        initialCameraPosition =
+            initialCameraPosition
     )
+
+    LaunchedEffect(
+        readyMap,
+        compassLeftMargin,
+        compassTopMargin
+    ) {
+        readyMap?.uiSettings?.apply {
+            compassGravity =
+                Gravity.TOP or Gravity.START
+
+            setCompassMargins(
+                compassLeftMargin,
+                compassTopMargin,
+                0,
+                0
+            )
+        }
+    }
 
     LaunchedEffect(mapView, styleUrl) {
         loadState = MapLoadState.Loading
@@ -197,12 +188,13 @@ internal fun AtlasMap(
         }
 
         mapView.getMapAsync { map ->
-            map.uiSettings.isAttributionEnabled = false
+            map.uiSettings.isAttributionEnabled =
+                false
+
             map.uiSettings.isLogoEnabled = false
 
             map.setStyle(
-                Style.Builder()
-                    .fromUri(styleUrl)
+                Style.Builder().fromUri(styleUrl)
             ) { style ->
                 val activationResult = runCatching {
                     val componentOptions =
@@ -226,11 +218,9 @@ internal fun AtlasMap(
                         )
 
                     map.locationComponent
-                        .isLocationComponentEnabled = true
+                        .isLocationComponentEnabled =
+                        true
 
-                    /*
-                     * The app controls camera following manually.
-                     */
                     map.locationComponent.cameraMode =
                         CameraMode.NONE
 
@@ -246,13 +236,26 @@ internal fun AtlasMap(
                     return@setStyle
                 }
 
+                runCatching {
+                    style.addLiveMapUserLayers()
+                }.onFailure { exception ->
+                    Log.e(
+                        TAG,
+                        "Failed to add live map user layers",
+                        exception
+                    )
+                }
+
                 map.addOnCameraIdleListener {
                     val camera = map.cameraPosition
                     val target = camera.target
 
                     if (target != null) {
-                        savedLatitude = target.latitude
-                        savedLongitude = target.longitude
+                        savedLatitude =
+                            target.latitude
+
+                        savedLongitude =
+                            target.longitude
                     }
 
                     savedZoom = camera.zoom
@@ -260,16 +263,14 @@ internal fun AtlasMap(
                     savedTilt = camera.tilt
                 }
 
-                map.addOnCameraMoveStartedListener { reason ->
+                map.addOnCameraMoveStartedListener {
+                        reason ->
                     if (
-                        reason == MapLibreMap
+                        reason ==
+                        MapLibreMap
                             .OnCameraMoveStartedListener
                             .REASON_API_GESTURE
                     ) {
-                        /*
-                         * Only user interaction stops camera
-                         * following. Programmatic movement does not.
-                         */
                         currentOnUserCameraMove()
                     }
                 }
@@ -284,30 +285,27 @@ internal fun AtlasMap(
         (locationState as? LocationState.Available)
             ?.location
 
-    /*
-     * Every location update moves the puck.
-     *
-     * The first available location also uses the same center and
-     * zoom operation as the recenter button. Later updates follow
-     * the puck without resetting the zoom.
-     *
-     * After the user moves the camera, isFollowingLocation becomes
-     * false. The puck continues moving, but the camera stays where
-     * the user placed it.
-     */
     LaunchedEffect(
         readyMap,
         availableLocation
     ) {
-        val map = readyMap
-            ?: return@LaunchedEffect
+        val map =
+            readyMap ?: return@LaunchedEffect
 
-        val location = availableLocation
-            ?: return@LaunchedEffect
+        val location =
+            availableLocation
+                ?: return@LaunchedEffect
 
         runCatching {
-            map.locationComponent.forceLocationUpdate(
-                location.toAndroidLocation()
+            map.locationComponent
+                .forceLocationUpdate(
+                    location.toAndroidLocation()
+                )
+        }.onFailure { exception ->
+            Log.e(
+                TAG,
+                "Failed to update user location",
+                exception
             )
         }
 
@@ -321,11 +319,6 @@ internal fun AtlasMap(
         }
     }
 
-    /*
-     * Pressing the recenter button centers and zooms the camera.
-     * MainScreen also changes isFollowingLocation to true, so future
-     * location updates continue following the puck.
-     */
     LaunchedEffect(
         readyMap,
         recenterRequestId
@@ -334,19 +327,39 @@ internal fun AtlasMap(
             return@LaunchedEffect
         }
 
-        val map = readyMap
-            ?: return@LaunchedEffect
+        val map =
+            readyMap ?: return@LaunchedEffect
 
-        val location = availableLocation
-            ?: return@LaunchedEffect
+        val location =
+            availableLocation
+                ?: return@LaunchedEffect
 
         hasInitiallyCentered = true
         map.centerOnLocation(location)
     }
 
-    Box(
-        modifier = modifier
+    LaunchedEffect(
+        readyMap,
+        liveMapUsers
     ) {
+        val style =
+            readyMap?.style
+                ?: return@LaunchedEffect
+
+        runCatching {
+            style.updateLiveMapUsers(
+                liveMapUsers
+            )
+        }.onFailure { exception ->
+            Log.e(
+                TAG,
+                "Failed to update live map users",
+                exception
+            )
+        }
+    }
+
+    Box(modifier = modifier) {
         AndroidView(
             factory = { mapView },
             modifier = Modifier.fillMaxSize()
@@ -369,13 +382,15 @@ internal fun AtlasMap(
                         Alignment.Center
                     ),
                     color =
-                        MaterialTheme.colorScheme.errorContainer,
+                        MaterialTheme
+                            .colorScheme
+                            .errorContainer,
                     contentColor =
-                        MaterialTheme.colorScheme.onErrorContainer
+                        MaterialTheme
+                            .colorScheme
+                            .onErrorContainer
                 ) {
-                    Text(
-                        text = state.message
-                    )
+                    Text(text = state.message)
                 }
             }
         }
@@ -409,97 +424,4 @@ private fun MapLibreMap.followLocation(
     )
 }
 
-@Composable
-private fun rememberMapViewWithLifecycle(
-    initialCameraPosition: CameraPosition
-): MapView {
-    val context = LocalContext.current
-    val lifecycle =
-        LocalLifecycleOwner.current.lifecycle
-
-    val mapView = remember {
-        MapLibre.getInstance(
-            context.applicationContext
-        )
-
-        val options = MapLibreMapOptions
-            .createFromAttributes(context)
-            .camera(initialCameraPosition)
-
-        MapView(context, options)
-    }
-
-    DisposableEffect(lifecycle, mapView) {
-        var created = false
-        var started = false
-        var resumed = false
-
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_CREATE -> {
-                    if (!created) {
-                        mapView.onCreate(null)
-                        created = true
-                    }
-                }
-
-                Lifecycle.Event.ON_START -> {
-                    if (!started) {
-                        mapView.onStart()
-                        started = true
-                    }
-                }
-
-                Lifecycle.Event.ON_RESUME -> {
-                    if (!resumed) {
-                        mapView.onResume()
-                        resumed = true
-                    }
-                }
-
-                Lifecycle.Event.ON_PAUSE -> {
-                    if (resumed) {
-                        mapView.onPause()
-                        resumed = false
-                    }
-                }
-
-                Lifecycle.Event.ON_STOP -> {
-                    if (started) {
-                        mapView.onStop()
-                        started = false
-                    }
-                }
-
-                Lifecycle.Event.ON_DESTROY -> {
-                    if (created) {
-                        mapView.onDestroy()
-                        created = false
-                    }
-                }
-
-                Lifecycle.Event.ON_ANY -> Unit
-            }
-        }
-
-        lifecycle.addObserver(observer)
-
-        onDispose {
-            lifecycle.removeObserver(observer)
-
-            if (resumed) {
-                mapView.onPause()
-            }
-
-            if (started) {
-                mapView.onStop()
-            }
-
-            if (created) {
-                mapView.onDestroy()
-            }
-        }
-    }
-
-    return mapView
-}
+private const val TAG = "AtlasMap"

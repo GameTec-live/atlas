@@ -177,6 +177,19 @@ class MainActivity : ComponentActivity() {
 
                                 val mainScreenState by mainScreenViewModel.uiState
                                     .collectAsStateWithLifecycle()
+
+                                val liveMapUsers by
+                                atlasApplication
+                                    .telemetryWebSocketSender
+                                    .liveMapUsers
+                                    .collectAsStateWithLifecycle()
+
+                                val otherMapUsers = liveMapUsers
+                                    .values
+                                    .filterNot { mapUser ->
+                                        mapUser.userId == currentSession.userId
+                                    }
+
                                 RequiredLocationPermissionGate(
                                     locationProvider =
                                         atlasApplication.locationProvider
@@ -186,6 +199,7 @@ class MainActivity : ComponentActivity() {
                                         role = currentShift.session.role,
                                         serverAddress = loginState.serverAddress,
                                         locationState = locationState,
+                                        liveMapUsers = otherMapUsers,
                                         mainScreenState = mainScreenState,
                                         onToggleJobList = mainScreenViewModel::toggleJobList,
                                         onRetryJobs = mainScreenViewModel::refresh,
