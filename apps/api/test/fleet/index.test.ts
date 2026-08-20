@@ -488,9 +488,7 @@ describe("GET /fleet/vehicles/:id/maintenance", () => {
         );
         setDbMockRows("select", [maintenanceRow]);
 
-        const response = await request(
-            `/vehicles/${vehicleId}/maintenance`,
-        );
+        const response = await request(`/vehicles/${vehicleId}/maintenance`);
 
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual([serializedMaintenance]);
@@ -506,9 +504,7 @@ describe("GET /fleet/vehicles/:id/maintenance", () => {
         getSessionMock.mockResolvedValue(adminSession);
         setDbMockRows("select", []);
 
-        const response = await request(
-            `/vehicles/${vehicleId}/maintenance`,
-        );
+        const response = await request(`/vehicles/${vehicleId}/maintenance`);
 
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual([]);
@@ -517,9 +513,7 @@ describe("GET /fleet/vehicles/:id/maintenance", () => {
     it("returns 422 for a non-UUID id without querying the database", async () => {
         getSessionMock.mockResolvedValue(adminSession);
 
-        const response = await request(
-            "/vehicles/not-a-uuid/maintenance",
-        );
+        const response = await request("/vehicles/not-a-uuid/maintenance");
 
         expect(response.status).toBe(422);
         expect(dbClientQueryMock).not.toHaveBeenCalled();
