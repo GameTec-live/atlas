@@ -56,24 +56,18 @@ class MainActivity : ComponentActivity() {
     private val mainScreenViewModel:
             MainScreenViewModel by viewModels {
         MainScreenViewModelFactory(
-            jobRepository =
-                atlasApplication.jobRepository,
-            geoServiceRepository =
-                atlasApplication.geoServiceRepository,
-            telemetryProvider =
-                atlasApplication.telemetryProvider,
-            collectedJobStore =
-                atlasApplication.collectedJobStore
+            jobRepository = atlasApplication.jobRepository,
+            geoServiceRepository = atlasApplication.geoServiceRepository,
+            telemetryProvider = atlasApplication.telemetryProvider,
+            collectedJobStore = atlasApplication.collectedJobStore
         )
     }
 
     private val jobNotificationViewModel:
             JobNotificationViewModel by viewModels {
         JobNotificationViewModelFactory(
-            jobRepository =
-                atlasApplication.jobRepository,
-            webSocket =
-                atlasApplication.jobNotificationWebSocket
+            jobRepository = atlasApplication.jobRepository,
+            webSocket = atlasApplication.jobNotificationWebSocket
         )
     }
 
@@ -175,29 +169,14 @@ class MainActivity : ComponentActivity() {
                     SessionState.SignedOut -> {
                         LoginScreen(
                             state = loginState,
-                            onUsernameChanged =
-                                loginViewModel::
-                                onUsernameChanged,
-                            onPasswordChanged =
-                                loginViewModel::
-                                onPasswordChanged,
-                            onPasswordVisibilityChanged =
-                                loginViewModel::
-                                togglePasswordVisibility,
-                            onLogin =
-                                loginViewModel::login,
-                            onEditServer =
-                                loginViewModel::
-                                openServerDialog,
-                            onServerAddressChanged =
-                                loginViewModel::
-                                onServerAddressChanged,
-                            onSaveServerAddress =
-                                loginViewModel::
-                                saveServerAddress,
-                            onDismissServerDialog =
-                                loginViewModel::
-                                closeServerDialog
+                            onUsernameChanged = loginViewModel::onUsernameChanged,
+                            onPasswordChanged = loginViewModel::onPasswordChanged,
+                            onPasswordVisibilityChanged = loginViewModel::togglePasswordVisibility,
+                            onLogin = loginViewModel::login,
+                            onEditServer = loginViewModel::openServerDialog,
+                            onServerAddressChanged = loginViewModel::onServerAddressChanged,
+                            onSaveServerAddress = loginViewModel::saveServerAddress,
+                            onDismissServerDialog = loginViewModel::closeServerDialog
                         )
                     }
 
@@ -304,65 +283,27 @@ class MainActivity : ComponentActivity() {
                                     AssignedJobNotificationPermissionEffect()
 
                                     AuthenticatedNavHost(
-                                        userName =
-                                            currentSession
-                                                .userName,
-                                        role =
-                                            currentShift
-                                                .session
-                                                .role,
-                                        serverAddress =
-                                            loginState
-                                                .serverAddress,
-                                        locationState =
-                                            locationState,
-                                        liveMapUsers =
-                                            otherMapUsers,
-                                        mainScreenState =
-                                            mainScreenState,
-                                        onToggleJobList =
-                                            mainScreenViewModel::
-                                            toggleJobList,
-                                        onRetryJobs =
-                                            mainScreenViewModel::
-                                            refresh,
-                                        onStartNextJob =
-                                            mainScreenViewModel::
-                                            startNextJob,
-                                        onCancelCurrentJob =
-                                            mainScreenViewModel::
-                                            cancelCurrentJob,
-                                        onPersonCollected =
-                                            mainScreenViewModel::
-                                            personCollected,
-                                        onEditDestination =
-                                            mainScreenViewModel::
-                                            openDestinationEditor,
-                                        onAddressQueryChanged =
-                                            mainScreenViewModel::
-                                            onAddressQueryChanged,
-                                        onAddressSuggestionSelected =
-                                            mainScreenViewModel::
-                                            selectAddressSuggestion,
-                                        onCloseAddressEditor =
-                                            mainScreenViewModel::
-                                            closeAddressEditor,
-                                        jobNotificationState =
-                                            jobNotificationState,
-                                        onDismissJobNotification =
-                                            jobNotificationViewModel::
-                                            dismissCurrentNotification,
-                                        onDeclineJobNotification =
-                                            jobNotificationViewModel::
-                                            declineCurrentNotification,
-                                        onDismissDeclineConfirmation =
-                                            jobNotificationViewModel::
-                                            dismissDeclineConfirmation,
-                                        onConfirmDecline =
-                                            jobNotificationViewModel::
-                                            confirmDecline,
-                                        onLogout =
-                                            loginViewModel::logout
+                                        userName = currentSession.userName,
+                                        role = currentShift.session.role,
+                                        serverAddress = loginState.serverAddress,
+                                        locationState = locationState,
+                                        liveMapUsers = otherMapUsers,
+                                        mainScreenState = mainScreenState,
+                                        onToggleJobList = mainScreenViewModel::toggleJobList,
+                                        onRetryJobs = mainScreenViewModel::refresh,
+                                        onStartNextJob = mainScreenViewModel::startNextJob,
+                                        onCancelCurrentJob = mainScreenViewModel::cancelCurrentJob,
+                                        onPersonCollected = mainScreenViewModel::personCollected,
+                                        onEditDestination = mainScreenViewModel::openDestinationEditor,
+                                        onAddressQueryChanged = mainScreenViewModel::onAddressQueryChanged,
+                                        onAddressSuggestionSelected = mainScreenViewModel::selectAddressSuggestion,
+                                        onCloseAddressEditor = mainScreenViewModel::closeAddressEditor,
+                                        jobNotificationState = jobNotificationState,
+                                        onDismissJobNotification = jobNotificationViewModel::dismissCurrentNotification,
+                                        onDeclineJobNotification = jobNotificationViewModel::declineCurrentNotification,
+                                        onDismissDeclineConfirmation = jobNotificationViewModel::dismissDeclineConfirmation,
+                                        onConfirmDecline = jobNotificationViewModel::confirmDecline,
+                                        onLogout = loginViewModel::logout
                                     )
                                 }
                             }
