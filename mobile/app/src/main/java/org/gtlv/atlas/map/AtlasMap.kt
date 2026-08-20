@@ -266,6 +266,11 @@ internal fun AtlasMap(
 
                 layerResult.exceptionOrNull()?.let {
                         exception ->
+                    Log.e(
+                        TAG,
+                        "Failed to add live map user layers",
+                        exception
+                    )
                 }
 
                 map.addOnCameraIdleListener {
