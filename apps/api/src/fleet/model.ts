@@ -14,7 +14,18 @@ const vehicleInsertModel = t.Object({
     assessmentMonth: t.Integer({ minimum: 1, maximum: 12 }),
 });
 
+const maintenanceInsertModel = t.Object({
+    ...t.Omit(t.Object(dbModel.insert.maintenance), [
+        "id",
+        "vehicleId",
+        "createdAt",
+        "updatedAt",
+    ]).properties,
+    odometer: t.Optional(t.Number({ minimum: 0 })),
+});
+
 export const FleetModel = {
     vehicleInsertModel,
     vehicleUpdateModel: t.Partial(vehicleInsertModel),
+    maintenanceInsertModel,
 } as const;

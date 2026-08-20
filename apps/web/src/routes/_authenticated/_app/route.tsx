@@ -57,7 +57,9 @@ function RouteComponent() {
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
                             <NavigationMenuItem>
-                                <NavigationMenuLink render={<Link to="/" />}>
+                                <NavigationMenuLink
+                                    render={<Link to="/fleet" />}
+                                >
                                     {m.cool_only_manatee_pout()}
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
