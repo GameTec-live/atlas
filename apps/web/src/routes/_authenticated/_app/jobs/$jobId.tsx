@@ -158,13 +158,19 @@ function JobDetailsPage() {
                     destination={destination.address}
                     dueDate={dueDate}
                     locale={locale}
-                    isUnassigned={isUnassigned}
-                    canSave={
-                        hasUnsavedChanges &&
-                        destinationIsValid &&
-                        !mutationPending
+                    editable={isUnassigned}
+                    saveAction={
+                        isUnassigned
+                            ? {
+                                  disabled:
+                                      !hasUnsavedChanges ||
+                                      !destinationIsValid ||
+                                      mutationPending,
+                                  isPending: saveMutation.isPending,
+                                  onSave: () => saveMutation.mutate(),
+                              }
+                            : undefined
                     }
-                    isSaving={saveMutation.isPending}
                     onDestinationChange={(address) => {
                         setDestination({ address, coordinates: null });
                         setDestinationDirty(true);
@@ -174,7 +180,6 @@ function JobDetailsPage() {
                         setDestinationDirty(true);
                     }}
                     onDueDateChange={setDueDate}
-                    onSave={() => saveMutation.mutate()}
                 />
             </section>
 

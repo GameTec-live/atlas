@@ -18,13 +18,17 @@ export const addressResolveQueryOptions = (address: string) =>
     });
 
 export const routeQueryOptions = (
-    from: [number, number],
+    from: [number, number] | null,
     to: [number, number] | null,
 ) =>
     queryOptions({
         queryKey: [...routeQueryKey, from, to] as const,
         queryFn: () => {
-            if (!to) throw new Error("A destination is required for routing");
+            if (!from || !to) {
+                throw new Error(
+                    "An origin and destination are required for routing",
+                );
+            }
 
             return unwrapEden(
                 api.geoservices.route.get({
@@ -37,6 +41,6 @@ export const routeQueryOptions = (
                 }),
             );
         },
-        enabled: to !== null,
+        enabled: from !== null && to !== null,
         staleTime: 10 * 60_000,
     });

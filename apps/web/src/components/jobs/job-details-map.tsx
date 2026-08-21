@@ -22,7 +22,7 @@ import { routeQueryOptions } from "@/queries/geoservices";
 setWorkerUrl(maplibreWorkerUrl);
 
 type JobDetailsMapProps = {
-    from: Coordinates;
+    from: Coordinates | null;
     to: Coordinates | null;
 };
 
@@ -59,12 +59,20 @@ export function JobDetailsMap({ from, to }: JobDetailsMapProps) {
         () =>
             routeCoordinates.length > 0
                 ? routeCoordinates
-                : [toMapPoint(from), ...(to ? [toMapPoint(to)] : [])],
+                : [
+                      ...(from ? [toMapPoint(from)] : []),
+                      ...(to ? [toMapPoint(to)] : []),
+                  ],
         [from, routeCoordinates, to],
     );
 
     useEffect(() => {
-        if (!map || visiblePoints.length < 2) return;
+        if (!map || visiblePoints.length === 0) return;
+
+        if (visiblePoints.length === 1) {
+            map.easeTo({ center: visiblePoints[0], zoom: 14, duration: 700 });
+            return;
+        }
 
         const bounds = visiblePoints.reduce(
             (result, point) => result.extend(point),
@@ -85,11 +93,15 @@ export function JobDetailsMap({ from, to }: JobDetailsMapProps) {
         <>
             <MapLibre
                 ref={setMap}
-                initialViewState={{
-                    longitude: from[1],
-                    latitude: from[0],
-                    zoom: 13,
-                }}
+                initialViewState={
+                    from
+                        ? {
+                              longitude: from[1],
+                              latitude: from[0],
+                              zoom: 13,
+                          }
+                        : undefined
+                }
                 mapStyle="/map/style/liberty"
                 attributionControl={false}
             >
@@ -116,11 +128,13 @@ export function JobDetailsMap({ from, to }: JobDetailsMapProps) {
                     <DriverMarker key={driver.userId} driver={driver} />
                 ))}
 
-                <JobMarker
-                    coordinates={from}
-                    label={m.jobs_from()}
-                    variant="from"
-                />
+                {from && (
+                    <JobMarker
+                        coordinates={from}
+                        label={m.jobs_from()}
+                        variant="from"
+                    />
+                )}
                 {to && (
                     <JobMarker
                         coordinates={to}
