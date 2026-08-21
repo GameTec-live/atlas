@@ -23,6 +23,7 @@ class CarAwareLocationProvider(
     private var carState: LocationState = LocationState.Stopped
     private var carLocationProvider: LocationProvider? = null
     private var carStateJob: Job? = null
+    private var locationRequested = false
 
     init {
         scope.launch {
@@ -34,14 +35,13 @@ class CarAwareLocationProvider(
     }
 
     override fun start() {
-        phoneLocationProvider.start()
+        locationRequested = true
+        updatePhoneLocationProvider()
     }
 
     override fun stop() {
-            if (carLocationProvider == null) {
-        phoneLocationProvider.stop()
-    }
-
+        locationRequested = false
+        updatePhoneLocationProvider()
     }
 
     fun registerCarLocationProvider(provider: LocationProvider) {
@@ -52,7 +52,7 @@ class CarAwareLocationProvider(
         carState = provider.state.value
         publishPreferredState()
 
-        phoneLocationProvider.start()
+        updatePhoneLocationProvider()
         provider.start()
 
         carStateJob = scope.launch {
@@ -70,7 +70,19 @@ class CarAwareLocationProvider(
         carStateJob = null
         carLocationProvider = null
         carState = LocationState.Stopped
+        updatePhoneLocationProvider()
         publishPreferredState()
+    }
+
+    private fun updatePhoneLocationProvider() {
+        if (
+            locationRequested ||
+            carLocationProvider != null
+        ) {
+            phoneLocationProvider.start()
+        } else {
+            phoneLocationProvider.stop()
+        }
     }
 
     private fun publishPreferredState() {

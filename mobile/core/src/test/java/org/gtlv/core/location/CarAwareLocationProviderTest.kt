@@ -46,6 +46,55 @@ class CarAwareLocationProviderTest {
         scope.cancel()
     }
 
+    @Test
+    fun `phone location stops after service and car usage end`() {
+        val scope = CoroutineScope(
+            SupervisorJob() + Dispatchers.Unconfined
+        )
+        val phoneProvider = FakeLocationProvider(LocationState.Stopped)
+        val carProvider = FakeLocationProvider(LocationState.Stopped)
+        val provider = CarAwareLocationProvider(phoneProvider, scope)
+
+        provider.start()
+        provider.registerCarLocationProvider(carProvider)
+
+        provider.stop()
+
+        assertEquals(true, phoneProvider.isStarted)
+        assertEquals(0, phoneProvider.stopCount)
+
+        provider.unregisterCarLocationProvider(carProvider)
+
+        assertEquals(false, phoneProvider.isStarted)
+        assertEquals(1, phoneProvider.stopCount)
+
+        scope.cancel()
+    }
+
+    @Test
+    fun `phone location continues after car disconnects during service usage`() {
+        val scope = CoroutineScope(
+            SupervisorJob() + Dispatchers.Unconfined
+        )
+        val phoneProvider = FakeLocationProvider(LocationState.Stopped)
+        val carProvider = FakeLocationProvider(LocationState.Stopped)
+        val provider = CarAwareLocationProvider(phoneProvider, scope)
+
+        provider.start()
+        provider.registerCarLocationProvider(carProvider)
+        provider.unregisterCarLocationProvider(carProvider)
+
+        assertEquals(true, phoneProvider.isStarted)
+        assertEquals(0, phoneProvider.stopCount)
+
+        provider.stop()
+
+        assertEquals(false, phoneProvider.isStarted)
+        assertEquals(1, phoneProvider.stopCount)
+
+        scope.cancel()
+    }
+
     private fun atlasLocation(source: LocationSource): AtlasLocation {
         return AtlasLocation(
             latitude = 48.511,
@@ -65,9 +114,22 @@ class CarAwareLocationProviderTest {
 
         override val state: StateFlow<LocationState> = mutableState
 
-        override fun start() = Unit
+        var isStarted = false
+            private set
 
-        override fun stop() = Unit
+        var stopCount = 0
+            private set
+
+        override fun start() {
+            isStarted = true
+        }
+
+        override fun stop() {
+            if (!isStarted) return
+
+            isStarted = false
+            stopCount += 1
+        }
 
         fun setState(state: LocationState) {
             mutableState.value = state
