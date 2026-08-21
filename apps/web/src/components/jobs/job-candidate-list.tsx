@@ -115,6 +115,12 @@ function CandidateCard({
             tabIndex={0}
             aria-pressed={selected}
             onClick={select}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    select();
+                }
+            }}
         >
             <CardContent className="space-y-3 p-4">
                 <div className="flex min-w-0 items-center gap-2">
