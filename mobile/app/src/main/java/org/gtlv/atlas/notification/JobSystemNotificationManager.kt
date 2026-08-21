@@ -8,10 +8,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import java.util.concurrent.ConcurrentHashMap
 import org.gtlv.atlas.MainActivity
 import org.gtlv.atlas.R
@@ -24,10 +24,6 @@ class JobSystemNotificationManager(
         ConcurrentHashMap.newKeySet<Int>()
 
     fun createChannel() {
-        if (Build.VERSION.SDK_INT < 26) {
-            return
-        }
-
         val channel = NotificationChannel(
             CHANNEL_ID,
             context.getString(
@@ -50,7 +46,12 @@ class JobSystemNotificationManager(
     fun show(
         notification: AssignedJobNotification
     ) {
-        if (!canPostNotifications()) {
+        if (
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
             return
         }
 
@@ -80,11 +81,12 @@ class JobSystemNotificationManager(
         ).apply {
             action = ACTION_CONFIRM_JOB_DECLINE
 
-            data = Uri.parse(
-                "atlas://job-notification/" +
-                        Uri.encode(notification.jobId) +
-                        "/decline"
-            )
+            data =
+                (
+                    "atlas://job-notification/" +
+                            Uri.encode(notification.jobId) +
+                            "/decline"
+                ).toUri()
 
             flags =
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -104,6 +106,13 @@ class JobSystemNotificationManager(
                 EXTRA_TO,
                 notification.to
             )
+
+            notification.note?.let { note ->
+                putExtra(
+                    EXTRA_NOTE,
+                    note
+                )
+            }
         }
 
         val declinePendingIntent =
@@ -124,6 +133,19 @@ class JobSystemNotificationManager(
             notification.to
         )
 
+        val noteText = notification.note?.let { note ->
+            context.getString(
+                R.string.job_notification_note,
+                note
+            )
+        }
+
+        val detailsText = buildList {
+            add(fromText)
+            add(toText)
+            noteText?.let(::add)
+        }.joinToString("\n")
+
         val systemNotification =
             NotificationCompat.Builder(
                 context,
@@ -140,9 +162,19 @@ class JobSystemNotificationManager(
                 .setContentText(fromText)
                 .setStyle(
                     NotificationCompat.BigTextStyle()
-                        .bigText(
-                            "$fromText\n$toText"
+                        .setBigContentTitle(
+                            context.getString(
+                                R.string
+                                    .job_notification_title
+                            )
                         )
+                        .bigText(detailsText)
+                )
+                .setColor(
+                    ContextCompat.getColor(
+                        context,
+                        R.color.job_notification_accent
+                    )
                 )
                 .setPriority(
                     NotificationCompat.PRIORITY_HIGH
@@ -152,6 +184,15 @@ class JobSystemNotificationManager(
                 )
                 .setContentIntent(openPendingIntent)
                 .setAutoCancel(true)
+                .setTimeoutAfter(
+                    NOTIFICATION_TIMEOUT_MILLIS
+                )
+                .setWhen(
+                    System.currentTimeMillis() +
+                            NOTIFICATION_TIMEOUT_MILLIS
+                )
+                .setUsesChronometer(true)
+                .setChronometerCountDown(true)
                 .addAction(
                     0,
                     context.getString(
@@ -195,14 +236,6 @@ class JobSystemNotificationManager(
         activeNotificationIds.clear()
     }
 
-    private fun canPostNotifications(): Boolean {
-        return Build.VERSION.SDK_INT < 33 ||
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED
-    }
-
     private fun notificationId(
         jobId: String
     ): Int {
@@ -227,8 +260,14 @@ class JobSystemNotificationManager(
         private const val EXTRA_TO =
             "assigned_job_to"
 
+        private const val EXTRA_NOTE =
+            "assigned_job_note"
+
         private const val CHANNEL_ID =
             "assigned_jobs"
+
+        private const val NOTIFICATION_TIMEOUT_MILLIS =
+            10_000L
 
         fun notificationFromIntent(
             intent: Intent?
@@ -252,6 +291,10 @@ class JobSystemNotificationManager(
                 EXTRA_TO
             )?.trim().orEmpty()
 
+            val note = intent.getStringExtra(
+                EXTRA_NOTE
+            )?.trim()?.takeIf(String::isNotEmpty)
+
             if (
                 jobId.isBlank() ||
                 from.isBlank() ||
@@ -263,7 +306,8 @@ class JobSystemNotificationManager(
             return AssignedJobNotification(
                 jobId = jobId,
                 from = from,
-                to = to
+                to = to,
+                note = note
             )
         }
     }

@@ -71,6 +71,7 @@
     <string name="job_notification_title">New Job</string>
     <string name="job_notification_from">From: %1$s</string>
     <string name="job_notification_to">To: %1$s</string>
+    <string name="job_notification_note">Note: %1$s</string>
     <string name="job_notification_decline">Decline job</string>
     <string name="job_notification_decline_failed">Could not decline the assigned job</string>
     <string name="job_notification_decline_dialog_title">Decline job?</string>

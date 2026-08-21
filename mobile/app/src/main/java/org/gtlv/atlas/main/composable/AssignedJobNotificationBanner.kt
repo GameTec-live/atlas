@@ -153,6 +153,19 @@ internal fun AssignedJobNotificationBanner(
                             MaterialTheme.typography
                                 .bodySmall
                     )
+
+                    notification.note?.let { note ->
+                        Text(
+                            text = stringResource(
+                                R.string
+                                    .job_notification_note,
+                                note
+                            ),
+                            style =
+                                MaterialTheme.typography
+                                    .bodySmall
+                        )
+                    }
                 }
 
                 Spacer(

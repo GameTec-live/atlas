@@ -294,6 +294,11 @@ class JobNotificationWebSocket(
         val to =
             json.optString("to").trim()
 
+        val note =
+            json.optString("note")
+                .trim()
+                .takeIf(String::isNotEmpty)
+
         if (
             jobId.isBlank() ||
             from.isBlank() ||
@@ -311,7 +316,8 @@ class JobNotificationWebSocket(
             AssignedJobNotification(
                 jobId = jobId,
                 from = from,
-                to = to
+                to = to,
+                note = note
             )
 
         val showInApp =
