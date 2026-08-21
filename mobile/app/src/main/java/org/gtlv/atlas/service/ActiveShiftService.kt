@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import org.gtlv.atlas.AtlasApplication
 import org.gtlv.atlas.MainActivity
 import org.gtlv.atlas.R
 
@@ -26,6 +27,8 @@ class ActiveShiftService : Service() {
             ServiceInfo
                 .FOREGROUND_SERVICE_TYPE_LOCATION
         )
+
+        atlasApplication.locationProvider.start()
     }
 
     override fun onStartCommand(
@@ -41,6 +44,15 @@ class ActiveShiftService : Service() {
     ): IBinder? {
         return null
     }
+
+    override fun onDestroy() {
+        atlasApplication.locationProvider.stop()
+
+        super.onDestroy()
+    }
+
+    private val atlasApplication: AtlasApplication
+        get() = application as AtlasApplication
 
     private fun createNotificationChannel() {
         val channel =

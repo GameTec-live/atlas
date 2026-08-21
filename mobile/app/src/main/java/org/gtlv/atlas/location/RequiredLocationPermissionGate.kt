@@ -173,10 +173,6 @@ internal fun RequiredLocationPermissionGate(
                         }
                     }
 
-                    Lifecycle.Event.ON_STOP -> {
-                        locationProvider.stop()
-                    }
-
                     else -> Unit
                 }
             }
@@ -185,7 +181,6 @@ internal fun RequiredLocationPermissionGate(
 
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            locationProvider.stop()
         }
     }
 
