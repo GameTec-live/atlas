@@ -33,7 +33,7 @@ class ActiveShiftService : Service() {
         flags: Int,
         startId: Int
     ): Int {
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     override fun onBind(
