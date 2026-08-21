@@ -86,7 +86,8 @@ export function JobCard({
         <Card className="group/job py-0 transition-colors hover:border-foreground hover:bg-muted">
             <div className="flex items-stretch">
                 <Link
-                    to="/"
+                    to="/jobs/$jobId"
+                    params={{ jobId: job.id }}
                     className="min-w-0 flex-1 p-4 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     aria-label={`${m.jobs_from()} ${from}`}
                 >

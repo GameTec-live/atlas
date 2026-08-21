@@ -18,12 +18,13 @@ type AddressOption = {
     value: string;
     label: string;
     context?: string;
+    coordinates?: [number, number];
 };
 
 type AddressSearchProps = {
     value: string;
     onValueChange: (value: string) => void;
-    onAddressSelect: (address: string) => void;
+    onAddressSelect: (address: string, coordinates: [number, number]) => void;
     disabled?: boolean;
     placeholder?: string;
     "aria-label"?: string;
@@ -69,6 +70,7 @@ export function AddressSearch({
                 ]
                     .filter(Boolean)
                     .join(" · "),
+                coordinates: [result.lat, result.lon],
             });
         }
 
@@ -108,9 +110,9 @@ export function AddressSearch({
                 onValueChange(nextValue);
             }}
             onValueChange={(option) => {
-                if (!option) return;
+                if (!option?.coordinates) return;
                 setIsSearching(false);
-                onAddressSelect(option.value);
+                onAddressSelect(option.value, option.coordinates);
             }}
         >
             <ComboboxInput
