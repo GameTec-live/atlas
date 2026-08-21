@@ -11,31 +11,39 @@ import { m } from "@/paraglide/messages";
 type JobDetailsControlsProps = {
     from: string;
     to: string;
+    origin?: string;
     destination: string;
     dueDate: Date;
     locale: string;
-    isUnassigned: boolean;
-    canSave: boolean;
-    isSaving: boolean;
+    editable: boolean;
+    originEditable?: boolean;
+    saveAction?: {
+        disabled: boolean;
+        isPending: boolean;
+        onSave: () => void;
+    };
+    onOriginChange?: (value: string) => void;
+    onOriginSelect?: (address: string, coordinates: Coordinates) => void;
     onDestinationChange: (value: string) => void;
     onDestinationSelect: (address: string, coordinates: Coordinates) => void;
     onDueDateChange: (value: Date) => void;
-    onSave: () => void;
 };
 
 export function JobDetailsControls({
     from,
     to,
+    origin = from,
     destination,
     dueDate,
     locale,
-    isUnassigned,
-    canSave,
-    isSaving,
+    editable,
+    originEditable = false,
+    saveAction,
+    onOriginChange,
+    onOriginSelect,
     onDestinationChange,
     onDestinationSelect,
     onDueDateChange,
-    onSave,
 }: JobDetailsControlsProps) {
     return (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start gap-2 p-3 sm:p-4 mr-4">
@@ -53,49 +61,53 @@ export function JobDetailsControls({
 
             <Card className="pointer-events-auto w-full max-w-xl gap-0  py-0 bg-background/50 shadow-md backdrop-blur overflow-hidden">
                 <div className="flex min-h-12 items-stretch">
-                    <LocationValue label={m.jobs_from()} value={from} />
+                    {originEditable && onOriginChange && onOriginSelect ? (
+                        <LocationSearch
+                            label={m.jobs_from()}
+                            value={origin}
+                            placeholder={m.job_details_origin_placeholder()}
+                            onChange={onOriginChange}
+                            onSelect={onOriginSelect}
+                        />
+                    ) : (
+                        <LocationValue label={m.jobs_from()} value={from} />
+                    )}
                     <DueDatePicker
                         value={dueDate}
-                        disabled={!isUnassigned}
+                        disabled={!editable}
                         locale={locale}
                         onChange={onDueDateChange}
                     />
                 </div>
 
                 <div className="flex items-center border-t">
-                    {isUnassigned ? (
-                        <div className="relative min-w-0 flex-1">
-                            <span className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2 text-sm text-muted-foreground">
-                                {m.jobs_to()}
-                            </span>
-                            <AddressSearch
-                                value={destination}
-                                onValueChange={onDestinationChange}
-                                onAddressSelect={onDestinationSelect}
-                                placeholder={m.job_details_destination_placeholder()}
-                                aria-label={m.jobs_to()}
-                                className="h-12 w-full rounded-none border-0 bg-transparent pl-12 text-sm shadow-none focus-visible:ring-0 sm:text-base"
-                            />
-                        </div>
+                    {editable ? (
+                        <LocationSearch
+                            label={m.jobs_to()}
+                            value={destination}
+                            placeholder={m.job_details_destination_placeholder()}
+                            onChange={onDestinationChange}
+                            onSelect={onDestinationSelect}
+                        />
                     ) : (
                         <LocationValue label={m.jobs_to()} value={to} />
                     )}
 
-                    {isUnassigned && (
+                    {saveAction && (
                         <Button
                             variant="secondary"
                             className="mr-2 shrink-0"
-                            disabled={!canSave}
-                            onClick={onSave}
+                            disabled={saveAction.disabled}
+                            onClick={saveAction.onSave}
                             aria-label={m.job_details_save_changes()}
                         >
-                            {isSaving ? (
+                            {saveAction.isPending ? (
                                 <Spinner />
                             ) : (
                                 <SaveIcon data-icon="inline-start" />
                             )}
                             <span className="hidden sm:inline">
-                                {isSaving
+                                {saveAction.isPending
                                     ? m.job_details_saving_changes()
                                     : m.job_details_save_changes()}
                             </span>
@@ -103,6 +115,38 @@ export function JobDetailsControls({
                     )}
                 </div>
             </Card>
+        </div>
+    );
+}
+
+type LocationSearchProps = {
+    label: string;
+    value: string;
+    placeholder: string;
+    onChange: (value: string) => void;
+    onSelect: (address: string, coordinates: Coordinates) => void;
+};
+
+function LocationSearch({
+    label,
+    value,
+    placeholder,
+    onChange,
+    onSelect,
+}: LocationSearchProps) {
+    return (
+        <div className="relative min-w-0 flex-1">
+            <span className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2 text-sm text-muted-foreground">
+                {label}
+            </span>
+            <AddressSearch
+                value={value}
+                onValueChange={onChange}
+                onAddressSelect={onSelect}
+                placeholder={placeholder}
+                aria-label={label}
+                className="h-12 w-full rounded-none border-0 bg-transparent pl-12 text-sm shadow-none focus-visible:ring-0 sm:text-base"
+            />
         </div>
     );
 }

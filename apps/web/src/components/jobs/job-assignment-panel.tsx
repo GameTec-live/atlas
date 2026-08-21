@@ -20,17 +20,28 @@ type JobAssignmentPanelProps = {
     isError: boolean;
     isFetching: boolean;
     destinationIsValid: boolean;
+    originIsValid?: boolean;
     isPending: boolean;
     disabled: boolean;
     mobileOpen: boolean;
     onMobileOpenChange: (open: boolean) => void;
     onSelect: (driverId: string) => void;
     onAssign: () => void;
+    createUnassignedAction?: {
+        disabled: boolean;
+        isPending: boolean;
+        onCreate: () => void;
+    };
 };
 
 type AssignmentActionProps = Pick<
     JobAssignmentPanelProps,
-    "destinationIsValid" | "isPending" | "disabled" | "onAssign"
+    | "destinationIsValid"
+    | "originIsValid"
+    | "isPending"
+    | "disabled"
+    | "onAssign"
+    | "createUnassignedAction"
 >;
 
 export function JobAssignmentPanel({
@@ -40,12 +51,14 @@ export function JobAssignmentPanel({
     isError,
     isFetching,
     destinationIsValid,
+    originIsValid = true,
     isPending,
     disabled,
     mobileOpen,
     onMobileOpenChange,
     onSelect,
     onAssign,
+    createUnassignedAction,
 }: JobAssignmentPanelProps) {
     const candidateListProps = {
         candidates,
@@ -57,9 +70,11 @@ export function JobAssignmentPanel({
     };
     const actionProps = {
         destinationIsValid,
+        originIsValid,
         isPending,
         disabled,
         onAssign,
+        createUnassignedAction,
     } satisfies AssignmentActionProps;
 
     return (
@@ -115,27 +130,52 @@ export function JobAssignmentPanel({
 
 function AssignmentAction({
     destinationIsValid,
+    originIsValid = true,
     isPending,
     disabled,
     onAssign,
+    createUnassignedAction,
 }: AssignmentActionProps) {
     return (
         <div className="space-y-3">
-            {!destinationIsValid && (
+            {!originIsValid && (
+                <p className="text-sm text-destructive">
+                    {m.job_details_origin_required()}
+                </p>
+            )}
+            {originIsValid && !destinationIsValid && (
                 <p className="text-sm text-destructive">
                     {m.job_details_destination_required()}
                 </p>
             )}
-            <Button
-                size="lg"
-                className="w-full"
-                disabled={disabled}
-                onClick={onAssign}
-            >
-                {isPending && <Spinner />}
-                {isPending ? m.job_details_assigning() : m.job_details_assign()}
-                {!isPending && <ArrowRightIcon data-icon="inline-end" />}
-            </Button>
+            <div className="flex gap-2">
+                {createUnassignedAction && (
+                    <Button
+                        size="lg"
+                        variant="outline"
+                        className="min-w-0 flex-1"
+                        disabled={createUnassignedAction.disabled}
+                        onClick={createUnassignedAction.onCreate}
+                    >
+                        {createUnassignedAction.isPending && <Spinner />}
+                        {createUnassignedAction.isPending
+                            ? m.job_create_creating()
+                            : m.job_create_unassigned()}
+                    </Button>
+                )}
+                <Button
+                    size="lg"
+                    className="min-w-0 flex-1"
+                    disabled={disabled}
+                    onClick={onAssign}
+                >
+                    {isPending && <Spinner />}
+                    {isPending
+                        ? m.job_details_assigning()
+                        : m.job_details_assign()}
+                    {!isPending && <ArrowRightIcon data-icon="inline-end" />}
+                </Button>
+            </div>
         </div>
     );
 }

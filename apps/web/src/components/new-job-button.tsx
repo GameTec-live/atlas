@@ -9,7 +9,7 @@ export function NewJobButton({ className }: { className?: string }) {
         <Button
             className={cn("h-10 px-4", className)}
             nativeButton={false}
-            render={<Link to="/" />}
+            render={<Link to="/jobs/new" />}
         >
             {m.super_crazy_anaconda_wave()}
             <ArrowRightIcon data-icon="inline-end" />

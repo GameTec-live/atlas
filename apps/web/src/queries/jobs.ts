@@ -40,12 +40,14 @@ export const jobQueryOptions = (id: string) =>
     });
 
 type CandidateTarget = {
-    from: [number, number];
+    from: [number, number] | null;
     to: [number, number] | null;
     dueDate: Date;
 };
 
 const fetchJobCandidates = async (target: CandidateTarget) => {
+    if (!target.from) throw new Error("An origin is required");
+
     const candidates = await unwrapEden(
         api.jobs.candidates.post({
             from: target.from,
@@ -69,6 +71,7 @@ export const jobCandidatesQueryOptions = (target: CandidateTarget) =>
             target.dueDate.toISOString(),
         ],
         queryFn: () => fetchJobCandidates(target),
+        enabled: target.from !== null,
     });
 
 export const jobsQueryOptions = () =>
