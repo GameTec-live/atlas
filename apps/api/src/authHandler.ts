@@ -12,7 +12,7 @@ const betterAuthView = (context: Context) => {
     }
 };
 
-const isAdmin = (role: string | null | undefined) =>
+export const isAdmin = (role: string | null | undefined) =>
     role?.split(",").some((value) => value.trim() === "admin") ?? false;
 
 export const authHandler = new Elysia()

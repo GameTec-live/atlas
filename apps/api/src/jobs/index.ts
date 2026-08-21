@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { Elysia, status, t } from "elysia";
 import { env } from "@/env";
-import { authHandler } from "../authHandler";
+import { authHandler, isAdmin } from "../authHandler";
 import { db } from "../db";
 import { job, user } from "../db/schema";
 import { trackCache } from "../realtime/cache";
@@ -324,7 +324,26 @@ export const jobs = new Elysia({
     )
     .post(
         "/:id/cancel",
-        async ({ params }) => {
+        async ({ params, user }) => {
+            if (!isAdmin(user.role)) {
+                const [targetJob] = await db
+                    .select()
+                    .from(job)
+                    .where(
+                        and(
+                            eq(job.id, params.id),
+                            eq(job.assignedDriverId, user.id),
+                        ),
+                    )
+                    .limit(1);
+
+                if (!targetJob) {
+                    return status(403, {
+                        error: "You are not authorized to cancel this job",
+                    });
+                }
+            }
+
             const updateResult = await db
                 .update(job)
                 .set({
