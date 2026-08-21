@@ -1,4 +1,4 @@
-import { FlagIcon, MapPinIcon, NavigationIcon, RouteIcon } from "lucide-react";
+import { RouteIcon } from "lucide-react";
 import { LngLatBounds, setWorkerUrl } from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { useEffect, useMemo, useState } from "react";
