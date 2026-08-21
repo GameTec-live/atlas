@@ -2185,7 +2185,7 @@ describe("POST /jobs/:id/cancel", () => {
         expect(dbClientQueryMock).not.toHaveBeenCalled();
     });
 
-    it("clears assignment and progress state", async () => {
+    it("allows the assigned driver to cancel the job", async () => {
         getSessionMock.mockResolvedValue(session);
 
         const response = await mutationRequest("cancel");
@@ -2194,6 +2194,41 @@ describe("POST /jobs/:id/cancel", () => {
         expect(await response.json()).toEqual({
             message: "Job canceled successfully",
         });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(2);
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain('from "job"');
+        expect(sql).toContain('"job"."id" = $1');
+        expect(sql).toContain('"job"."assigned_driver_id" = $2');
+        expect(values).toEqual([jobId, session.user.id, 1]);
+    });
+
+    it("returns 403 when the driver is not assigned to the job", async () => {
+        getSessionMock.mockResolvedValue(session);
+        setDbMockTableRows("job", []);
+
+        const response = await mutationRequest("cancel");
+
+        expect(response.status).toBe(403);
+        expect(await response.json()).toEqual({
+            error: "You are not authorized to cancel this job",
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain('"job"."id" = $1');
+        expect(sql).toContain('"job"."assigned_driver_id" = $2');
+        expect(values).toEqual([jobId, session.user.id, 1]);
+    });
+
+    it("allows an admin to cancel without checking the assignment", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await mutationRequest("cancel");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+            message: "Job canceled successfully",
+        });
+        expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
         const { sql, values } = getFirstQuery();
         expect(sql).toContain('"assigned_driver_id" = $1');
         expect(sql).toContain('"vehicle_id" = $2');
@@ -2205,7 +2240,7 @@ describe("POST /jobs/:id/cancel", () => {
     });
 
     it("returns 404 when the job does not exist", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
         setDbMockRowCount("update", 0);
 
         const response = await mutationRequest("cancel");
@@ -2229,7 +2264,7 @@ describe("POST /jobs/:id/cancel", () => {
     });
 
     it("returns 500 when the job update fails", async () => {
-        getSessionMock.mockResolvedValue(session);
+        getSessionMock.mockResolvedValue(adminSession);
         dbClientQueryMock.mockRejectedValueOnce(
             new Error("database unavailable"),
         );
