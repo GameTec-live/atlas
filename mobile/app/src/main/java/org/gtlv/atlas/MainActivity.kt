@@ -1,9 +1,15 @@
 package org.gtlv.atlas
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,21 +25,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import org.gtlv.atlas.auth.LoginScreen
 import org.gtlv.atlas.auth.LoginViewModel
 import org.gtlv.atlas.auth.LoginViewModelFactory
 import org.gtlv.atlas.location.RequiredLocationPermissionGate
+import org.gtlv.atlas.main.MainScreenViewModel
+import org.gtlv.atlas.main.MainScreenViewModelFactory
 import org.gtlv.atlas.navigation.AuthenticatedNavHost
+import org.gtlv.atlas.notification.JobNotificationViewModel
+import org.gtlv.atlas.notification.JobNotificationViewModelFactory
+import org.gtlv.atlas.notification.JobSystemNotificationManager
 import org.gtlv.atlas.role.RoleSelectionScreen
 import org.gtlv.atlas.role.RoleSelectionViewModel
 import org.gtlv.atlas.role.RoleSelectionViewModelFactory
+import org.gtlv.atlas.service.ActiveShiftService
 import org.gtlv.atlas.ui.theme.AtlasTheme
 import org.gtlv.core.session.SessionState
 import org.gtlv.core.shift.ShiftSessionState
-import org.gtlv.atlas.main.MainScreenViewModel
-import org.gtlv.atlas.main.MainScreenViewModelFactory
 
 class MainActivity : ComponentActivity() {
 
@@ -44,14 +56,18 @@ class MainActivity : ComponentActivity() {
     private val mainScreenViewModel:
             MainScreenViewModel by viewModels {
         MainScreenViewModelFactory(
-            jobRepository =
-                atlasApplication.jobRepository,
-            geoServiceRepository =
-                atlasApplication.geoServiceRepository,
-            telemetryProvider =
-                atlasApplication.telemetryProvider,
-            collectedJobStore =
-                atlasApplication.collectedJobStore
+            jobRepository = atlasApplication.jobRepository,
+            geoServiceRepository = atlasApplication.geoServiceRepository,
+            telemetryProvider = atlasApplication.telemetryProvider,
+            collectedJobStore = atlasApplication.collectedJobStore
+        )
+    }
+
+    private val jobNotificationViewModel:
+            JobNotificationViewModel by viewModels {
+        JobNotificationViewModelFactory(
+            jobRepository = atlasApplication.jobRepository,
+            webSocket = atlasApplication.jobNotificationWebSocket
         )
     }
 
@@ -61,11 +77,14 @@ class MainActivity : ComponentActivity() {
     private val shiftSessionManager
         get() = atlasApplication.shiftSessionManager
 
-    private val loginViewModel: LoginViewModel by viewModels {
+    private val loginViewModel:
+            LoginViewModel by viewModels {
         LoginViewModelFactory(
-            sessionManager = atlasApplication.sessionManager,
+            sessionManager =
+                atlasApplication.sessionManager,
             serverSettingsRepository =
-                atlasApplication.serverSettingsRepository
+                atlasApplication
+                    .serverSettingsRepository
         )
     }
 
@@ -81,27 +100,68 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
+        handleJobNotificationIntent(intent)
 
         setContent {
             AtlasTheme {
-                val coroutineScope = rememberCoroutineScope()
+                val coroutineScope =
+                    rememberCoroutineScope()
 
-                val loginState by loginViewModel.uiState
+                val loginState by
+                loginViewModel.uiState
                     .collectAsStateWithLifecycle()
 
-                val sessionState by sessionManager.state
+                val sessionState by
+                sessionManager.state
+                    .collectAsStateWithLifecycle()
+
+                val jobNotificationState by
+                jobNotificationViewModel.uiState
                     .collectAsStateWithLifecycle()
 
                 LaunchedEffect(sessionState) {
-                    if (sessionState !is SessionState.SignedIn) {
-                        mainScreenViewModel.clearJobs()
+                    when (sessionState) {
+                        SessionState.SignedOut -> {
+                            mainScreenViewModel
+                                .clearJobs()
+
+                            jobNotificationViewModel
+                                .clear()
+
+                            ActiveShiftService.stop(
+                                this@MainActivity
+                            )
+                        }
+
+                        is SessionState.RoleCheckFailed -> {
+                            ActiveShiftService.stop(
+                                this@MainActivity
+                            )
+                        }
+
+                        else -> Unit
                     }
                 }
 
-                when (val currentSession = sessionState) {
+                LaunchedEffect(Unit) {
+                    jobNotificationViewModel
+                        .refreshRequests
+                        .collect {
+                            mainScreenViewModel
+                                .refresh()
+                        }
+                }
+
+                when (
+                    val currentSession =
+                        sessionState
+                ) {
                     SessionState.Checking -> {
                         SessionLoadingScreen()
                     }
@@ -109,22 +169,14 @@ class MainActivity : ComponentActivity() {
                     SessionState.SignedOut -> {
                         LoginScreen(
                             state = loginState,
-                            onUsernameChanged =
-                                loginViewModel::onUsernameChanged,
-                            onPasswordChanged =
-                                loginViewModel::onPasswordChanged,
-                            onPasswordVisibilityChanged =
-                                loginViewModel::togglePasswordVisibility,
-                            onLogin =
-                                loginViewModel::login,
-                            onEditServer =
-                                loginViewModel::openServerDialog,
-                            onServerAddressChanged =
-                                loginViewModel::onServerAddressChanged,
-                            onSaveServerAddress =
-                                loginViewModel::saveServerAddress,
-                            onDismissServerDialog =
-                                loginViewModel::closeServerDialog
+                            onUsernameChanged = loginViewModel::onUsernameChanged,
+                            onPasswordChanged = loginViewModel::onPasswordChanged,
+                            onPasswordVisibilityChanged = loginViewModel::togglePasswordVisibility,
+                            onLogin = loginViewModel::login,
+                            onEditServer = loginViewModel::openServerDialog,
+                            onServerAddressChanged = loginViewModel::onServerAddressChanged,
+                            onSaveServerAddress = loginViewModel::saveServerAddress,
+                            onDismissServerDialog = loginViewModel::closeServerDialog
                         )
                     }
 
@@ -132,50 +184,73 @@ class MainActivity : ComponentActivity() {
                         RoleCheckFailedScreen(
                             onRetry = {
                                 coroutineScope.launch {
-                                    sessionManager.retryRoleCheck()
+                                    sessionManager
+                                        .retryRoleCheck()
                                 }
                             },
-                            onLogout = loginViewModel::logout
+                            onLogout =
+                                loginViewModel::logout
                         )
                     }
 
                     is SessionState.SignedIn -> {
-                        val shiftState by shiftSessionManager.state
+                        val shiftState by
+                        shiftSessionManager.state
                             .collectAsStateWithLifecycle()
 
-                        when (val currentShift = shiftState) {
+                        when (
+                            val currentShift =
+                                shiftState
+                        ) {
                             ShiftSessionState.Loading -> {
                                 SessionLoadingScreen()
                             }
 
-                            ShiftSessionState.NoActiveShift -> {
-                                val roleState by roleSelectionViewModel.uiState
+                            ShiftSessionState
+                                .NoActiveShift -> {
+                                val roleState by
+                                roleSelectionViewModel
+                                    .uiState
                                     .collectAsStateWithLifecycle()
 
                                 LaunchedEffect(Unit) {
-                                    roleSelectionViewModel.retry()
+                                    ActiveShiftService.stop(
+                                        this@MainActivity
+                                    )
+
+                                    roleSelectionViewModel
+                                        .retry()
                                 }
 
                                 RoleSelectionScreen(
                                     state = roleState,
                                     onDispatcherSelected =
-                                        roleSelectionViewModel::selectDispatcher,
+                                        roleSelectionViewModel::
+                                        selectDispatcher,
                                     onDriverSelected =
-                                        roleSelectionViewModel::selectDriver,
+                                        roleSelectionViewModel::
+                                        selectDriver,
                                     onRetry =
-                                        roleSelectionViewModel::retry
+                                        roleSelectionViewModel::
+                                        retry
                                 )
                             }
 
                             is ShiftSessionState.Active -> {
-                                LaunchedEffect(currentSession.userId) {
-                                    mainScreenViewModel.loadJobsForUser(
-                                        userId = currentSession.userId
-                                    )
+                                LaunchedEffect(
+                                    currentSession.userId
+                                ) {
+                                    mainScreenViewModel
+                                        .loadJobsForUser(
+                                            userId =
+                                                currentSession
+                                                    .userId
+                                        )
                                 }
 
-
-                                val mainScreenState by mainScreenViewModel.uiState
+                                val mainScreenState by
+                                mainScreenViewModel
+                                    .uiState
                                     .collectAsStateWithLifecycle()
 
                                 val liveMapUsers by
@@ -184,16 +259,29 @@ class MainActivity : ComponentActivity() {
                                     .liveMapUsers
                                     .collectAsStateWithLifecycle()
 
-                                val otherMapUsers = liveMapUsers
-                                    .values
-                                    .filterNot { mapUser ->
-                                        mapUser.userId == currentSession.userId
-                                    }
+                                val otherMapUsers =
+                                    liveMapUsers
+                                        .values
+                                        .filterNot {
+                                                mapUser ->
+                                            mapUser.userId ==
+                                                    currentSession
+                                                        .userId
+                                        }
 
                                 RequiredLocationPermissionGate(
                                     locationProvider =
-                                        atlasApplication.locationProvider
+                                        atlasApplication
+                                            .locationProvider
                                 ) { locationState ->
+                                    LaunchedEffect(Unit) {
+                                        ActiveShiftService.start(
+                                            this@MainActivity
+                                        )
+                                    }
+
+                                    AssignedJobNotificationPermissionEffect()
+
                                     AuthenticatedNavHost(
                                         userName = currentSession.userName,
                                         role = currentShift.session.role,
@@ -210,6 +298,11 @@ class MainActivity : ComponentActivity() {
                                         onAddressQueryChanged = mainScreenViewModel::onAddressQueryChanged,
                                         onAddressSuggestionSelected = mainScreenViewModel::selectAddressSuggestion,
                                         onCloseAddressEditor = mainScreenViewModel::closeAddressEditor,
+                                        jobNotificationState = jobNotificationState,
+                                        onDismissJobNotification = jobNotificationViewModel::dismissCurrentNotification,
+                                        onDeclineJobNotification = jobNotificationViewModel::declineCurrentNotification,
+                                        onDismissDeclineConfirmation = jobNotificationViewModel::dismissDeclineConfirmation,
+                                        onConfirmDecline = jobNotificationViewModel::confirmDecline,
                                         onLogout = loginViewModel::logout
                                     )
                                 }
@@ -218,6 +311,70 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(
+        intent: Intent
+    ) {
+        super.onNewIntent(intent)
+
+        setIntent(intent)
+        handleJobNotificationIntent(intent)
+    }
+
+    private fun handleJobNotificationIntent(
+        intent: Intent?
+    ) {
+        val notification =
+            JobSystemNotificationManager
+                .notificationFromIntent(
+                    intent ?: return
+                )
+                ?: return
+
+        jobNotificationViewModel
+            .requestDeclineConfirmation(
+                notification
+            )
+
+        intent.action = null
+    }
+}
+
+@Composable
+private fun AssignedJobNotificationPermissionEffect() {
+    if (
+        Build.VERSION.SDK_INT <
+        Build.VERSION_CODES.TIRAMISU
+    ) {
+        return
+    }
+
+    val context = LocalContext.current
+
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract =
+                ActivityResultContracts
+                    .RequestPermission()
+        ) {
+            // The app continues working if denied.
+        }
+
+    LaunchedEffect(Unit) {
+        val permissionGranted =
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission
+                    .POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+
+        if (!permissionGranted) {
+            permissionLauncher.launch(
+                Manifest.permission
+                    .POST_NOTIFICATIONS
+            )
         }
     }
 }
@@ -239,19 +396,27 @@ private fun RoleCheckFailedScreen(
 ) {
     Column(
         modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment =
+            Alignment.CenterHorizontally,
+        verticalArrangement =
+            Arrangement.Center
     ) {
         Text(
-            text = "Could not check your current role.",
-            style = MaterialTheme.typography.bodyLarge
+            text =
+                "Could not check your current role.",
+            style =
+                MaterialTheme.typography.bodyLarge
         )
 
-        Button(onClick = onRetry) {
+        Button(
+            onClick = onRetry
+        ) {
             Text(text = "Retry")
         }
 
-        Button(onClick = onLogout) {
+        Button(
+            onClick = onLogout
+        ) {
             Text(text = "Log out")
         }
     }

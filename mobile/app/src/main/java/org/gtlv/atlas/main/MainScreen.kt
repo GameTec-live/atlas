@@ -37,12 +37,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
 import org.gtlv.atlas.address.AddressSearchField
+import org.gtlv.atlas.main.composable.AssignedJobDeclineDialog
+import org.gtlv.atlas.main.composable.AssignedJobNotificationBanner
 import org.gtlv.atlas.main.composable.JobActionButtons
 import org.gtlv.atlas.main.composable.JobPanel
 import org.gtlv.atlas.main.composable.ProfileButton
 import org.gtlv.atlas.main.composable.ProfileSidebar
 import org.gtlv.atlas.map.AtlasMap
 import org.gtlv.atlas.map.MapConfiguration
+import org.gtlv.atlas.notification.JobNotificationUiState
 import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.location.LocationState
@@ -57,6 +60,11 @@ internal fun MainScreen(
     liveMapUsers: Collection<LiveMapUser>,
     onLogout: () -> Unit,
     jobState: MainScreenUiState,
+    jobNotificationState: JobNotificationUiState,
+    onDismissJobNotification: () -> Unit,
+    onDeclineJobNotification: () -> Unit,
+    onDismissDeclineConfirmation: () -> Unit,
+    onConfirmDecline: () -> Unit,
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
@@ -113,6 +121,13 @@ internal fun MainScreen(
     }
 
     val jobActionErrorMessage = when {
+        jobNotificationState.declineFailed -> {
+            stringResource(
+                R.string
+                    .job_notification_decline_failed
+            )
+        }
+
         jobState.startNextJobFailed -> {
             stringResource(
                 R.string.job_action_start_failed
@@ -211,7 +226,7 @@ internal fun MainScreen(
                     isPersonCollected =
                         jobState.isPersonCollected,
                     isPersonCollectionEnabled =
-                                !jobState.isLoading &&
+                        !jobState.isLoading &&
                                 !jobState.isStartingNextJob &&
                                 !jobState.isCancellingCurrentJob &&
                                 !jobState.isPersonCollected &&
@@ -227,6 +242,8 @@ internal fun MainScreen(
 
             if (
                 !jobState.isAddressEditorOpen &&
+                jobNotificationState
+                    .currentNotification == null &&
                 locationState
                         is LocationState.Available &&
                 !isFollowingLocation
@@ -254,9 +271,45 @@ internal fun MainScreen(
                 }
             }
 
+            jobNotificationState
+                .currentNotification
+                ?.let { notification ->
+                    val expiration =
+                        jobNotificationState
+                            .currentNotificationExpiresAtElapsedRealtime
+
+                    if (expiration != null) {
+                        AssignedJobNotificationBanner(
+                            notification =
+                                notification,
+                            expiresAtElapsedRealtime =
+                                expiration,
+                            isDeclining =
+                                jobNotificationState
+                                    .decliningJobId ==
+                                        notification.jobId,
+                            onDecline =
+                                onDeclineJobNotification,
+                            onExpired =
+                                onDismissJobNotification,
+                            modifier = Modifier
+                                .align(
+                                    Alignment.TopCenter
+                                )
+                                .padding(16.dp)
+                                .widthIn(
+                                    max = 520.dp
+                                )
+                                .fillMaxWidth()
+                        )
+                    }
+                }
+
             if (
                 !isProfileOpen &&
-                !jobState.isAddressEditorOpen
+                !jobState.isAddressEditorOpen &&
+                jobNotificationState
+                    .currentNotification == null
             ) {
                 ProfileButton(
                     userName = userName,
@@ -364,6 +417,22 @@ internal fun MainScreen(
                 )
             }
         }
+
+        jobNotificationState
+            .declineConfirmation
+            ?.let { notification ->
+                AssignedJobDeclineDialog(
+                    notification = notification,
+                    isDeclining =
+                        jobNotificationState
+                            .decliningJobId ==
+                                notification.jobId,
+                    onConfirm =
+                        onConfirmDecline,
+                    onDismiss =
+                        onDismissDeclineConfirmation
+                )
+            }
     }
 }
 

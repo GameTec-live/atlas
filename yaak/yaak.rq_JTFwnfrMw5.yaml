@@ -2,19 +2,16 @@ type: http_request
 model: http_request
 id: rq_JTFwnfrMw5
 createdAt: 2026-07-21T07:20:50.725016900
-updatedAt: 2026-07-21T07:20:50.725017200
+updatedAt: 2026-08-20T11:06:05.329669200
 workspaceId: wk_gbXsp49jy7
 folderId: fl_Pe9scVD4yF
-authentication:
-  token: ${[bearerToken]}
-authenticationType: bearer
+authentication: {}
+authenticationType: none
 body:
   text: |-
     {
-      "username": "<string>",
-      "password": "<string>",
-      "rememberMe": "<boolean>",
-      "callbackURL": "<string>"
+      "username": "testuser5",
+      "password": "12345678"
     }
 bodyType: application/json
 description: Sign in with username
