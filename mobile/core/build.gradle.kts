@@ -32,6 +32,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.androidx.datastore.preferences)
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20250517")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
 }

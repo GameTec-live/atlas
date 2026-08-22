@@ -274,6 +274,13 @@ class MainActivity : ComponentActivity() {
                                         atlasApplication
                                             .locationProvider
                                 ) { locationState ->
+                                    LaunchedEffect(locationState) {
+                                        mainScreenViewModel
+                                            .updateLocationState(
+                                                locationState
+                                            )
+                                    }
+
                                     LaunchedEffect(Unit) {
                                         ActiveShiftService.start(
                                             this@MainActivity

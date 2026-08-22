@@ -2,19 +2,101 @@ package org.gtlv.core.geoservice
 
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
+import okhttp3.Response
 import org.gtlv.core.network.NetworkClient
 import org.gtlv.core.settings.ServerSettingsRepository
 import org.json.JSONObject
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 class GeoServiceRepositoryImpl(
     private val networkClient: NetworkClient,
     private val serverSettingsRepository:
     ServerSettingsRepository
 ) : GeoServiceRepository {
+
+    override suspend fun requestRoute(
+        origin: RoutePoint,
+        destination: RoutePoint,
+        language: String
+    ): RouteResult = withContext(Dispatchers.IO) {
+        if (
+            !origin.isValid() ||
+            !destination.isValid() ||
+            language.length !in 2..5
+        ) {
+            return@withContext RouteResult.InvalidResponse
+        }
+
+        val serverAddress = serverSettingsRepository
+            .serverAddress
+            .first()
+            .removeSuffix("/")
+
+        val url = serverAddress
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.addPathSegments("api/geoservices/route")
+            ?.addQueryParameter("fromlat", origin.latitude.toString())
+            ?.addQueryParameter("fromlon", origin.longitude.toString())
+            ?.addQueryParameter(
+                "tolat",
+                destination.latitude.toString()
+            )
+            ?.addQueryParameter(
+                "tolon",
+                destination.longitude.toString()
+            )
+            ?.addQueryParameter("lang", language)
+            ?.build()
+            ?: return@withContext RouteResult.InvalidResponse
+
+        val request = Request.Builder()
+            .url(url)
+            .header("Origin", serverAddress)
+            .header("Accept", "application/json")
+            .get()
+            .build()
+
+        try {
+            executeCancellable(request).use { response ->
+                val responseText = response.body
+                    ?.string()
+                    .orEmpty()
+
+                when {
+                    response.code == 401 -> {
+                        RouteResult.Unauthorized
+                    }
+
+                    responseText.isBlank() -> {
+                        RouteResult.InvalidResponse
+                    }
+
+                    else -> {
+                        RouteResponseParser.parse(
+                            responseText = responseText,
+                            httpStatusCode = response.code
+                        )
+                    }
+                }
+            }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: IOException) {
+            RouteResult.NetworkError
+        } catch (_: Exception) {
+            RouteResult.InvalidResponse
+        }
+    }
 
     override suspend fun resolveAddress(
         address: String
@@ -189,5 +271,37 @@ class GeoServiceRepositoryImpl(
                 .optString("message")
                 .ifBlank { null }
         }.getOrNull()
+    }
+
+    private suspend fun executeCancellable(
+        request: Request
+    ): Response = suspendCancellableCoroutine { continuation ->
+        val call = networkClient.okHttpClient.newCall(request)
+
+        continuation.invokeOnCancellation {
+            call.cancel()
+        }
+
+        call.enqueue(object : Callback {
+            override fun onFailure(
+                call: Call,
+                e: IOException
+            ) {
+                if (continuation.isActive) {
+                    continuation.resumeWithException(e)
+                }
+            }
+
+            override fun onResponse(
+                call: Call,
+                response: Response
+            ) {
+                if (continuation.isActive) {
+                    continuation.resume(response)
+                } else {
+                    response.close()
+                }
+            }
+        })
     }
 }

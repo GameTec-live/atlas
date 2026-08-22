@@ -42,6 +42,26 @@
     <string name="map_load_error">The map could not be loaded.</string>
     <string name="map_location_display_error">Your location could not be displayed on the map.</string>
     <string name="map_recenter_location">Return to current location</string>
+    <string name="navigation_route">Route</string>
+    <string name="navigation_to_pickup">Driving to pickup</string>
+    <string name="navigation_to_destination">Driving to destination</string>
+    <string name="navigation_loading">Calculating route…</string>
+    <string name="navigation_waiting_location">Waiting for a current location before calculating the pickup route.</string>
+    <string name="navigation_pickup_unavailable">The pickup coordinates are unavailable.</string>
+    <string name="navigation_waiting_destination">Select a destination to continue navigation.</string>
+    <string name="navigation_error_unauthorized">Your session is no longer valid for routing.</string>
+    <string name="navigation_error_network">Could not connect to the routing service.</string>
+    <string name="navigation_error_router">No suitable route was found.</string>
+    <string name="navigation_error_server">The routing service returned an error.</string>
+    <string name="navigation_error_invalid_response">The routing service returned an invalid route.</string>
+    <string name="navigation_no_maneuvers">Route overview</string>
+    <string name="navigation_summary_separator">•</string>
+    <string name="navigation_distance_meters">%1$d m</string>
+    <string name="navigation_distance_kilometers">%1$s km</string>
+    <string name="navigation_duration_minutes">%1$d min</string>
+    <string name="navigation_duration_hours_minutes">%1$d h %2$d min</string>
+    <string name="navigation_expand_steps">Show all route steps</string>
+    <string name="navigation_collapse_steps">Hide route steps</string>
     <string name="logout">Log out</string>
 
     <string name="job_panel_load_error">Could not load jobs</string>

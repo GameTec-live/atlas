@@ -13,12 +13,17 @@ import kotlinx.coroutines.launch
 import org.gtlv.atlas.address.AddressSearchUiState
 import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.geoservice.GeoServiceRepository
+import org.gtlv.core.geoservice.RoutePoint
+import org.gtlv.core.geoservice.RouteProgressCalculator
+import org.gtlv.core.geoservice.RouteResult
 import org.gtlv.core.geoservice.ResolveAddressResult
-import org.gtlv.core.job.CollectedJobStore
+import org.gtlv.core.job.CollectedJobStateStore
 import org.gtlv.core.job.JobActionResult
 import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
+import org.gtlv.core.location.AtlasLocation
+import org.gtlv.core.location.LocationState
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryVehicleState
 
@@ -29,7 +34,7 @@ class MainScreenViewModel(
     private val telemetryProvider:
     TelemetryProvider,
     private val collectedJobStore:
-    CollectedJobStore
+    CollectedJobStateStore
 ) : ViewModel() {
 
     private val _uiState =
@@ -43,7 +48,16 @@ class MainScreenViewModel(
     private var jobActionTask: Job? = null
     private var addressSearchTask: Job? = null
     private var locationUpdateTask: Job? = null
+    private var routeRequestTask: Job? = null
     private var collectedJobId: String? = null
+    private var latestLocation: AtlasLocation? = null
+    private var pickupRouteOrigin: RoutePoint? = null
+    private var destinationRouteOrigin: RoutePoint? = null
+    private var activeRouteRequest:
+        NavigationRouteRequest? = null
+    private var loadedRouteRequest:
+        NavigationRouteRequest? = null
+    private var routeRequestGeneration = 0L
 
     fun loadJobsForUser(
         userId: String
@@ -152,6 +166,7 @@ class MainScreenViewModel(
 
             when (result) {
                 JobActionResult.Success -> {
+                    clearNavigation()
                     reloadJobsAfterAction()
                 }
 
@@ -206,6 +221,7 @@ class MainScreenViewModel(
 
             when (result) {
                 JobActionResult.Success -> {
+                    clearNavigation()
                     reloadJobsAfterAction()
                 }
 
@@ -249,9 +265,15 @@ class MainScreenViewModel(
             TelemetryVehicleState.OCCUPIED
         )
 
+        destinationRouteOrigin = latestLocation?.let {
+            RoutePoint(
+                latitude = it.latitude,
+                longitude = it.longitude
+            )
+        }?.takeIf(RoutePoint::isValid)
+
         val destinationIsMissing =
-            currentJob.to == null &&
-                    currentJob.toAddress.isNullOrBlank()
+            currentJob.to == null
 
         addressSearchTask?.cancel()
         addressSearchTask = null
@@ -271,6 +293,8 @@ class MainScreenViewModel(
                     AddressSearchUiState()
             )
         }
+
+        reconcileNavigation()
     }
 
     private suspend fun reloadJobsAfterAction() {
@@ -301,12 +325,19 @@ class MainScreenViewModel(
     private fun applyJobs(
         result: JobsResult.Success
     ) {
+        val previousJobId = _uiState.value.currentJob?.id
         val currentJob = result.currentJob
         val userId = activeUserId
 
         val personCollected =
             currentJob != null &&
                     currentJob.id == collectedJobId
+
+        if (previousJobId != currentJob?.id) {
+            pickupRouteOrigin = null
+            destinationRouteOrigin = null
+            clearNavigation()
+        }
 
         if (
             collectedJobId != null &&
@@ -352,6 +383,65 @@ class MainScreenViewModel(
                 cancelCurrentJobFailed = false,
                 isPersonCollected = personCollected
             )
+        }
+
+        reconcileNavigation()
+    }
+
+    fun updateLocationState(
+        locationState: LocationState
+    ) {
+        val availableLocation =
+            (locationState as? LocationState.Available)
+                ?.location
+
+        if (availableLocation != null) {
+            latestLocation = availableLocation
+
+            if (
+                _uiState.value.isPersonCollected &&
+                destinationRouteOrigin == null
+            ) {
+                destinationRouteOrigin = RoutePoint(
+                    latitude = availableLocation.latitude,
+                    longitude = availableLocation.longitude
+                ).takeIf(RoutePoint::isValid)
+            }
+        }
+
+        val navigation = _uiState.value.navigation
+        val route = navigation.route
+
+        if (
+            availableLocation != null &&
+            route != null &&
+            navigation.status != NavigationStatus.Idle
+        ) {
+            val progress = RouteProgressCalculator.calculate(
+                route = route,
+                location = RoutePoint(
+                    latitude = availableLocation.latitude,
+                    longitude = availableLocation.longitude
+                ),
+                previousShapeIndex = navigation.progress
+                    ?.routeShapeIndex
+                    ?: 0
+            )
+
+            _uiState.update {
+                it.copy(
+                    navigation = it.navigation.copy(
+                        progress = progress
+                    )
+                )
+            }
+        }
+
+        if (
+            _uiState.value.navigation.status ==
+            NavigationStatus.WaitingForLocation
+        ) {
+            reconcileNavigation()
         }
     }
 
@@ -607,10 +697,251 @@ class MainScreenViewModel(
         }
     }
 
+    private fun reconcileNavigation() {
+        val state = _uiState.value
+        val plan = NavigationRoutePlanner.plan(
+            currentJob = state.currentJob,
+            isPersonCollected = state.isPersonCollected,
+            latestLocation = latestLocation,
+            pickupOrigin = pickupRouteOrigin,
+            destinationOrigin = destinationRouteOrigin
+        )
+
+        when (plan) {
+            NavigationRoutePlan.None -> {
+                clearNavigation()
+            }
+
+            is NavigationRoutePlan.WaitingForLocation -> {
+                clearNavigationRequest()
+                _uiState.update {
+                    it.copy(
+                        navigation = NavigationUiState(
+                            jobId = state.currentJob?.id,
+                            phase = plan.phase,
+                            status =
+                                NavigationStatus.WaitingForLocation
+                        )
+                    )
+                }
+            }
+
+            NavigationRoutePlan.PickupUnavailable -> {
+                clearNavigationRequest()
+                _uiState.update {
+                    it.copy(
+                        navigation = NavigationUiState(
+                            jobId = state.currentJob?.id,
+                            phase = if (state.isPersonCollected) {
+                                NavigationPhase.ToDestination
+                            } else {
+                                NavigationPhase.ToPickup
+                            },
+                            status =
+                                NavigationStatus.PickupUnavailable
+                        )
+                    )
+                }
+            }
+
+            NavigationRoutePlan.WaitingForDestination -> {
+                clearNavigationRequest()
+                _uiState.update {
+                    it.copy(
+                        navigation = NavigationUiState(
+                            jobId = state.currentJob?.id,
+                            phase = NavigationPhase.ToDestination,
+                            status = NavigationStatus
+                                .WaitingForDestination
+                        )
+                    )
+                }
+            }
+
+            is NavigationRoutePlan.Request -> {
+                if (
+                    plan.value.phase ==
+                    NavigationPhase.ToPickup &&
+                    pickupRouteOrigin == null
+                ) {
+                    pickupRouteOrigin = plan.value.origin
+                }
+
+                if (
+                    plan.value.phase ==
+                    NavigationPhase.ToDestination &&
+                    destinationRouteOrigin == null
+                ) {
+                    destinationRouteOrigin = plan.value.origin
+                }
+
+                requestRoute(plan.value)
+            }
+        }
+    }
+
+    private fun requestRoute(
+        request: NavigationRouteRequest
+    ) {
+        if (
+            loadedRouteRequest == request &&
+            _uiState.value.navigation.route != null
+        ) {
+            return
+        }
+
+        if (
+            activeRouteRequest == request &&
+            routeRequestTask?.isActive == true
+        ) {
+            return
+        }
+
+        routeRequestTask?.cancel()
+        routeRequestGeneration += 1
+        val generation = routeRequestGeneration
+        activeRouteRequest = request
+
+        val currentNavigation = _uiState.value.navigation
+        val keepCurrentRoute =
+            currentNavigation.jobId == request.jobId &&
+                    currentNavigation.phase == request.phase &&
+                    currentNavigation.route != null
+
+        if (!keepCurrentRoute) {
+            loadedRouteRequest = null
+        }
+
+        _uiState.update {
+            it.copy(
+                navigation = NavigationUiState(
+                    jobId = request.jobId,
+                    phase = request.phase,
+                    status = NavigationStatus.Loading,
+                    route = if (keepCurrentRoute) {
+                        currentNavigation.route
+                    } else {
+                        null
+                    },
+                    progress = if (keepCurrentRoute) {
+                        currentNavigation.progress
+                    } else {
+                        null
+                    }
+                )
+            )
+        }
+
+        routeRequestTask = viewModelScope.launch {
+            val result = geoServiceRepository.requestRoute(
+                origin = request.origin,
+                destination = request.destination,
+                language = "de-AT"
+            )
+
+            currentCoroutineContext().ensureActive()
+
+            if (
+                generation != routeRequestGeneration ||
+                activeRouteRequest != request ||
+                _uiState.value.currentJob?.id != request.jobId
+            ) {
+                return@launch
+            }
+
+            when (result) {
+                is RouteResult.Success -> {
+                    loadedRouteRequest = request
+                    activeRouteRequest = null
+
+                    val initialProgress = latestLocation?.let {
+                        location ->
+                        RouteProgressCalculator.calculate(
+                            route = result.route,
+                            location = RoutePoint(
+                                latitude = location.latitude,
+                                longitude = location.longitude
+                            )
+                        )
+                    } ?: RouteProgressCalculator.initial(
+                        result.route
+                    )
+
+                    _uiState.update {
+                        it.copy(
+                            navigation = NavigationUiState(
+                                jobId = request.jobId,
+                                phase = request.phase,
+                                status = NavigationStatus.Ready,
+                                route = result.route,
+                                progress = initialProgress
+                            )
+                        )
+                    }
+                }
+
+                else -> {
+                    activeRouteRequest = null
+                    val navigation = _uiState.value.navigation
+
+                    _uiState.update {
+                        it.copy(
+                            navigation = navigation.copy(
+                                status = NavigationStatus.Error,
+                                error = result.toNavigationError()
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun RouteResult.toNavigationError(): NavigationError {
+        return when (this) {
+            RouteResult.Unauthorized ->
+                NavigationError.Unauthorized
+
+            RouteResult.NetworkError ->
+                NavigationError.Network
+
+            is RouteResult.RouterError ->
+                NavigationError.Router
+
+            is RouteResult.ServerError ->
+                NavigationError.Server
+
+            RouteResult.MalformedJson,
+            RouteResult.InvalidResponse ->
+                NavigationError.InvalidResponse
+
+            is RouteResult.Success ->
+                error("A successful route has no error")
+        }
+    }
+
+    private fun clearNavigationRequest() {
+        routeRequestGeneration += 1
+        routeRequestTask?.cancel()
+        routeRequestTask = null
+        activeRouteRequest = null
+        loadedRouteRequest = null
+    }
+
+    private fun clearNavigation() {
+        clearNavigationRequest()
+        _uiState.update {
+            it.copy(navigation = NavigationUiState())
+        }
+    }
+
     fun clearJobs() {
         activeUserId = null
 
         collectedJobId = null
+        latestLocation = null
+        pickupRouteOrigin = null
+        destinationRouteOrigin = null
 
         telemetryProvider.setVehicleState(
             TelemetryVehicleState.FREE
@@ -635,5 +966,7 @@ class MainScreenViewModel(
 
         locationUpdateTask?.cancel()
         locationUpdateTask = null
+
+        clearNavigationRequest()
     }
 }

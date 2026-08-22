@@ -34,6 +34,7 @@ import org.gtlv.atlas.R
 import org.gtlv.atlas.location.toAndroidLocation
 import org.gtlv.core.location.AtlasLocation
 import org.gtlv.core.location.LocationState
+import org.gtlv.core.geoservice.RoutePoint
 import org.gtlv.core.telemetry.LiveMapUser
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -50,6 +51,7 @@ import org.maplibre.android.maps.Style
 internal fun AtlasMap(
     locationState: LocationState,
     liveMapUsers: Collection<LiveMapUser>,
+    routePoints: List<RoutePoint>,
     recenterRequestId: Int,
     isFollowingLocation: Boolean,
     onUserCameraMove: () -> Unit,
@@ -237,6 +239,7 @@ internal fun AtlasMap(
                 }
 
                 runCatching {
+                    style.addRouteLayer()
                     style.addLiveMapUserLayers()
                 }.onFailure { exception ->
                     Log.e(
@@ -336,6 +339,24 @@ internal fun AtlasMap(
 
         hasInitiallyCentered = true
         map.centerOnLocation(location)
+    }
+
+    LaunchedEffect(
+        readyMap,
+        routePoints
+    ) {
+        val style = readyMap?.style
+            ?: return@LaunchedEffect
+
+        runCatching {
+            style.updateRoute(routePoints)
+        }.onFailure { exception ->
+            Log.e(
+                TAG,
+                "Failed to update route layer",
+                exception
+            )
+        }
     }
 
     LaunchedEffect(
