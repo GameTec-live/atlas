@@ -8,7 +8,13 @@ data class NavigationRouteRequest(
     val jobId: String,
     val phase: NavigationPhase,
     val origin: RoutePoint,
-    val destination: RoutePoint
+    val destination: RoutePoint,
+    val headingDegrees: Int?
+)
+
+data class NavigationRouteOrigin(
+    val point: RoutePoint,
+    val headingDegrees: Int?
 )
 
 sealed interface NavigationRoutePlan {
@@ -33,8 +39,9 @@ object NavigationRoutePlanner {
         currentJob: Job?,
         isPersonCollected: Boolean,
         latestLocation: AtlasLocation?,
-        pickupOrigin: RoutePoint?,
-        destinationOrigin: RoutePoint?
+        latestHeadingDegrees: Int?,
+        pickupOrigin: NavigationRouteOrigin?,
+        destinationOrigin: NavigationRouteOrigin?
     ): NavigationRoutePlan {
         val job = currentJob ?: return NavigationRoutePlan.None
         val pickup = job.from?.let { coordinates ->
@@ -47,8 +54,10 @@ object NavigationRoutePlanner {
 
         if (!isPersonCollected) {
             val origin = pickupOrigin
-                ?.takeIf(RoutePoint::isValid)
-                ?: latestLocation?.toRoutePoint()
+                ?.takeIf { it.point.isValid() }
+                ?: latestLocation?.toRouteOrigin(
+                    latestHeadingDegrees
+                )
                 ?: return NavigationRoutePlan.WaitingForLocation(
                     NavigationPhase.ToPickup
                 )
@@ -57,8 +66,9 @@ object NavigationRoutePlanner {
                 NavigationRouteRequest(
                     jobId = job.id,
                     phase = NavigationPhase.ToPickup,
-                    origin = origin,
-                    destination = pickup
+                    origin = origin.point,
+                    destination = pickup,
+                    headingDegrees = origin.headingDegrees
                 )
             )
         }
@@ -72,7 +82,7 @@ object NavigationRoutePlanner {
             ?: return NavigationRoutePlan.WaitingForDestination
 
         val origin = destinationOrigin
-            ?.takeIf(RoutePoint::isValid)
+            ?.takeIf { it.point.isValid() }
             ?: return NavigationRoutePlan.WaitingForLocation(
                 NavigationPhase.ToDestination
             )
@@ -81,15 +91,24 @@ object NavigationRoutePlanner {
             NavigationRouteRequest(
                 jobId = job.id,
                 phase = NavigationPhase.ToDestination,
-                origin = origin,
-                destination = destination
+                origin = origin.point,
+                destination = destination,
+                headingDegrees = origin.headingDegrees
             )
         )
     }
 
-    private fun AtlasLocation.toRoutePoint(): RoutePoint? =
-        RoutePoint(
+    private fun AtlasLocation.toRouteOrigin(
+        headingDegrees: Int?
+    ): NavigationRouteOrigin? {
+        val point = RoutePoint(
             latitude = latitude,
             longitude = longitude
-        ).takeIf(RoutePoint::isValid)
+        ).takeIf(RoutePoint::isValid) ?: return null
+
+        return NavigationRouteOrigin(
+            point = point,
+            headingDegrees = headingDegrees
+        )
+    }
 }

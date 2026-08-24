@@ -26,11 +26,13 @@ class GeoServiceRepositoryImpl(
     override suspend fun requestRoute(
         origin: RoutePoint,
         destination: RoutePoint,
-        language: String
+        language: String,
+        headingDegrees: Int?
     ): RouteResult = withContext(Dispatchers.IO) {
         if (
             !origin.isValid() ||
             !destination.isValid() ||
+            headingDegrees?.let { it !in 0..360 } == true ||
             language.length !in 2..5
         ) {
             return@withContext RouteResult.InvalidResponse
@@ -55,6 +57,11 @@ class GeoServiceRepositoryImpl(
                 "tolon",
                 destination.longitude.toString()
             )
+            ?.apply {
+                headingDegrees?.let {
+                    addQueryParameter("heading", it.toString())
+                }
+            }
             ?.addQueryParameter("lang", language)
             ?.build()
             ?: return@withContext RouteResult.InvalidResponse

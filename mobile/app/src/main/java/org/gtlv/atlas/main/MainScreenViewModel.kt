@@ -25,6 +25,7 @@ import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
 import org.gtlv.core.location.AtlasLocation
 import org.gtlv.core.location.LocationState
+import org.gtlv.core.location.VehicleHeadingEstimator
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryVehicleState
 
@@ -52,8 +53,13 @@ class MainScreenViewModel(
     private var routeRequestTask: Job? = null
     private var collectedJobId: String? = null
     private var latestLocation: AtlasLocation? = null
-    private var pickupRouteOrigin: RoutePoint? = null
-    private var destinationRouteOrigin: RoutePoint? = null
+    private var latestVehicleHeadingDegrees: Int? = null
+    private val vehicleHeadingEstimator =
+        VehicleHeadingEstimator()
+    private var pickupRouteOrigin:
+        NavigationRouteOrigin? = null
+    private var destinationRouteOrigin:
+        NavigationRouteOrigin? = null
     private var activeRouteRequest:
         NavigationRouteRequest? = null
     private var loadedRouteRequest:
@@ -269,12 +275,10 @@ class MainScreenViewModel(
             TelemetryVehicleState.OCCUPIED
         )
 
-        destinationRouteOrigin = latestLocation?.let {
-            RoutePoint(
-                latitude = it.latitude,
-                longitude = it.longitude
+        destinationRouteOrigin = latestLocation
+            ?.toNavigationRouteOrigin(
+                latestVehicleHeadingDegrees
             )
-        }?.takeIf(RoutePoint::isValid)
 
         val destinationIsMissing =
             currentJob.to == null
@@ -401,15 +405,19 @@ class MainScreenViewModel(
 
         if (availableLocation != null) {
             latestLocation = availableLocation
+            latestVehicleHeadingDegrees =
+                vehicleHeadingEstimator.update(
+                    availableLocation
+                )
 
             if (
                 _uiState.value.isPersonCollected &&
                 destinationRouteOrigin == null
             ) {
-                destinationRouteOrigin = RoutePoint(
-                    latitude = availableLocation.latitude,
-                    longitude = availableLocation.longitude
-                ).takeIf(RoutePoint::isValid)
+                destinationRouteOrigin = availableLocation
+                    .toNavigationRouteOrigin(
+                        latestVehicleHeadingDegrees
+                    )
             }
         }
 
@@ -714,6 +722,8 @@ class MainScreenViewModel(
             currentJob = state.currentJob,
             isPersonCollected = state.isPersonCollected,
             latestLocation = latestLocation,
+            latestHeadingDegrees =
+                latestVehicleHeadingDegrees,
             pickupOrigin = pickupRouteOrigin,
             destinationOrigin = destinationRouteOrigin
         )
@@ -775,7 +785,8 @@ class MainScreenViewModel(
                     NavigationPhase.ToPickup &&
                     pickupRouteOrigin == null
                 ) {
-                    pickupRouteOrigin = plan.value.origin
+                    pickupRouteOrigin =
+                        plan.value.toRouteOrigin()
                 }
 
                 if (
@@ -783,7 +794,8 @@ class MainScreenViewModel(
                     NavigationPhase.ToDestination &&
                     destinationRouteOrigin == null
                 ) {
-                    destinationRouteOrigin = plan.value.origin
+                    destinationRouteOrigin =
+                        plan.value.toRouteOrigin()
                 }
 
                 requestRoute(plan.value)
@@ -847,6 +859,7 @@ class MainScreenViewModel(
             val result = geoServiceRepository.requestRoute(
                 origin = request.origin,
                 destination = request.destination,
+                headingDegrees = request.headingDegrees,
                 language = "de-AT"
             )
 
@@ -987,10 +1000,9 @@ class MainScreenViewModel(
             return
         }
 
-        val origin = RoutePoint(
-            latitude = location.latitude,
-            longitude = location.longitude
-        ).takeIf(RoutePoint::isValid) ?: return
+        val origin = location.toNavigationRouteOrigin(
+            latestVehicleHeadingDegrees
+        ) ?: return
 
         when (navigation.phase) {
             NavigationPhase.ToPickup -> {
@@ -1034,6 +1046,8 @@ class MainScreenViewModel(
 
         collectedJobId = null
         latestLocation = null
+        latestVehicleHeadingDegrees = null
+        vehicleHeadingEstimator.reset()
         pickupRouteOrigin = null
         destinationRouteOrigin = null
 
@@ -1047,6 +1061,26 @@ class MainScreenViewModel(
             isLoading = false
         )
     }
+
+    private fun AtlasLocation.toNavigationRouteOrigin(
+        headingDegrees: Int?
+    ): NavigationRouteOrigin? {
+        val point = RoutePoint(
+            latitude = latitude,
+            longitude = longitude
+        ).takeIf(RoutePoint::isValid) ?: return null
+
+        return NavigationRouteOrigin(
+            point = point,
+            headingDegrees = headingDegrees
+        )
+    }
+
+    private fun NavigationRouteRequest.toRouteOrigin():
+            NavigationRouteOrigin = NavigationRouteOrigin(
+        point = origin,
+        headingDegrees = headingDegrees
+    )
 
     private fun cancelAllTasks() {
         refreshJob?.cancel()
