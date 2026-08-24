@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Link2Icon, NotebookTabsIcon, Settings2 } from "lucide-react";
+import { Link2Icon, Settings2 } from "lucide-react";
 import LanguageToggle from "@/components/language-toggle";
 import { ModeToggle } from "@/components/mode-toggle";
 import SignoutButton from "@/components/signout-button";

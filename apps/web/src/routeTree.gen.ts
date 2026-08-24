@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedAppRouteRouteImport } from './routes/_authenticated/_app/route'
+import { Route as JobsPublicRouteImport } from './routes/jobs/public'
 import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/_app/index'
 import { Route as AuthenticatedAppRealtimeRouteRouteImport } from './routes/_authenticated/_app/realtime/route'
 import { Route as AuthenticatedAppFleetIndexRouteImport } from './routes/_authenticated/_app/fleet/index'
@@ -34,6 +35,11 @@ const LoginRoute = LoginRouteImport.update({
 const AuthenticatedAppRouteRoute = AuthenticatedAppRouteRouteImport.update({
   id: '/_app',
   getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const JobsPublicRoute = JobsPublicRouteImport.update({
+  id: '/jobs/public',
+  path: '/jobs/public',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAppIndexRoute = AuthenticatedAppIndexRouteImport.update({
   id: '/',
@@ -91,6 +97,7 @@ const AuthenticatedAppSettingsShortnamesRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedAppIndexRoute
   '/login': typeof LoginRoute
+  '/jobs/public': typeof JobsPublicRoute
   '/realtime': typeof AuthenticatedAppRealtimeRouteRoute
   '/jobs/$jobId': typeof AuthenticatedAppJobsJobIdRoute
   '/jobs/new': typeof AuthenticatedAppJobsNewRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedAppIndexRoute
   '/login': typeof LoginRoute
+  '/jobs/public': typeof JobsPublicRoute
   '/realtime': typeof AuthenticatedAppRealtimeRouteRoute
   '/jobs/$jobId': typeof AuthenticatedAppJobsJobIdRoute
   '/jobs/new': typeof AuthenticatedAppJobsNewRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/_authenticated/_app': typeof AuthenticatedAppRouteRouteWithChildren
+  '/jobs/public': typeof JobsPublicRoute
   '/_authenticated/_app/realtime': typeof AuthenticatedAppRealtimeRouteRoute
   '/_authenticated/_app/': typeof AuthenticatedAppIndexRoute
   '/_authenticated/_app/jobs/$jobId': typeof AuthenticatedAppJobsJobIdRoute
@@ -132,6 +141,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/jobs/public'
     | '/realtime'
     | '/jobs/$jobId'
     | '/jobs/new'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/jobs/public'
     | '/realtime'
     | '/jobs/$jobId'
     | '/jobs/new'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/login'
     | '/_authenticated/_app'
+    | '/jobs/public'
     | '/_authenticated/_app/realtime'
     | '/_authenticated/_app/'
     | '/_authenticated/_app/jobs/$jobId'
@@ -171,6 +183,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
+  JobsPublicRoute: typeof JobsPublicRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -195,6 +208,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedAppRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/jobs/public': {
+      id: '/jobs/public'
+      path: '/jobs/public'
+      fullPath: '/jobs/public'
+      preLoaderRoute: typeof JobsPublicRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/_app/': {
       id: '/_authenticated/_app/'
@@ -306,6 +326,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   LoginRoute: LoginRoute,
+  JobsPublicRoute: JobsPublicRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

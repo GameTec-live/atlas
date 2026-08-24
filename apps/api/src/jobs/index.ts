@@ -171,6 +171,17 @@ export const jobs = new Elysia({
             },
         },
     )
+    .get(
+        "/jobtoken",
+        ({ set }) => {
+            set.headers["cache-control"] = "no-store";
+            return { jobtoken: env.JOBTOKEN };
+        },
+        {
+            admin: true,
+            response: t.Object({ jobtoken: t.String() }),
+        },
+    )
     .post(
         "/create",
         async ({ body, server }) => {
