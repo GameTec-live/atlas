@@ -265,6 +265,7 @@ export const GeoservicesModel = {
         fromlon: t.Number({ minimum: -180, maximum: 180 }),
         tolat: t.Number({ minimum: -90, maximum: 90 }),
         tolon: t.Number({ minimum: -180, maximum: 180 }),
+        heading: t.Optional(t.Integer({ minimum: 0, maximum: 360 })),
         lang: t.Optional(t.String({ minLength: 2, maxLength: 5 })),
     }),
     routeResponse: t.Union([routeSuccessResponse, routeErrorResponse]),
