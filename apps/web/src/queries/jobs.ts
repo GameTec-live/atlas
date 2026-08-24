@@ -5,6 +5,9 @@ import { getJobAddresses } from "@/lib/jobs";
 export const jobsQueryKey = ["jobs", "all"] as const;
 export const jobQueryKey = (id: string) => ["jobs", "detail", id] as const;
 export const jobCandidatesQueryKey = ["jobs", "candidates"] as const;
+export const jobTokenQueryKey = ["jobs", "public-token"] as const;
+export const publicJobsQueryKey = (jobtoken: string) =>
+    ["jobs", "public", jobtoken] as const;
 
 const fetchJobs = async () => {
     const jobs = await unwrapEden(
@@ -16,6 +19,30 @@ const fetchJobs = async () => {
 };
 
 export type Job = Awaited<ReturnType<typeof fetchJobs>>[number];
+
+export const jobTokenQueryOptions = () =>
+    queryOptions({
+        queryKey: jobTokenQueryKey,
+        queryFn: () => unwrapEden(api.jobs.jobtoken.get()),
+    });
+
+const fetchPublicJobs = async (jobtoken: string) => {
+    const jobs = await unwrapEden(
+        api.jobs["unassigned-reduced"].get({
+            headers: { authorization: jobtoken },
+            query: { geocode: "true" },
+        }),
+    );
+    return jobs ?? [];
+};
+
+export type PublicJob = Awaited<ReturnType<typeof fetchPublicJobs>>[number];
+
+export const publicJobsQueryOptions = (jobtoken: string) =>
+    queryOptions({
+        queryKey: publicJobsQueryKey(jobtoken),
+        queryFn: () => fetchPublicJobs(jobtoken),
+    });
 
 const fetchJob = async (id: string) => {
     const job = await unwrapEden(
