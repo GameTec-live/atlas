@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Link2Icon, Settings2 } from "lucide-react";
+import { Link2Icon, NotebookTabsIcon, Settings2 } from "lucide-react";
 import LanguageToggle from "@/components/language-toggle";
 import { ModeToggle } from "@/components/mode-toggle";
 import SignoutButton from "@/components/signout-button";
@@ -61,6 +61,13 @@ function RouteComponent() {
                                     render={<Link to="/fleet" />}
                                 >
                                     {m.cool_only_manatee_pout()}
+                                </NavigationMenuLink>
+                            </NavigationMenuItem>
+                            <NavigationMenuItem>
+                                <NavigationMenuLink
+                                    render={<Link to="/logbook" />}
+                                >
+                                    {m.logbook_title()}
                                 </NavigationMenuLink>
                             </NavigationMenuItem>
                             <NavigationMenuItem>

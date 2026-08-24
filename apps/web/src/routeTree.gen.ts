@@ -18,6 +18,7 @@ import { Route as AuthenticatedAppFleetIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedAppJobsIndexRouteImport } from './routes/_authenticated/_app/jobs/index'
 import { Route as AuthenticatedAppJobsJobIdRouteImport } from './routes/_authenticated/_app/jobs/$jobId'
 import { Route as AuthenticatedAppJobsNewRouteImport } from './routes/_authenticated/_app/jobs/new'
+import { Route as AuthenticatedAppLogbookIndexRouteImport } from './routes/_authenticated/_app/logbook/index'
 import { Route as AuthenticatedAppSettingsIndexRouteImport } from './routes/_authenticated/_app/settings/index'
 import { Route as AuthenticatedAppSettingsShortnamesRouteImport } from './routes/_authenticated/_app/settings/shortnames'
 
@@ -68,6 +69,12 @@ const AuthenticatedAppJobsNewRoute = AuthenticatedAppJobsNewRouteImport.update({
   path: '/jobs/new',
   getParentRoute: () => AuthenticatedAppRouteRoute,
 } as any)
+const AuthenticatedAppLogbookIndexRoute =
+  AuthenticatedAppLogbookIndexRouteImport.update({
+    id: '/logbook/',
+    path: '/logbook/',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 const AuthenticatedAppSettingsIndexRoute =
   AuthenticatedAppSettingsIndexRouteImport.update({
     id: '/settings/',
@@ -90,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/settings/shortnames': typeof AuthenticatedAppSettingsShortnamesRoute
   '/fleet/': typeof AuthenticatedAppFleetIndexRoute
   '/jobs/': typeof AuthenticatedAppJobsIndexRoute
+  '/logbook/': typeof AuthenticatedAppLogbookIndexRoute
   '/settings/': typeof AuthenticatedAppSettingsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -101,6 +109,7 @@ export interface FileRoutesByTo {
   '/settings/shortnames': typeof AuthenticatedAppSettingsShortnamesRoute
   '/fleet': typeof AuthenticatedAppFleetIndexRoute
   '/jobs': typeof AuthenticatedAppJobsIndexRoute
+  '/logbook': typeof AuthenticatedAppLogbookIndexRoute
   '/settings': typeof AuthenticatedAppSettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -115,6 +124,7 @@ export interface FileRoutesById {
   '/_authenticated/_app/settings/shortnames': typeof AuthenticatedAppSettingsShortnamesRoute
   '/_authenticated/_app/fleet/': typeof AuthenticatedAppFleetIndexRoute
   '/_authenticated/_app/jobs/': typeof AuthenticatedAppJobsIndexRoute
+  '/_authenticated/_app/logbook/': typeof AuthenticatedAppLogbookIndexRoute
   '/_authenticated/_app/settings/': typeof AuthenticatedAppSettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/settings/shortnames'
     | '/fleet/'
     | '/jobs/'
+    | '/logbook/'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/settings/shortnames'
     | '/fleet'
     | '/jobs'
+    | '/logbook'
     | '/settings'
   id:
     | '__root__'
@@ -152,6 +164,7 @@ export interface FileRouteTypes {
     | '/_authenticated/_app/settings/shortnames'
     | '/_authenticated/_app/fleet/'
     | '/_authenticated/_app/jobs/'
+    | '/_authenticated/_app/logbook/'
     | '/_authenticated/_app/settings/'
   fileRoutesById: FileRoutesById
 }
@@ -225,6 +238,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppJobsNewRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/_app/logbook/': {
+      id: '/_authenticated/_app/logbook/'
+      path: '/logbook'
+      fullPath: '/logbook/'
+      preLoaderRoute: typeof AuthenticatedAppLogbookIndexRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/_app/settings/': {
       id: '/_authenticated/_app/settings/'
       path: '/settings'
@@ -250,6 +270,7 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppSettingsShortnamesRoute: typeof AuthenticatedAppSettingsShortnamesRoute
   AuthenticatedAppFleetIndexRoute: typeof AuthenticatedAppFleetIndexRoute
   AuthenticatedAppJobsIndexRoute: typeof AuthenticatedAppJobsIndexRoute
+  AuthenticatedAppLogbookIndexRoute: typeof AuthenticatedAppLogbookIndexRoute
   AuthenticatedAppSettingsIndexRoute: typeof AuthenticatedAppSettingsIndexRoute
 }
 
@@ -262,6 +283,7 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
     AuthenticatedAppSettingsShortnamesRoute,
   AuthenticatedAppFleetIndexRoute: AuthenticatedAppFleetIndexRoute,
   AuthenticatedAppJobsIndexRoute: AuthenticatedAppJobsIndexRoute,
+  AuthenticatedAppLogbookIndexRoute: AuthenticatedAppLogbookIndexRoute,
   AuthenticatedAppSettingsIndexRoute: AuthenticatedAppSettingsIndexRoute,
 }
 
