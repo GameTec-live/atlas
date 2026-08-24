@@ -139,6 +139,7 @@ export const geoservices = new Elysia({
                     {
                         latitude: query.fromlat,
                         longitude: query.fromlon,
+                        heading: query.heading,
                     },
                     {
                         latitude: query.tolat,

@@ -6,6 +6,7 @@ import { GeoservicesModel } from "./model";
 export interface RoutePoint {
     latitude: number;
     longitude: number;
+    heading?: number;
 }
 
 export async function requestRoute(
@@ -25,6 +26,7 @@ export async function requestRoute(
             _initHooksCalled: true,
             lat: point.latitude,
             lon: point.longitude,
+            ...(point.heading === undefined ? {} : { heading: point.heading }),
         })),
         costing: "auto",
         directions_options: {

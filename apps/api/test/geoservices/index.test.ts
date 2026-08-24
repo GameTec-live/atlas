@@ -152,7 +152,10 @@ const validRouteQuery = {
 
 const routeRequest = (
     query: Partial<
-        Record<keyof typeof validRouteQuery | "lang", string | number>
+        Record<
+            keyof typeof validRouteQuery | "heading" | "lang",
+            string | number
+        >
     >,
 ) => {
     const url = new URL("http://localhost/geoservices/route");
@@ -570,6 +573,9 @@ describe("GET /geoservices/route", () => {
         ["a missing coordinate", { ...validRouteQuery, tolon: undefined }],
         ["a non-numeric coordinate", { ...validRouteQuery, fromlat: "north" }],
         ["an out-of-range latitude", { ...validRouteQuery, tolat: 91 }],
+        ["a negative heading", { ...validRouteQuery, heading: -1 }],
+        ["an out-of-range heading", { ...validRouteQuery, heading: 361 }],
+        ["a non-integer heading", { ...validRouteQuery, heading: 90.5 }],
         ["an invalid language", { ...validRouteQuery, lang: "english" }],
     ])("returns 422 for %s", async (_description, query) => {
         getSessionMock.mockResolvedValue(session);
@@ -622,6 +628,24 @@ describe("GET /geoservices/route", () => {
                 language: config.routing.defaultLanguage,
             },
         });
+    });
+
+    it("forwards the optional heading to the origin", async () => {
+        getSessionMock.mockResolvedValue(session);
+        respondWith(routeSuccessResponse);
+
+        const response = await routeRequest({
+            ...validRouteQuery,
+            heading: 90,
+        });
+
+        expect(response.status).toBe(200);
+        const routerRequestUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+        const routerQuery = JSON.parse(
+            routerRequestUrl.searchParams.get("json") ?? "",
+        );
+        expect(routerQuery.locations[0].heading).toBe(90);
+        expect(routerQuery.locations[1]).not.toHaveProperty("heading");
     });
 
     it("forwards the requested directions language", async () => {
