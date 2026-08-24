@@ -107,22 +107,22 @@ function PublicJobsPage() {
 
 function PublicJobsList({ jobtoken }: { jobtoken: string }) {
     const { data: jobs } = useSuspenseQuery(publicJobsQueryOptions(jobtoken));
-    const newestFirst = useMemo(
+    const oldestFirst = useMemo(
         () =>
             [...jobs].sort(
                 (left, right) =>
-                    right.dueDate.getTime() - left.dueDate.getTime(),
+                    left.dueDate.getTime() - right.dueDate.getTime(),
             ),
         [jobs],
     );
 
     return (
         <PublicJobsLayout>
-            {newestFirst.length === 0 ? (
+            {oldestFirst.length === 0 ? (
                 <EmptyJobs title={m.jobs_empty_unassigned()} />
             ) : (
                 <div className="grid gap-3">
-                    {newestFirst.map((job) => (
+                    {oldestFirst.map((job) => (
                         <PublicJobCard key={job.id} job={job} />
                     ))}
                 </div>
