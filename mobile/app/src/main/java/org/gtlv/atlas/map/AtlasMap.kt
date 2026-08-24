@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -29,11 +30,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import org.gtlv.atlas.R
 import org.gtlv.atlas.location.toAndroidLocation
 import org.gtlv.core.location.LocationState
+import org.gtlv.core.location.VehicleHeadingEstimator
 import org.gtlv.core.geoservice.RoutePoint
 import org.gtlv.core.telemetry.LiveMapUser
 import org.maplibre.android.camera.CameraPosition
@@ -164,12 +167,29 @@ internal fun AtlasMap(
         RouteRenderState()
     }
 
+    var mapHeightPixels by remember {
+        mutableIntStateOf(0)
+    }
+
+    val navigationCameraTopPaddingPixels =
+        navigationCameraTopPaddingPixels(
+            mapHeightPixels = mapHeightPixels,
+            isLandscape = isLandscape,
+            hasActiveRoute = routePoints.size >= 2
+        )
+
+    val cameraHeadingEstimator = remember {
+        VehicleHeadingEstimator()
+    }
+
     LaunchedEffect(
         readyMap,
         compassLeftMargin,
-        compassTopMargin
+        compassTopMargin,
+        isFollowingLocation
     ) {
         readyMap?.uiSettings?.apply {
+            isCompassEnabled = !isFollowingLocation
             compassGravity =
                 Gravity.TOP or Gravity.START
 
@@ -205,6 +225,9 @@ internal fun AtlasMap(
                     val componentOptions =
                         LocationComponentOptions
                             .builder(context)
+                            .gpsDrawable(
+                                R.drawable.ic_navigation_puck
+                            )
                             .pulseEnabled(true)
                             .trackingAnimationDurationMultiplier(1f)
                             .trackingGesturesManagement(true)
@@ -233,7 +256,7 @@ internal fun AtlasMap(
                         CameraMode.NONE
 
                     map.locationComponent.renderMode =
-                        RenderMode.NORMAL
+                        RenderMode.GPS
 
                     map.locationComponent.setMaxAnimationFps(60)
                 }
@@ -306,11 +329,16 @@ internal fun AtlasMap(
         val location =
             availableLocation
                 ?: return@LaunchedEffect
+        val displayBearingDegrees = cameraHeadingEstimator
+            .update(location)
+            ?.toFloat()
 
         runCatching {
             map.locationComponent
                 .forceLocationUpdate(
-                    location.toAndroidLocation()
+                    location.toAndroidLocation(
+                        displayBearingDegrees
+                    )
                 )
         }.onFailure { exception ->
             Log.e(
@@ -325,28 +353,37 @@ internal fun AtlasMap(
     LaunchedEffect(
         readyMap,
         isFollowingLocation,
-        availableLocation != null
+        availableLocation != null,
+        navigationCameraTopPaddingPixels
     ) {
         val map = readyMap ?: return@LaunchedEffect
 
         runCatching {
             map.locationComponent.cameraMode =
                 if (isFollowingLocation) {
-                    CameraMode.TRACKING
+                    CameraMode.TRACKING_GPS
                 } else {
                     CameraMode.NONE
                 }
 
             if (
                 isFollowingLocation &&
-                availableLocation != null &&
-                !hasInitiallyCentered
+                availableLocation != null
             ) {
-                hasInitiallyCentered = true
-                map.locationComponent.zoomWhileTracking(
-                    MapConfiguration.USER_LOCATION_ZOOM,
-                    INITIAL_CAMERA_TRANSITION_MILLIS
+                map.locationComponent.paddingWhileTracking(
+                    navigationCameraPadding(
+                        navigationCameraTopPaddingPixels
+                    ),
+                    CAMERA_PADDING_TRANSITION_MILLIS
                 )
+
+                if (!hasInitiallyCentered) {
+                    hasInitiallyCentered = true
+                    map.locationComponent.zoomWhileTracking(
+                        MapConfiguration.USER_LOCATION_ZOOM,
+                        INITIAL_CAMERA_TRANSITION_MILLIS
+                    )
+                }
             }
         }.onFailure { exception ->
             Log.e(
@@ -371,14 +408,25 @@ internal fun AtlasMap(
         val location =
             availableLocation
                 ?: return@LaunchedEffect
+        val displayBearingDegrees = cameraHeadingEstimator
+            .update(location)
+            ?.toFloat()
 
         hasInitiallyCentered = true
         runCatching {
             map.locationComponent.forceLocationUpdate(
-                location.toAndroidLocation()
+                location.toAndroidLocation(
+                    displayBearingDegrees
+                )
             )
             map.locationComponent.cameraMode =
-                CameraMode.TRACKING
+                CameraMode.TRACKING_GPS
+            map.locationComponent.paddingWhileTracking(
+                navigationCameraPadding(
+                    navigationCameraTopPaddingPixels
+                ),
+                CAMERA_PADDING_TRANSITION_MILLIS
+            )
             map.locationComponent.zoomWhileTracking(
                 MapConfiguration.USER_LOCATION_ZOOM,
                 INITIAL_CAMERA_TRANSITION_MILLIS
@@ -464,7 +512,11 @@ internal fun AtlasMap(
     Box(modifier = modifier) {
         AndroidView(
             factory = { mapView },
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { size ->
+                    mapHeightPixels = size.height
+                }
         )
 
         when (val state = loadState) {
@@ -521,7 +573,37 @@ private class RouteRenderState(
     var points: List<RoutePoint> = emptyList()
 )
 
+internal fun navigationCameraTopPaddingPixels(
+    mapHeightPixels: Int,
+    isLandscape: Boolean,
+    hasActiveRoute: Boolean
+): Double {
+    if (!hasActiveRoute || mapHeightPixels <= 0) {
+        return 0.0
+    }
+
+    val topPaddingFraction = if (isLandscape) {
+        LANDSCAPE_NAVIGATION_TOP_PADDING_FRACTION
+    } else {
+        PORTRAIT_NAVIGATION_TOP_PADDING_FRACTION
+    }
+
+    return mapHeightPixels * topPaddingFraction
+}
+
+private fun navigationCameraPadding(
+    topPaddingPixels: Double
+): DoubleArray = doubleArrayOf(
+    0.0,
+    topPaddingPixels,
+    0.0,
+    0.0
+)
+
 private const val TAG = "AtlasMap"
 private const val INITIAL_CAMERA_TRANSITION_MILLIS = 750L
+private const val CAMERA_PADDING_TRANSITION_MILLIS = 650L
 private const val ROUTE_TRANSITION_FRAME_MILLIS = 50L
 private const val ROUTE_TRANSITION_FRAME_COUNT = 18
+private const val PORTRAIT_NAVIGATION_TOP_PADDING_FRACTION = 0.42
+private const val LANDSCAPE_NAVIGATION_TOP_PADDING_FRACTION = 0.24

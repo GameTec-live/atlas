@@ -93,6 +93,14 @@ internal fun MainScreen(
         mutableIntStateOf(0)
     }
 
+    LaunchedEffect(jobState.navigation.route) {
+        val route = jobState.navigation.route
+        if (route != null && route.points.size >= 2) {
+            isFollowingLocation = true
+            recenterRequestId += 1
+        }
+    }
+
     var isProfileOpen by rememberSaveable(
         userName
     ) {
