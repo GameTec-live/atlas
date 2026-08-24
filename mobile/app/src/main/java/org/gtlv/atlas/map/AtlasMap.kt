@@ -33,12 +33,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import org.gtlv.atlas.R
 import org.gtlv.atlas.location.toAndroidLocation
-import org.gtlv.core.location.AtlasLocation
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.geoservice.RoutePoint
 import org.gtlv.core.telemetry.LiveMapUser
 import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.LocationComponentOptions
@@ -209,6 +207,7 @@ internal fun AtlasMap(
                             .builder(context)
                             .pulseEnabled(true)
                             .trackingAnimationDurationMultiplier(1f)
+                            .trackingGesturesManagement(true)
                             .accuracyAnimationEnabled(true)
                             .build()
 
@@ -299,7 +298,6 @@ internal fun AtlasMap(
 
     LaunchedEffect(
         readyMap,
-        isFollowingLocation,
         availableLocation
     ) {
         val map =
@@ -322,13 +320,40 @@ internal fun AtlasMap(
             )
         }
 
-        if (isFollowingLocation) {
-            if (!hasInitiallyCentered) {
+    }
+
+    LaunchedEffect(
+        readyMap,
+        isFollowingLocation,
+        availableLocation != null
+    ) {
+        val map = readyMap ?: return@LaunchedEffect
+
+        runCatching {
+            map.locationComponent.cameraMode =
+                if (isFollowingLocation) {
+                    CameraMode.TRACKING
+                } else {
+                    CameraMode.NONE
+                }
+
+            if (
+                isFollowingLocation &&
+                availableLocation != null &&
+                !hasInitiallyCentered
+            ) {
                 hasInitiallyCentered = true
-                map.centerOnLocation(location)
-            } else {
-                map.followLocation(location)
+                map.locationComponent.zoomWhileTracking(
+                    MapConfiguration.USER_LOCATION_ZOOM,
+                    INITIAL_CAMERA_TRANSITION_MILLIS
+                )
             }
+        }.onFailure { exception ->
+            Log.e(
+                TAG,
+                "Failed to update location camera tracking",
+                exception
+            )
         }
     }
 
@@ -348,7 +373,23 @@ internal fun AtlasMap(
                 ?: return@LaunchedEffect
 
         hasInitiallyCentered = true
-        map.centerOnLocation(location)
+        runCatching {
+            map.locationComponent.forceLocationUpdate(
+                location.toAndroidLocation()
+            )
+            map.locationComponent.cameraMode =
+                CameraMode.TRACKING
+            map.locationComponent.zoomWhileTracking(
+                MapConfiguration.USER_LOCATION_ZOOM,
+                INITIAL_CAMERA_TRANSITION_MILLIS
+            )
+        }.onFailure { exception ->
+            Log.e(
+                TAG,
+                "Failed to recenter location camera",
+                exception
+            )
+        }
     }
 
     LaunchedEffect(
@@ -458,36 +499,6 @@ internal fun AtlasMap(
     }
 }
 
-private fun MapLibreMap.centerOnLocation(
-    location: AtlasLocation
-) {
-    animateCamera(
-        CameraUpdateFactory.newLatLngZoom(
-            LatLng(
-                location.latitude,
-                location.longitude
-            ),
-            MapConfiguration.USER_LOCATION_ZOOM
-        ),
-        INITIAL_CAMERA_TRANSITION_MILLIS
-    )
-}
-
-private fun MapLibreMap.followLocation(
-    location: AtlasLocation
-) {
-    easeCamera(
-        CameraUpdateFactory.newLatLng(
-            LatLng(
-                location.latitude,
-                location.longitude
-            )
-        ),
-        LOCATION_TRANSITION_MILLIS,
-        true
-    )
-}
-
 private fun updateDisplayedRoute(
     style: Style,
     points: List<RoutePoint>,
@@ -511,7 +522,6 @@ private class RouteRenderState(
 )
 
 private const val TAG = "AtlasMap"
-private const val LOCATION_TRANSITION_MILLIS = 1_000
-private const val INITIAL_CAMERA_TRANSITION_MILLIS = 750
+private const val INITIAL_CAMERA_TRANSITION_MILLIS = 750L
 private const val ROUTE_TRANSITION_FRAME_MILLIS = 50L
 private const val ROUTE_TRANSITION_FRAME_COUNT = 18
