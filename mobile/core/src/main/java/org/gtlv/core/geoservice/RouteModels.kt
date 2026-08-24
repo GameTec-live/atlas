@@ -45,5 +45,7 @@ data class RouteProgress(
     val snappedRoutePoint: RoutePoint? = null,
     val routePosition: Double = routeShapeIndex.toDouble(),
     val distanceFromRouteKilometers: Double? = null,
-    val isMovingAgainstRoute: Boolean = false
+    val isMovingAgainstRoute: Boolean = false,
+    val nextManeuverIndex: Int? = null,
+    val remainingDistanceInCurrentManeuverKilometers: Double? = null
 )

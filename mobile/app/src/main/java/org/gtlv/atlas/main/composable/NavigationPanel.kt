@@ -83,10 +83,14 @@ internal fun NavigationPanel(
                 return@Column
             }
 
-            val currentIndex = state.progress
-                ?.currentManeuverIndex
-                ?: route.maneuvers.indices.firstOrNull()
-            val currentManeuver = currentIndex?.let {
+            val currentIndex = state.progress?.let { progress ->
+                progress.currentManeuverIndex
+                    ?: progress.nextManeuverIndex
+            } ?: route.maneuvers.indices.firstOrNull()
+            val nextIndex = state.progress
+                ?.nextManeuverIndex
+            val displayedIndex = nextIndex ?: currentIndex
+            val displayedManeuver = displayedIndex?.let {
                 route.maneuvers.getOrNull(it)
             }
 
@@ -99,14 +103,14 @@ internal fun NavigationPanel(
                     imageVector = Icons.Default.ArrowUpward,
                     contentDescription = null,
                     modifier = Modifier.rotate(
-                        maneuverRotation(currentManeuver?.type)
+                        maneuverRotation(displayedManeuver?.type)
                     ),
                     tint = MaterialTheme.colorScheme.primary
                 )
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = currentManeuver?.instruction
+                        text = displayedManeuver?.instruction
                             ?: stringResource(
                                 R.string.navigation_no_maneuvers
                             ),
@@ -116,7 +120,10 @@ internal fun NavigationPanel(
                         ?.remainingDistanceToManeuverKilometers
                         ?.let { distance ->
                             Text(
-                                text = formatDistance(distance),
+                                text = stringResource(
+                                    R.string.navigation_in_distance,
+                                    formatDistance(distance)
+                                ),
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
@@ -178,7 +185,8 @@ internal fun NavigationPanel(
 
             if (expanded && route.maneuvers.isNotEmpty()) {
                 HorizontalDivider()
-                val firstRemainingIndex = currentIndex ?: 0
+                val firstRemainingIndex =
+                    nextIndex ?: currentIndex ?: 0
                 val remainingManeuvers = route.maneuvers
                     .drop(firstRemainingIndex)
                 LazyColumn(
@@ -188,9 +196,16 @@ internal fun NavigationPanel(
                     itemsIndexed(remainingManeuvers) { index, maneuver ->
                         ManeuverRow(
                             maneuver = maneuver,
-                            showCurrentDistance = index == 0,
-                            currentDistanceKilometers = state.progress
-                                ?.remainingDistanceToManeuverKilometers
+                            remainingSegmentDistanceKilometers =
+                                if (
+                                    index == 0 &&
+                                    nextIndex == null
+                                ) {
+                                    state.progress
+                                        ?.remainingDistanceInCurrentManeuverKilometers
+                                } else {
+                                    null
+                                }
                         )
                     }
                 }
@@ -243,8 +258,7 @@ private fun NavigationStatusContent(state: NavigationUiState) {
 @Composable
 private fun ManeuverRow(
     maneuver: RouteManeuver,
-    showCurrentDistance: Boolean,
-    currentDistanceKilometers: Double?
+    remainingSegmentDistanceKilometers: Double?
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -263,15 +277,14 @@ private fun ManeuverRow(
                 text = maneuver.instruction,
                 style = MaterialTheme.typography.bodyLarge
             )
-            val distance = if (showCurrentDistance) {
-                currentDistanceKilometers
-                    ?: maneuver.lengthKilometers
-            } else {
-                maneuver.lengthKilometers
-            }
+            val distance = remainingSegmentDistanceKilometers
+                ?: maneuver.lengthKilometers
             distance?.let {
                 Text(
-                    text = formatDistance(it),
+                    text = stringResource(
+                        R.string.navigation_continue_for,
+                        formatDistance(it)
+                    ),
                     style = MaterialTheme.typography.bodySmall
                 )
             }

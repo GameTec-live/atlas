@@ -29,6 +29,84 @@ class RouteProgressCalculatorTest {
     }
 
     @Test
+    fun upcomingTurnUsesDistanceToItsBeginIndex() {
+        val route = routeWithUpcomingTurns()
+
+        val progress = RouteProgressCalculator.initial(route)
+
+        assertEquals(0, progress.currentManeuverIndex)
+        assertEquals(1, progress.nextManeuverIndex)
+        assertEquals(
+            0.111,
+            progress.remainingDistanceToManeuverKilometers ?: 0.0,
+            0.002
+        )
+        assertEquals(
+            0.111,
+            progress.remainingDistanceInCurrentManeuverKilometers
+                ?: 0.0,
+            0.002
+        )
+        assertTrue(
+            (progress.remainingDistanceToManeuverKilometers ?: 0.0) <
+                    (route.maneuvers[1].lengthKilometers ?: 0.0)
+        )
+    }
+
+    @Test
+    fun nextTurnAdvancesAfterCurrentTurnWasPassed() {
+        val route = routeWithUpcomingTurns()
+
+        val progress = RouteProgressCalculator.calculate(
+            route = route,
+            location = RoutePoint(0.0, 0.00275)
+        )
+
+        assertEquals(1, progress.currentManeuverIndex)
+        assertEquals(2, progress.nextManeuverIndex)
+        assertEquals(
+            0.028,
+            progress.remainingDistanceToManeuverKilometers ?: 0.0,
+            0.002
+        )
+    }
+
+    @Test
+    fun arrivalIsPresentedAsTheFinalUpcomingManeuver() {
+        val route = routeWithUpcomingTurns()
+        val arrival = maneuver(
+            instruction = "You have arrived",
+            beginIndex = 4,
+            endIndex = 4
+        )
+        val routeWithArrival = route.copy(
+            maneuvers = route.maneuvers + arrival
+        )
+
+        val approaching = RouteProgressCalculator.calculate(
+            route = routeWithArrival,
+            location = RoutePoint(0.0, 0.00375)
+        )
+        val arrived = RouteProgressCalculator.calculate(
+            route = routeWithArrival,
+            location = RoutePoint(0.0, 0.004)
+        )
+
+        assertEquals(3, approaching.nextManeuverIndex)
+        assertEquals(
+            0.028,
+            approaching.remainingDistanceToManeuverKilometers ?: 0.0,
+            0.002
+        )
+        assertEquals(3, arrived.nextManeuverIndex)
+        assertEquals(
+            0.0,
+            arrived.remainingDistanceToManeuverKilometers ?: -1.0,
+            0.000001
+        )
+    }
+
+    @Test
     fun progressNeverMovesBackwardsOnTheSameRoute() {
         val route = routeWithManeuvers()
 
@@ -142,6 +220,33 @@ class RouteProgressCalculatorTest {
         summary = RouteSummary(
             timeSeconds = 180.0,
             lengthKilometers = 0.333
+        ),
+        units = "kilometers",
+        language = "en-US"
+    )
+
+    private fun routeWithUpcomingTurns(): Route = Route(
+        points = listOf(
+            RoutePoint(0.0, 0.0),
+            RoutePoint(0.0, 0.001),
+            RoutePoint(0.0, 0.002),
+            RoutePoint(0.0, 0.003),
+            RoutePoint(0.0, 0.004)
+        ),
+        maneuvers = listOf(
+            maneuver("Drive north", 0, 1).copy(
+                lengthKilometers = 0.111
+            ),
+            maneuver("Turn right", 1, 3).copy(
+                lengthKilometers = 0.222
+            ),
+            maneuver("Turn left", 3, 4).copy(
+                lengthKilometers = 0.111
+            )
+        ),
+        summary = RouteSummary(
+            timeSeconds = null,
+            lengthKilometers = null
         ),
         units = "kilometers",
         language = "en-US"

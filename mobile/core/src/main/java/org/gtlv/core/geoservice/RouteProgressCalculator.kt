@@ -170,6 +170,27 @@ object RouteProgressCalculator {
                 endIndex.toDouble() > routePosition
             }
             .takeIf { it >= 0 }
+        val nextManeuverIndex = route.maneuvers
+            .indexOfFirst { maneuver ->
+                maneuver.beginShapeIndex
+                    ?.toDouble()
+                    ?.let {
+                        it > routePosition +
+                                MANEUVER_POSITION_EPSILON
+                    } == true
+            }
+            .takeIf { it >= 0 }
+            ?: route.maneuvers
+                .lastIndex
+                .takeIf { index ->
+                    val finalManeuver = route.maneuvers
+                        .getOrNull(index)
+                        ?: return@takeIf false
+                    val beginIndex = finalManeuver.beginShapeIndex
+                        ?: return@takeIf false
+                    finalManeuver.endShapeIndex == beginIndex &&
+                            routePosition >= beginIndex.toDouble()
+                }
 
         val geometryTotal = distanceAlongRoute(
             route.points,
@@ -207,13 +228,41 @@ object RouteProgressCalculator {
                 .mapNotNull { it.timeSeconds }
                 .sum()
 
-        val maneuverDistance = currentManeuverIndex?.let { index ->
+        val currentManeuverDistance =
+            currentManeuverIndex?.let { index ->
+                val maneuver = route.maneuvers[index]
+                val targetIndex = (
+                        maneuver.endShapeIndex
+                            ?: maneuver.beginShapeIndex
+                            ?: shapeIndex
+                        ).coerceIn(
+                            shapeIndex,
+                            route.points.lastIndex
+                        )
+                distanceFromSnappedPoint(
+                    points = route.points,
+                    snappedPoint = snappedPoint,
+                    shapeIndex = shapeIndex,
+                    targetIndex = targetIndex
+                ) * distanceScale
+            }
+
+        val displayedManeuverIndex =
+            nextManeuverIndex ?: currentManeuverIndex
+        val maneuverDistance = displayedManeuverIndex?.let { index ->
             val maneuver = route.maneuvers[index]
             val targetIndex = (
-                    maneuver.endShapeIndex
-                        ?: maneuver.beginShapeIndex
+                    if (nextManeuverIndex != null) {
+                        maneuver.beginShapeIndex
+                    } else {
+                        maneuver.endShapeIndex
+                            ?: maneuver.beginShapeIndex
+                    }
                         ?: shapeIndex
-                    ).coerceIn(shapeIndex, route.points.lastIndex)
+                    ).coerceIn(
+                        shapeIndex,
+                        route.points.lastIndex
+                    )
             distanceFromSnappedPoint(
                 points = route.points,
                 snappedPoint = snappedPoint,
@@ -235,7 +284,10 @@ object RouteProgressCalculator {
             routePosition = routePosition,
             distanceFromRouteKilometers =
                 distanceFromRouteKilometers,
-            isMovingAgainstRoute = isMovingAgainstRoute
+            isMovingAgainstRoute = isMovingAgainstRoute,
+            nextManeuverIndex = nextManeuverIndex,
+            remainingDistanceInCurrentManeuverKilometers =
+                currentManeuverDistance
         )
     }
 
@@ -350,7 +402,9 @@ object RouteProgressCalculator {
         snappedRoutePoint = null,
         routePosition = 0.0,
         distanceFromRouteKilometers = null,
-        isMovingAgainstRoute = false
+        isMovingAgainstRoute = false,
+        nextManeuverIndex = null,
+        remainingDistanceInCurrentManeuverKilometers = null
     )
 
     private data class SegmentProjection(
@@ -364,4 +418,5 @@ object RouteProgressCalculator {
     private const val MAX_FORWARD_SEGMENTS = 250
     private const val MAX_BACKWARD_SEGMENTS = 40
     private const val WRONG_WAY_DISTANCE_KILOMETERS = 0.05
+    private const val MANEUVER_POSITION_EPSILON = 0.001
 }
