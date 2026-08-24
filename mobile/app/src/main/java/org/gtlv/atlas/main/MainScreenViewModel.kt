@@ -14,6 +14,7 @@ import org.gtlv.atlas.address.AddressSearchUiState
 import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.geoservice.GeoServiceRepository
 import org.gtlv.core.geoservice.RoutePoint
+import org.gtlv.core.geoservice.RouteProgress
 import org.gtlv.core.geoservice.RouteProgressCalculator
 import org.gtlv.core.geoservice.RouteResult
 import org.gtlv.core.geoservice.ResolveAddressResult
@@ -58,6 +59,9 @@ class MainScreenViewModel(
     private var loadedRouteRequest:
         NavigationRouteRequest? = null
     private var routeRequestGeneration = 0L
+    private var offRouteSampleCount = 0
+    private var wrongWaySampleCount = 0
+    private var lastAutomaticRerouteAtMillis = 0L
 
     fun loadJobsForUser(
         userId: String
@@ -425,7 +429,8 @@ class MainScreenViewModel(
                 ),
                 previousShapeIndex = navigation.progress
                     ?.routeShapeIndex
-                    ?: 0
+                    ?: 0,
+                previousProgress = navigation.progress
             )
 
             _uiState.update {
@@ -435,6 +440,12 @@ class MainScreenViewModel(
                     )
                 )
             }
+
+            evaluateAutomaticReroute(
+                location = availableLocation,
+                navigation = navigation,
+                progress = progress
+            )
         }
 
         if (
@@ -853,6 +864,8 @@ class MainScreenViewModel(
                 is RouteResult.Success -> {
                     loadedRouteRequest = request
                     activeRouteRequest = null
+                    offRouteSampleCount = 0
+                    wrongWaySampleCount = 0
 
                     val initialProgress = latestLocation?.let {
                         location ->
@@ -920,6 +933,84 @@ class MainScreenViewModel(
         }
     }
 
+    private fun evaluateAutomaticReroute(
+        location: AtlasLocation,
+        navigation: NavigationUiState,
+        progress: RouteProgress
+    ) {
+        if (
+            navigation.phase == NavigationPhase.None ||
+            (
+                    navigation.status != NavigationStatus.Ready &&
+                            navigation.status != NavigationStatus.Error
+                    ) ||
+            routeRequestTask?.isActive == true
+        ) {
+            return
+        }
+
+        val accuracyThresholdKilometers =
+            (location.accuracyMeters ?: 0f) *
+                    GPS_ACCURACY_MULTIPLIER / 1000.0
+        val offRouteThreshold = maxOf(
+            MINIMUM_OFF_ROUTE_DISTANCE_KILOMETERS,
+            accuracyThresholdKilometers
+        )
+        val isOffRoute = progress.distanceFromRouteKilometers
+            ?.let { it > offRouteThreshold }
+            ?: false
+
+        offRouteSampleCount = if (isOffRoute) {
+            offRouteSampleCount + 1
+        } else {
+            0
+        }
+        wrongWaySampleCount = if (progress.isMovingAgainstRoute) {
+            wrongWaySampleCount + 1
+        } else {
+            0
+        }
+
+        if (
+            offRouteSampleCount < DEVIATION_SAMPLES_FOR_REROUTE &&
+            wrongWaySampleCount < DEVIATION_SAMPLES_FOR_REROUTE
+        ) {
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        if (
+            lastAutomaticRerouteAtMillis != 0L &&
+            now - lastAutomaticRerouteAtMillis <
+            AUTOMATIC_REROUTE_COOLDOWN_MILLIS
+        ) {
+            return
+        }
+
+        val origin = RoutePoint(
+            latitude = location.latitude,
+            longitude = location.longitude
+        ).takeIf(RoutePoint::isValid) ?: return
+
+        when (navigation.phase) {
+            NavigationPhase.ToPickup -> {
+                pickupRouteOrigin = origin
+            }
+
+            NavigationPhase.ToDestination -> {
+                destinationRouteOrigin = origin
+            }
+
+            NavigationPhase.None -> return
+        }
+
+        offRouteSampleCount = 0
+        wrongWaySampleCount = 0
+        lastAutomaticRerouteAtMillis = now
+        loadedRouteRequest = null
+        reconcileNavigation()
+    }
+
     private fun clearNavigationRequest() {
         routeRequestGeneration += 1
         routeRequestTask?.cancel()
@@ -930,6 +1021,9 @@ class MainScreenViewModel(
 
     private fun clearNavigation() {
         clearNavigationRequest()
+        offRouteSampleCount = 0
+        wrongWaySampleCount = 0
+        lastAutomaticRerouteAtMillis = 0L
         _uiState.update {
             it.copy(navigation = NavigationUiState())
         }
@@ -968,5 +1062,12 @@ class MainScreenViewModel(
         locationUpdateTask = null
 
         clearNavigationRequest()
+    }
+
+    private companion object {
+        const val MINIMUM_OFF_ROUTE_DISTANCE_KILOMETERS = 0.03
+        const val GPS_ACCURACY_MULTIPLIER = 2.5
+        const val DEVIATION_SAMPLES_FOR_REROUTE = 2
+        const val AUTOMATIC_REROUTE_COOLDOWN_MILLIS = 15_000L
     }
 }

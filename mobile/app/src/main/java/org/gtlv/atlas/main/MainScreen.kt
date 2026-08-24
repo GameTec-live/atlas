@@ -48,6 +48,7 @@ import org.gtlv.atlas.map.AtlasMap
 import org.gtlv.atlas.map.MapConfiguration
 import org.gtlv.atlas.notification.JobNotificationUiState
 import org.gtlv.core.geoservice.AddressSuggestion
+import org.gtlv.core.geoservice.RouteProgressCalculator
 import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
@@ -164,7 +165,12 @@ internal fun MainScreen(
             locationState = locationState,
             liveMapUsers = liveMapUsers,
             routePoints = jobState.navigation.route
-                ?.points
+                ?.let { route ->
+                    RouteProgressCalculator.remainingRoutePoints(
+                        route = route,
+                        progress = jobState.navigation.progress
+                    )
+                }
                 .orEmpty(),
             recenterRequestId =
                 recenterRequestId,

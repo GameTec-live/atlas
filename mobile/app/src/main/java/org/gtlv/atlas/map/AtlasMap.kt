@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.delay
 import org.gtlv.atlas.R
 import org.gtlv.atlas.location.toAndroidLocation
 import org.gtlv.core.location.AtlasLocation
@@ -161,6 +162,10 @@ internal fun AtlasMap(
             initialCameraPosition
     )
 
+    val routeRenderState = remember {
+        RouteRenderState()
+    }
+
     LaunchedEffect(
         readyMap,
         compassLeftMargin,
@@ -203,6 +208,8 @@ internal fun AtlasMap(
                         LocationComponentOptions
                             .builder(context)
                             .pulseEnabled(true)
+                            .trackingAnimationDurationMultiplier(1f)
+                            .accuracyAnimationEnabled(true)
                             .build()
 
                     val activationOptions =
@@ -228,6 +235,8 @@ internal fun AtlasMap(
 
                     map.locationComponent.renderMode =
                         RenderMode.NORMAL
+
+                    map.locationComponent.setMaxAnimationFps(60)
                 }
 
                 if (activationResult.isFailure) {
@@ -290,6 +299,7 @@ internal fun AtlasMap(
 
     LaunchedEffect(
         readyMap,
+        isFollowingLocation,
         availableLocation
     ) {
         val map =
@@ -345,16 +355,46 @@ internal fun AtlasMap(
         readyMap,
         routePoints
     ) {
-        val style = readyMap?.style
+        val map = readyMap ?: return@LaunchedEffect
+        val style = map.style
             ?: return@LaunchedEffect
 
-        runCatching {
-            style.updateRoute(routePoints)
-        }.onFailure { exception ->
-            Log.e(
-                TAG,
-                "Failed to update route layer",
-                exception
+        val previousPoints = if (routeRenderState.map === map) {
+            routeRenderState.points
+        } else {
+            emptyList()
+        }
+        routeRenderState.map = map
+
+        if (
+            previousPoints.isEmpty() ||
+            routePoints.isEmpty() ||
+            !canAnimateRouteTransition(
+                previous = previousPoints,
+                target = routePoints
+            )
+        ) {
+            updateDisplayedRoute(
+                style = style,
+                points = routePoints,
+                state = routeRenderState
+            )
+            return@LaunchedEffect
+        }
+
+        for (frame in 1..ROUTE_TRANSITION_FRAME_COUNT) {
+            delay(ROUTE_TRANSITION_FRAME_MILLIS)
+            val fraction = frame.toDouble() /
+                    ROUTE_TRANSITION_FRAME_COUNT
+            val displayedPoints = interpolateRemainingRoute(
+                previous = previousPoints,
+                target = routePoints,
+                fraction = fraction
+            )
+            updateDisplayedRoute(
+                style = style,
+                points = displayedPoints,
+                state = routeRenderState
             )
         }
     }
@@ -428,21 +468,50 @@ private fun MapLibreMap.centerOnLocation(
                 location.longitude
             ),
             MapConfiguration.USER_LOCATION_ZOOM
-        )
+        ),
+        INITIAL_CAMERA_TRANSITION_MILLIS
     )
 }
 
 private fun MapLibreMap.followLocation(
     location: AtlasLocation
 ) {
-    animateCamera(
+    easeCamera(
         CameraUpdateFactory.newLatLng(
             LatLng(
                 location.latitude,
                 location.longitude
             )
-        )
+        ),
+        LOCATION_TRANSITION_MILLIS,
+        true
     )
 }
 
+private fun updateDisplayedRoute(
+    style: Style,
+    points: List<RoutePoint>,
+    state: RouteRenderState
+) {
+    runCatching {
+        style.updateRoute(points)
+        state.points = points
+    }.onFailure { exception ->
+        Log.e(
+            TAG,
+            "Failed to update route layer",
+            exception
+        )
+    }
+}
+
+private class RouteRenderState(
+    var map: MapLibreMap? = null,
+    var points: List<RoutePoint> = emptyList()
+)
+
 private const val TAG = "AtlasMap"
+private const val LOCATION_TRANSITION_MILLIS = 1_000
+private const val INITIAL_CAMERA_TRANSITION_MILLIS = 750
+private const val ROUTE_TRANSITION_FRAME_MILLIS = 50L
+private const val ROUTE_TRANSITION_FRAME_COUNT = 18

@@ -128,7 +128,7 @@ class PhoneLocationProvider(
     }
 
     private companion object {
-        const val LOCATION_INTERVAL_MILLIS = 5_000L
-        const val MIN_LOCATION_INTERVAL_MILLIS = 2_000L
+        const val LOCATION_INTERVAL_MILLIS = 1_000L
+        const val MIN_LOCATION_INTERVAL_MILLIS = 500L
     }
 }
