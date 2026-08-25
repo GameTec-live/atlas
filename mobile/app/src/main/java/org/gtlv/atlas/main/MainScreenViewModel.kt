@@ -45,6 +45,7 @@ class MainScreenViewModel(
     private var addressSearchTask: Job? = null
     private var locationUpdateTask: Job? = null
     private var collectedStateTask: Job? = null
+    private var jobLifecycleTask: Job? = null
     private var collectedJobId: String? = null
 
     fun loadJobsForUser(
@@ -62,12 +63,33 @@ class MainScreenViewModel(
 
         _uiState.value = MainScreenUiState()
         observeCollectedJobState(userId)
+        observeJobLifecycle()
 
         telemetryProvider.setVehicleState(
             TelemetryVehicleState.FREE
         )
 
         refresh()
+    }
+
+    private fun observeJobLifecycle() {
+        jobLifecycleTask = viewModelScope.launch {
+            jobRepository.jobChanges.collectLatest {
+                jobActionTask
+                    ?.takeIf { it.isActive }
+                    ?.join()
+
+                when (val result = jobRepository.getJobs()) {
+                    is JobsResult.Success -> applyJobs(result)
+                    else -> _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            hasError = true
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun observeCollectedJobState(
@@ -126,6 +148,7 @@ class MainScreenViewModel(
             activeUserId == null ||
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
+            state.isFinishingCurrentJob ||
             state.addressSearch.isSaving
         ) {
             return
@@ -139,7 +162,8 @@ class MainScreenViewModel(
                     isLoading = true,
                     hasError = false,
                     startNextJobFailed = false,
-                    cancelCurrentJobFailed = false
+                    cancelCurrentJobFailed = false,
+                    finishCurrentJobFailed = false
                 )
             }
 
@@ -175,6 +199,7 @@ class MainScreenViewModel(
             state.isLoading ||
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
+            state.isFinishingCurrentJob ||
             state.isAddressEditorOpen ||
             state.addressSearch.isSaving
         ) {
@@ -191,7 +216,8 @@ class MainScreenViewModel(
                 it.copy(
                     isStartingNextJob = true,
                     startNextJobFailed = false,
-                    cancelCurrentJobFailed = false
+                    cancelCurrentJobFailed = false,
+                    finishCurrentJobFailed = false
                 )
             }
 
@@ -228,6 +254,7 @@ class MainScreenViewModel(
             state.isLoading ||
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
+            state.isFinishingCurrentJob ||
             state.isAddressEditorOpen ||
             state.addressSearch.isSaving
         ) {
@@ -235,6 +262,7 @@ class MainScreenViewModel(
         }
 
         val currentJobId = state.currentJob.id
+        val userId = requireNotNull(activeUserId)
 
         refreshJob?.cancel()
         jobActionTask?.cancel()
@@ -244,7 +272,8 @@ class MainScreenViewModel(
                 it.copy(
                     isCancellingCurrentJob = true,
                     cancelCurrentJobFailed = false,
-                    startNextJobFailed = false
+                    startNextJobFailed = false,
+                    finishCurrentJobFailed = false
                 )
             }
 
@@ -258,6 +287,9 @@ class MainScreenViewModel(
 
             when (result) {
                 JobActionResult.Success -> {
+                    clearCurrentJobAfterSuccessfulEnd(
+                        userId = userId
+                    )
                     reloadJobsAfterAction()
                 }
 
@@ -275,6 +307,63 @@ class MainScreenViewModel(
         }
     }
 
+    fun finishCurrentJob() {
+        val state = _uiState.value
+        val currentJob = state.currentJob ?: return
+        val userId = activeUserId ?: return
+
+        if (
+            state.isLoading ||
+            state.isStartingNextJob ||
+            state.isCancellingCurrentJob ||
+            state.isFinishingCurrentJob ||
+            !state.isPersonCollected ||
+            state.isAddressEditorOpen ||
+            state.addressSearch.isSaving
+        ) {
+            return
+        }
+
+        refreshJob?.cancel()
+        jobActionTask?.cancel()
+
+        jobActionTask = viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isFinishingCurrentJob = true,
+                    finishCurrentJobFailed = false,
+                    startNextJobFailed = false,
+                    cancelCurrentJobFailed = false
+                )
+            }
+
+            val result = jobRepository.completeJob(
+                jobId = currentJob.id
+            )
+
+            currentCoroutineContext()
+                .ensureActive()
+
+            when (result) {
+                JobActionResult.Success -> {
+                    clearCurrentJobAfterSuccessfulEnd(
+                        userId = userId
+                    )
+                    reloadJobsAfterAction()
+                }
+
+                else -> {
+                    _uiState.update {
+                        it.copy(
+                            isFinishingCurrentJob = false,
+                            finishCurrentJobFailed = true
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     fun personCollected() {
         val state = _uiState.value
         val currentJob = state.currentJob ?: return
@@ -284,6 +373,7 @@ class MainScreenViewModel(
             state.isLoading ||
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
+            state.isFinishingCurrentJob ||
             state.isPersonCollected ||
             state.addressSearch.isSaving
         ) {
@@ -325,6 +415,28 @@ class MainScreenViewModel(
         }
     }
 
+    private fun clearCurrentJobAfterSuccessfulEnd(
+        userId: String
+    ) {
+        collectedJobId = null
+        collectedJobStore.clearCollectedJobId(userId)
+        telemetryProvider.setVehicleState(
+            TelemetryVehicleState.FREE
+        )
+
+        _uiState.update {
+            it.copy(
+                currentJob = null,
+                isCancellingCurrentJob = false,
+                isFinishingCurrentJob = false,
+                isPersonCollected = false,
+                isAddressEditorOpen = false,
+                editedLocationField = null,
+                addressSearch = AddressSearchUiState()
+            )
+        }
+    }
+
     private suspend fun reloadJobsAfterAction() {
         val result = jobRepository.getJobs()
 
@@ -342,6 +454,8 @@ class MainScreenViewModel(
                         isLoading = false,
                         isStartingNextJob = false,
                         isCancellingCurrentJob =
+                            false,
+                        isFinishingCurrentJob =
                             false,
                         hasError = true
                     )
@@ -407,6 +521,8 @@ class MainScreenViewModel(
                 startNextJobFailed = false,
                 isCancellingCurrentJob = false,
                 cancelCurrentJobFailed = false,
+                isFinishingCurrentJob = false,
+                finishCurrentJobFailed = false,
                 isPersonCollected = personCollected
             )
         }
@@ -429,6 +545,7 @@ class MainScreenViewModel(
             state.isLoading ||
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
+            state.isFinishingCurrentJob ||
             state.addressSearch.isSaving
         ) {
             return
@@ -695,5 +812,8 @@ class MainScreenViewModel(
 
         collectedStateTask?.cancel()
         collectedStateTask = null
+
+        jobLifecycleTask?.cancel()
+        jobLifecycleTask = null
     }
 }

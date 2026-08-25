@@ -291,7 +291,7 @@ internal class MapLibreSurfaceRenderer(
             )
             readyMap.locationComponent.isLocationComponentEnabled = true
             readyMap.locationComponent.cameraMode = CameraMode.NONE
-            readyMap.locationComponent.renderMode = RenderMode.NORMAL
+            readyMap.locationComponent.renderMode = RenderMode.GPS
             readyMap.locationComponent.setMaxAnimationFps(60)
         }
     }
@@ -318,11 +318,7 @@ internal class MapLibreSurfaceRenderer(
             } else {
                 CameraMode.TRACKING
             }
-            component.renderMode = if (bearing != null) {
-                RenderMode.GPS
-            } else {
-                RenderMode.NORMAL
-            }
+            component.renderMode = RenderMode.GPS
 
             applyVisibleArea()
             if (component.cameraMode != cameraMode) {
@@ -414,7 +410,6 @@ internal class MapLibreSurfaceRenderer(
             text = jobSummary
             setTextColor(Color.rgb(210, 213, 218))
             textSize = 22f
-            maxLines = 3
         }
         jobSummaryView = summaryView
         jobCard.addView(summaryView)

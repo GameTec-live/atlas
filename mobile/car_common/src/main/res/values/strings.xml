@@ -16,6 +16,8 @@
     </plurals>
     <string name="driver_person_collected">Person collected</string>
     <string name="driver_job_finished">Job finished</string>
+    <string name="driver_cancel_job_error">Could not cancel the current job</string>
+    <string name="driver_finish_job_error">Could not finish the current job</string>
     <string name="driver_person_collected_error">Could not mark the person as collected</string>
     <string name="driver_no_next_job">No assigned job is waiting</string>
     <string name="driver_job_already_active">Finish the current job first</string>

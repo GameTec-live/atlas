@@ -60,12 +60,15 @@ class DriverMainScreen(
     private var locationJob: Job? = null
     private var styleJob: Job? = null
     private var collectedStateJob: Job? = null
+    private var jobLifecycleJob: Job? = null
     private var observedCollectedUserId: String? = null
     private var currentJob: AtlasJob? = null
     private var queuedJobs: List<AtlasJob> = emptyList()
     private var isLoading = true
     private var hasLoadError = false
     private var isStartingNextJob = false
+    private var isCancellingCurrentJob = false
+    private var isFinishingCurrentJob = false
     private var isPersonCollected = false
 
     init {
@@ -79,6 +82,7 @@ class DriverMainScreen(
         observeMapConfiguration()
         observeLocation()
         observeCollectedJobState()
+        observeJobLifecycle()
         startJobPolling()
     }
 
@@ -91,6 +95,8 @@ class DriverMainScreen(
         styleJob = null
         collectedStateJob?.cancel()
         collectedStateJob = null
+        jobLifecycleJob?.cancel()
+        jobLifecycleJob = null
         observedCollectedUserId = null
         super.onStop(owner)
     }
@@ -105,6 +111,10 @@ class DriverMainScreen(
     }
 
     override fun onGetTemplate(): Template {
+        val isJobActionInProgress =
+            isStartingNextJob ||
+                isCancellingCurrentJob ||
+                isFinishingCurrentJob
         val jobActionBuilder = Action.Builder()
         when {
             currentJob == null -> {
@@ -117,6 +127,7 @@ class DriverMainScreen(
             }
             isPersonCollected -> jobActionBuilder
                 .setTitle(carContext.getString(R.string.driver_job_finished))
+                .setOnClickListener(::finishCurrentJob)
             else -> jobActionBuilder
                 .setTitle(carContext.getString(R.string.driver_person_collected))
                 .setOnClickListener(::personCollected)
@@ -135,7 +146,7 @@ class DriverMainScreen(
                 carContext.carAppApiLevel >= 5 &&
                 (
                     (currentJob == null && queuedJobs.isEmpty()) ||
-                        (currentJob != null && isPersonCollected)
+                        isJobActionInProgress
                     )
             ) {
                 jobActionBuilder.setEnabled(false)
@@ -144,12 +155,26 @@ class DriverMainScreen(
 
         val jobAction = jobActionBuilder.build()
 
-        val builder = NavigationTemplate.Builder()
-            .setActionStrip(
-                ActionStrip.Builder()
-                    .addAction(jobAction)
-                    .build(),
+        val actionStripBuilder = ActionStrip.Builder()
+        if (currentJob != null) {
+            val cancelActionBuilder = Action.Builder()
+                .setIcon(carIcon(R.drawable.ic_close))
+                .setOnClickListener(::cancelCurrentJob)
+
+            if (carContext.carAppApiLevel >= 5) {
+                cancelActionBuilder
+                    .setFlags(Action.FLAG_IS_PERSISTENT)
+                    .setEnabled(!isJobActionInProgress)
+            }
+
+            actionStripBuilder.addAction(
+                cancelActionBuilder.build()
             )
+        }
+        actionStripBuilder.addAction(jobAction)
+
+        val builder = NavigationTemplate.Builder()
+            .setActionStrip(actionStripBuilder.build())
 
         if (carContext.carAppApiLevel >= 2) {
             addInteractiveMapControls(builder)
@@ -256,6 +281,17 @@ class DriverMainScreen(
         }
     }
 
+    private fun observeJobLifecycle() {
+        if (jobLifecycleJob != null) return
+        val repository = jobRepository ?: return
+
+        jobLifecycleJob = screenScope.launch {
+            repository.jobChanges.collectLatest {
+                refreshJobs()
+            }
+        }
+    }
+
     private suspend fun refreshJobs() {
         val repository = jobRepository
         if (repository == null) {
@@ -286,7 +322,9 @@ class DriverMainScreen(
 
     private fun startNextJob() {
         when {
-            isStartingNextJob -> return
+            isStartingNextJob ||
+                isCancellingCurrentJob ||
+                isFinishingCurrentJob -> return
             currentJob != null -> showToast(R.string.driver_job_already_active)
             queuedJobs.isEmpty() -> showToast(R.string.driver_no_next_job)
             jobRepository == null -> showToast(R.string.driver_start_job_error)
@@ -314,7 +352,12 @@ class DriverMainScreen(
 
     private fun personCollected() {
         val job = currentJob ?: return
-        if (isPersonCollected) return
+        if (
+            isPersonCollected ||
+            isStartingNextJob ||
+            isCancellingCurrentJob ||
+            isFinishingCurrentJob
+        ) return
 
         val userId = getUserId()
         val store = collectedJobStore
@@ -327,6 +370,82 @@ class DriverMainScreen(
         isPersonCollected = true
         telemetryProvider?.setVehicleState(TelemetryVehicleState.OCCUPIED)
         invalidateSafely()
+    }
+
+    private fun cancelCurrentJob() {
+        endCurrentJob(complete = false)
+    }
+
+    private fun finishCurrentJob() {
+        endCurrentJob(complete = true)
+    }
+
+    private fun endCurrentJob(
+        complete: Boolean
+    ) {
+        val job = currentJob ?: return
+        val repository = jobRepository
+        if (
+            isStartingNextJob ||
+            isCancellingCurrentJob ||
+            isFinishingCurrentJob ||
+            (complete && !isPersonCollected)
+        ) return
+
+        if (repository == null) {
+            showToast(
+                if (complete) {
+                    R.string.driver_finish_job_error
+                } else {
+                    R.string.driver_cancel_job_error
+                }
+            )
+            return
+        }
+
+        if (complete) {
+            isFinishingCurrentJob = true
+        } else {
+            isCancellingCurrentJob = true
+        }
+        invalidateSafely()
+
+        screenScope.launch {
+            val result = jobRequestMutex.withLock {
+                if (complete) {
+                    repository.completeJob(job.id)
+                } else {
+                    repository.cancelJob(job.id)
+                }
+            }
+
+            isFinishingCurrentJob = false
+            isCancellingCurrentJob = false
+
+            if (result == JobActionResult.Success) {
+                getUserId()?.let { userId ->
+                    collectedJobStore
+                        ?.clearCollectedJobId(userId)
+                }
+                currentJob = null
+                isPersonCollected = false
+                telemetryProvider?.setVehicleState(
+                    TelemetryVehicleState.FREE
+                )
+                updateJobOverlay()
+                invalidateSafely()
+                refreshJobs()
+            } else {
+                showToast(
+                    if (complete) {
+                        R.string.driver_finish_job_error
+                    } else {
+                        R.string.driver_cancel_job_error
+                    }
+                )
+                invalidateSafely()
+            }
+        }
     }
 
     private fun observeCollectedJobState() {
