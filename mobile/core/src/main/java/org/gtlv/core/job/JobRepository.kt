@@ -61,3 +61,8 @@ sealed interface JobActionResult {
         val message: String?
     ) : JobActionResult
 }
+
+/** Makes the application's authenticated job repository available to car sessions. */
+interface JobRepositoryProvider {
+    val jobRepository: JobRepository
+}

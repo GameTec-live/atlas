@@ -8,6 +8,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.gtlv.atlas.address.AddressSearchUiState
@@ -43,6 +44,7 @@ class MainScreenViewModel(
     private var jobActionTask: Job? = null
     private var addressSearchTask: Job? = null
     private var locationUpdateTask: Job? = null
+    private var collectedStateTask: Job? = null
     private var collectedJobId: String? = null
 
     fun loadJobsForUser(
@@ -59,12 +61,62 @@ class MainScreenViewModel(
             collectedJobStore.getCollectedJobId(userId)
 
         _uiState.value = MainScreenUiState()
+        observeCollectedJobState(userId)
 
         telemetryProvider.setVehicleState(
             TelemetryVehicleState.FREE
         )
 
         refresh()
+    }
+
+    private fun observeCollectedJobState(
+        userId: String
+    ) {
+        collectedStateTask = viewModelScope.launch {
+            collectedJobStore
+                .observeCollectedJobId(userId)
+                .collectLatest { storedJobId ->
+                    collectedJobId = storedJobId
+
+                    val state = _uiState.value
+                    if (state.isLoading) {
+                        return@collectLatest
+                    }
+
+                    val personCollected =
+                        state.currentJob?.id == storedJobId &&
+                                storedJobId != null
+
+                    telemetryProvider.setVehicleState(
+                        when {
+                            state.currentJob == null -> {
+                                TelemetryVehicleState.FREE
+                            }
+
+                            personCollected -> {
+                                TelemetryVehicleState.OCCUPIED
+                            }
+
+                            else -> {
+                                TelemetryVehicleState.ON_THE_WAY
+                            }
+                        }
+                    )
+
+                    if (
+                        state.isPersonCollected !=
+                        personCollected
+                    ) {
+                        _uiState.update {
+                            it.copy(
+                                isPersonCollected =
+                                    personCollected
+                            )
+                        }
+                    }
+                }
+        }
     }
 
     fun refresh() {
@@ -303,6 +355,11 @@ class MainScreenViewModel(
     ) {
         val currentJob = result.currentJob
         val userId = activeUserId
+
+        if (userId != null) {
+            collectedJobId =
+                collectedJobStore.getCollectedJobId(userId)
+        }
 
         val personCollected =
             currentJob != null &&
@@ -635,5 +692,8 @@ class MainScreenViewModel(
 
         locationUpdateTask?.cancel()
         locationUpdateTask = null
+
+        collectedStateTask?.cancel()
+        collectedStateTask = null
     }
 }

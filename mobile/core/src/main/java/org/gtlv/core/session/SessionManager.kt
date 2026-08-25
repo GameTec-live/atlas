@@ -204,3 +204,7 @@ class SessionManager(
         }
     }
 }
+
+interface SessionManagerProvider {
+    val sessionManager: SessionManager
+}
