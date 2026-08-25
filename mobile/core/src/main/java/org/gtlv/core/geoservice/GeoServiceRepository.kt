@@ -9,7 +9,7 @@ interface GeoServiceRepository {
     suspend fun requestRoute(
         origin: RoutePoint,
         destination: RoutePoint,
-        language: String = "de-AT",
+        language: String = "en",
         headingDegrees: Int? = null
     ): RouteResult
 }

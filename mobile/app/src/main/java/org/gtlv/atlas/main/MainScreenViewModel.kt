@@ -68,6 +68,28 @@ class MainScreenViewModel(
     private var offRouteSampleCount = 0
     private var wrongWaySampleCount = 0
     private var lastAutomaticRerouteAtMillis = 0L
+    private var navigationLanguage =
+        DEFAULT_NAVIGATION_LANGUAGE
+
+    fun updateNavigationLanguage(
+        language: String
+    ) {
+        if (
+            language == navigationLanguage ||
+            language.length !in 2..5
+        ) {
+            return
+        }
+
+        navigationLanguage = language
+        routeRequestTask?.cancel()
+        routeRequestTask = null
+        routeRequestGeneration += 1
+        activeRouteRequest = null
+        loadedRouteRequest = null
+
+        reconcileNavigation()
+    }
 
     fun loadJobsForUser(
         userId: String
@@ -860,7 +882,7 @@ class MainScreenViewModel(
                 origin = request.origin,
                 destination = request.destination,
                 headingDegrees = request.headingDegrees,
-                language = "de-AT"
+                language = navigationLanguage
             )
 
             currentCoroutineContext().ensureActive()
@@ -1103,5 +1125,6 @@ class MainScreenViewModel(
         const val GPS_ACCURACY_MULTIPLIER = 2.5
         const val DEVIATION_SAMPLES_FOR_REROUTE = 2
         const val AUTOMATIC_REROUTE_COOLDOWN_MILLIS = 15_000L
+        const val DEFAULT_NAVIGATION_LANGUAGE = "en"
     }
 }

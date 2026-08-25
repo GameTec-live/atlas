@@ -112,4 +112,5 @@
     <string name="active_shift_channel_description">Keeps Atlas connected while a shift is active</string>
     <string name="active_shift_notification_title">Atlas shift active</string>
     <string name="active_shift_notification_text">Receiving jobs and sharing live location</string>
+    <string name="navigation_route_language">en</string>
 </resources>
