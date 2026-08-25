@@ -6,17 +6,21 @@ on:
       - main
     paths:
       - "mobile/**"
+      - "apps/web/pki/atlas-local-root.crt"
       - ".github/workflows/android.yml"
   push:
     branches:
-      - main
-
+      - "**"
+    paths:
+      - "mobile/**"
+      - "apps/web/pki/atlas-local-root.crt"
+      - ".github/workflows/android.yml"
 permissions:
   contents: read
 
 concurrency:
-  group: android-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: android-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
@@ -108,3 +112,72 @@ jobs:
           path: mobile/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
           retention-days: 14
+
+  publish:
+    name: Distribute through Google Play
+    if: github.event_name == 'push'
+    needs:
+      - lint
+      - test
+      - build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: google-play-${{ github.ref_name == 'main' && 'release' || github.run_id }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      PLAY_STORE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Set up Ruby and Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+          working-directory: mobile
+
+      - name: Load signing key
+        uses: mobiledevops/secret-to-file-action@v1
+        with:
+          base64-encoded-secret: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          filename: "release-key.jks"
+          working-directory: "./mobile"
+
+      - name: Set release version
+        shell: bash
+        run: |
+          echo "ANDROID_VERSION_CODE=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          echo "ANDROID_VERSION_NAME=1.0.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Publish main
+        if: github.ref_name == 'main'
+        run: bundle exec fastlane android publish_main
+
+      - name: Share branch build
+        id: share-branch
+        if: github.ref_name != 'main'
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+          INTERNAL_APP_SHARING_URL_FILE: internal-app-sharing-url.txt
+        shell: bash
+        run: |
+          bundle exec fastlane android share_branch
+          sharing_url="$(< "$INTERNAL_APP_SHARING_URL_FILE")"
+          echo "url=$sharing_url" >> "$GITHUB_OUTPUT"
+          printf '### Internal App Sharing\n\n[%s branch build](%s)\n' \
+            "$BRANCH_NAME" "$sharing_url" >> "$GITHUB_STEP_SUMMARY"

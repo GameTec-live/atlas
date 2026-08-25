@@ -77,8 +77,15 @@ android {
         applicationId = "org.gtlv.atlas"
         minSdk = 36
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // CI injects unique Play versions; local builds keep stable defaults.
+        versionCode =
+            providers.environmentVariable(
+                "ANDROID_VERSION_CODE"
+            ).orNull?.toInt() ?: 1
+        versionName =
+            providers.environmentVariable(
+                "ANDROID_VERSION_NAME"
+            ).orNull ?: "1.0"
 
         testInstrumentationRunner =
             "androidx.test.runner." +

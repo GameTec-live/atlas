@@ -1,0 +1,66 @@
+PLAY_PACKAGE_NAME = "org.gtlv.atlas"
+
+def play_credentials_json
+  credentials = ENV["PLAY_STORE_SERVICE_ACCOUNT_JSON"]
+  UI.user_error!("PLAY_STORE_SERVICE_ACCOUNT_JSON is not set") if credentials.to_s.empty?
+
+  credentials
+end
+
+def build_release_bundle
+  gradle(task: "bundle", build_type: "Release")
+  lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH]
+end
+
+def upload_options
+  {
+    json_key_data: play_credentials_json,
+    package_name: PLAY_PACKAGE_NAME,
+    release_status: "completed",
+    skip_upload_apk: true,
+    skip_upload_metadata: true,
+    skip_upload_changelogs: true,
+    skip_upload_images: true,
+    skip_upload_screenshots: true
+  }
+end
+
+default_platform(:android)
+
+platform :android do
+  desc "Build main and publish the same release to internal and production"
+  lane :publish_main do
+    bundle_path = build_release_bundle
+
+    upload_to_play_store(
+      **upload_options,
+      aab: bundle_path,
+      track: "internal"
+    )
+
+    upload_to_play_store(
+      **upload_options,
+      track: "internal",
+      track_promote_to: "production",
+      track_promote_release_status: "completed",
+      version_code: ENV.fetch("ANDROID_VERSION_CODE"),
+      skip_upload_aab: true
+    )
+  end
+
+  desc "Build the current branch and upload it to Internal App Sharing"
+  lane :share_branch do
+    bundle_path = build_release_bundle
+    download_url = upload_to_play_store_internal_app_sharing(
+      json_key_data: play_credentials_json,
+      package_name: PLAY_PACKAGE_NAME,
+      aab: bundle_path
+    )
+
+    if ENV["INTERNAL_APP_SHARING_URL_FILE"]
+      File.write(ENV.fetch("INTERNAL_APP_SHARING_URL_FILE"), download_url)
+    end
+
+    UI.success("Branch build: #{download_url}")
+  end
+end
