@@ -171,12 +171,21 @@ internal fun AtlasMap(
         mutableIntStateOf(0)
     }
 
+    val hasActiveNavigationRoute = routePoints.size >= 2
+
     val navigationCameraTopPaddingPixels =
         navigationCameraTopPaddingPixels(
             mapHeightPixels = mapHeightPixels,
             isLandscape = isLandscape,
-            hasActiveRoute = routePoints.size >= 2
+            hasActiveRoute = hasActiveNavigationRoute
         )
+
+    val navigationCameraTiltDegrees =
+        if (hasActiveNavigationRoute) {
+            NAVIGATION_CAMERA_TILT_DEGREES
+        } else {
+            FLAT_CAMERA_TILT_DEGREES
+        }
 
     val cameraHeadingEstimator = remember {
         VehicleHeadingEstimator()
@@ -354,7 +363,8 @@ internal fun AtlasMap(
         readyMap,
         isFollowingLocation,
         availableLocation != null,
-        navigationCameraTopPaddingPixels
+        navigationCameraTopPaddingPixels,
+        navigationCameraTiltDegrees
     ) {
         val map = readyMap ?: return@LaunchedEffect
 
@@ -375,6 +385,10 @@ internal fun AtlasMap(
                         navigationCameraTopPaddingPixels
                     ),
                     CAMERA_PADDING_TRANSITION_MILLIS
+                )
+                map.locationComponent.tiltWhileTracking(
+                    navigationCameraTiltDegrees,
+                    CAMERA_TILT_TRANSITION_MILLIS
                 )
 
                 if (!hasInitiallyCentered) {
@@ -426,6 +440,10 @@ internal fun AtlasMap(
                     navigationCameraTopPaddingPixels
                 ),
                 CAMERA_PADDING_TRANSITION_MILLIS
+            )
+            map.locationComponent.tiltWhileTracking(
+                navigationCameraTiltDegrees,
+                CAMERA_TILT_TRANSITION_MILLIS
             )
             map.locationComponent.zoomWhileTracking(
                 MapConfiguration.USER_LOCATION_ZOOM,
@@ -603,7 +621,10 @@ private fun navigationCameraPadding(
 private const val TAG = "AtlasMap"
 private const val INITIAL_CAMERA_TRANSITION_MILLIS = 750L
 private const val CAMERA_PADDING_TRANSITION_MILLIS = 650L
+private const val CAMERA_TILT_TRANSITION_MILLIS = 650L
 private const val ROUTE_TRANSITION_FRAME_MILLIS = 50L
 private const val ROUTE_TRANSITION_FRAME_COUNT = 18
 private const val PORTRAIT_NAVIGATION_TOP_PADDING_FRACTION = 0.42
 private const val LANDSCAPE_NAVIGATION_TOP_PADDING_FRACTION = 0.24
+private const val NAVIGATION_CAMERA_TILT_DEGREES = 50.0
+private const val FLAT_CAMERA_TILT_DEGREES = 0.0
