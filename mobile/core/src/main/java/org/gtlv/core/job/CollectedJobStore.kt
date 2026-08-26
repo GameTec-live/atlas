@@ -14,6 +14,10 @@ interface CollectedJobStateStore {
     )
 
     fun clearCollectedJobId(userId: String)
+
+    fun observeCollectedJobId(
+        userId: String
+    ): StateFlow<String?>
 }
 
 class CollectedJobStore(
@@ -51,7 +55,7 @@ class CollectedJobStore(
         flowFor(userId).value = null
     }
 
-    fun observeCollectedJobId(
+    override fun observeCollectedJobId(
         userId: String
     ): StateFlow<String?> {
         return flowFor(userId)

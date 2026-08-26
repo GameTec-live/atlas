@@ -60,13 +60,13 @@ class MainScreenViewModel(
     private val vehicleHeadingEstimator =
         VehicleHeadingEstimator()
     private var pickupRouteOrigin:
-        NavigationRouteOrigin? = null
+            NavigationRouteOrigin? = null
     private var destinationRouteOrigin:
-        NavigationRouteOrigin? = null
+            NavigationRouteOrigin? = null
     private var activeRouteRequest:
-        NavigationRouteRequest? = null
+            NavigationRouteRequest? = null
     private var loadedRouteRequest:
-        NavigationRouteRequest? = null
+            NavigationRouteRequest? = null
     private var routeRequestGeneration = 0L
     private var offRouteSampleCount = 0
     private var wrongWaySampleCount = 0
@@ -1076,8 +1076,7 @@ class MainScreenViewModel(
                     offRouteSampleCount = 0
                     wrongWaySampleCount = 0
 
-                    val initialProgress = latestLocation?.let {
-                        location ->
+                    val initialProgress = latestLocation?.let { location ->
                         RouteProgressCalculator.calculate(
                             route = result.route,
                             location = RoutePoint(
@@ -1296,7 +1295,7 @@ class MainScreenViewModel(
 
         jobLifecycleTask?.cancel()
         jobLifecycleTask = null
-    }
+
         clearNavigationRequest()
     }
 
