@@ -118,6 +118,8 @@
 
     <string name="assign_job_title">Assign job</string>
     <string name="assign_job_back">Back to unassigned jobs</string>
+    <string name="assign_job_loading">Loading job...</string>
+    <string name="assign_job_not_found">This job is no longer available for assignment.</string>
     <string name="assign_job_due">Due: %1$s</string>
     <string name="assign_job_set_due_date">Set date</string>
     <string name="assign_job_date_next">Next</string>

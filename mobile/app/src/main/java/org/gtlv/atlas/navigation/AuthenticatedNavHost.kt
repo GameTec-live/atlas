@@ -1,6 +1,7 @@
 package org.gtlv.atlas.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
@@ -11,6 +12,7 @@ import org.gtlv.atlas.main.MainScreen
 import org.gtlv.atlas.main.MainScreenUiState
 import org.gtlv.atlas.assign.AssignJobScreen
 import org.gtlv.atlas.assign.AssignJobUiState
+import org.gtlv.atlas.assign.composable.AssignJobRouteState
 import org.gtlv.atlas.notification.JobNotificationUiState
 import org.gtlv.atlas.unassigned.UnassignedJobsScreen
 import org.gtlv.atlas.unassigned.UnassignedJobsUiState
@@ -45,6 +47,7 @@ internal fun AuthenticatedNavHost(
     onConfirmUnassignedJobDeletion: () -> Unit,
     onRemoveUnassignedJob: (String) -> Unit,
     onLoadAssignJob: (Job) -> Unit,
+    onClearAssignJob: () -> Unit,
     onEditAssignJobAddress: (org.gtlv.core.job.JobLocationField) -> Unit,
     onAssignJobAddressQueryChanged: (String) -> Unit,
     onAssignJobAddressSelected: (AddressSuggestion) -> Unit,
@@ -141,42 +144,76 @@ internal fun AuthenticatedNavHost(
                     listedJob.id == destination.jobId
                 }
 
-            LaunchedEffect(job?.id) {
-                job?.let(onLoadAssignJob)
+            DisposableEffect(destination.jobId) {
+                onDispose(onClearAssignJob)
             }
 
-            AssignJobScreen(
-                state = assignJobState,
-                serverAddress = serverAddress,
-                locationState = locationState,
-                liveMapUsers = liveMapUsers,
-                onBack = {
+            LaunchedEffect(destination.jobId) {
+                if (job == null) {
                     onRefreshUnassignedJobs()
-                    navController.popBackStack()
-                },
-                onEditAddress = onEditAssignJobAddress,
-                onAddressQueryChanged =
-                    onAssignJobAddressQueryChanged,
-                onAddressSuggestionSelected =
-                    onAssignJobAddressSelected,
-                onCloseAddressEditor =
-                    onCloseAssignJobAddressEditor,
-                onDueDateChanged =
-                    onAssignJobDueDateChanged,
-                onSaveChanges = onSaveAssignJobChanges,
-                onRetryCandidates =
-                    onRetryAssignJobCandidates,
-                onRequestAssignment =
-                    onRequestJobAssignment,
-                onDismissAssignment =
-                    onDismissJobAssignment,
-                onConfirmAssignment =
-                    onConfirmJobAssignment,
-                onAssignmentCompleted = {
-                    onRemoveUnassignedJob(destination.jobId)
-                    navController.popBackStack()
                 }
-            )
+            }
+
+            LaunchedEffect(destination.jobId, job?.id) {
+                if (job == null) {
+                    onClearAssignJob()
+                } else {
+                    onLoadAssignJob(job)
+                }
+            }
+
+            if (
+                job != null &&
+                assignJobState.job?.id == destination.jobId
+            ) {
+                AssignJobScreen(
+                    state = assignJobState,
+                    serverAddress = serverAddress,
+                    locationState = locationState,
+                    liveMapUsers = liveMapUsers,
+                    onBack = {
+                        onClearAssignJob()
+                        onRefreshUnassignedJobs()
+                        navController.popBackStack()
+                    },
+                    onEditAddress = onEditAssignJobAddress,
+                    onAddressQueryChanged =
+                        onAssignJobAddressQueryChanged,
+                    onAddressSuggestionSelected =
+                        onAssignJobAddressSelected,
+                    onCloseAddressEditor =
+                        onCloseAssignJobAddressEditor,
+                    onDueDateChanged =
+                        onAssignJobDueDateChanged,
+                    onSaveChanges = onSaveAssignJobChanges,
+                    onRetryCandidates =
+                        onRetryAssignJobCandidates,
+                    onRequestAssignment =
+                        onRequestJobAssignment,
+                    onDismissAssignment =
+                        onDismissJobAssignment,
+                    onConfirmAssignment =
+                        onConfirmJobAssignment,
+                    onAssignmentCompleted = {
+                        onRemoveUnassignedJob(
+                            destination.jobId
+                        )
+                        onClearAssignJob()
+                        navController.popBackStack()
+                    }
+                )
+            } else {
+                AssignJobRouteState(
+                    isLoading =
+                        unassignedJobsState.isLoading ||
+                                job != null,
+                    onBack = {
+                        onClearAssignJob()
+                        navController.popBackStack()
+                    },
+                    onRetry = onRefreshUnassignedJobs
+                )
+            }
         }
     }
 }

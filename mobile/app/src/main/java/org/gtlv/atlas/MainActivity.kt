@@ -376,6 +376,7 @@ class MainActivity : ComponentActivity() {
                                         onConfirmUnassignedJobDeletion = unassignedJobsViewModel::confirmDeletion,
                                         onRemoveUnassignedJob = unassignedJobsViewModel::removeJob,
                                         onLoadAssignJob = assignJobViewModel::load,
+                                        onClearAssignJob = assignJobViewModel::clear,
                                         onEditAssignJobAddress = assignJobViewModel::openAddressEditor,
                                         onAssignJobAddressQueryChanged = assignJobViewModel::onAddressQueryChanged,
                                         onAssignJobAddressSelected = assignJobViewModel::selectAddressSuggestion,
