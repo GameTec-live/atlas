@@ -37,7 +37,9 @@ import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryVehicleState
+import kotlin.time.Duration.Companion.milliseconds
 import org.gtlv.core.job.Job as AtlasJob
+import androidx.core.graphics.createBitmap
 
 class DriverMainScreen(
     carContext: CarContext,
@@ -226,11 +228,7 @@ class DriverMainScreen(
         val size = (CAR_ICON_SIZE_DP * carContext.resources.displayMetrics.density)
             .toInt()
             .coerceAtLeast(1)
-        val bitmap = Bitmap.createBitmap(
-            size,
-            size,
-            Bitmap.Config.ARGB_8888,
-        )
+        val bitmap = createBitmap(size, size)
         val drawable = requireNotNull(
             AppCompatResources.getDrawable(carContext, resourceId),
         )
@@ -276,7 +274,7 @@ class DriverMainScreen(
         pollingJob = screenScope.launch {
             while (isActive) {
                 refreshJobs()
-                delay(JOB_REFRESH_INTERVAL_MILLIS)
+                delay(JOB_REFRESH_INTERVAL_MILLIS.milliseconds)
             }
         }
     }
