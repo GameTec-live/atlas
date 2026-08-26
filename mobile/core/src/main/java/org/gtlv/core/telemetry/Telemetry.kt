@@ -240,19 +240,6 @@ class Telemetry(
         }
 
         _telemetry.value = updatedTelemetry
-
-        Log.d(
-            TAG,
-            "Telemetry snapshot: " +
-                    "type=${TelemetryData.TYPE}, " +
-                    "latitude=${currentLocation?.latitude}, " +
-                    "longitude=${currentLocation?.longitude}, " +
-                    "state=${currentState.wireValue}, " +
-                    "vehicleId=$vehicleId, " +
-                    "fuelLevel=$fuelLevel, " +
-                    "odometer=$odometer, " +
-                    "readyToSend=${updatedTelemetry != null}"
-        )
     }
 
     companion object {
