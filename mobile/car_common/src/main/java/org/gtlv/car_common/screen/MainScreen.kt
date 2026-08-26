@@ -41,8 +41,9 @@ import kotlin.time.Duration.Companion.milliseconds
 import org.gtlv.core.job.Job as AtlasJob
 import androidx.core.graphics.createBitmap
 
-class DriverMainScreen(
+class MainScreen(
     carContext: CarContext,
+    private val role: ShiftRole,
     getRole: () -> ShiftRole?,
     onRoleLost: () -> Unit,
     private val jobRepository: JobRepository?,
@@ -51,7 +52,7 @@ class DriverMainScreen(
     private val collectedJobStore: CollectedJobStore?,
     private val getUserId: () -> String?,
     private val telemetryProvider: TelemetryProvider?,
-) : RoleAwareScreen(carContext, ShiftRole.DRIVER, getRole, onRoleLost) {
+) : RoleAwareScreen(carContext, role, getRole, onRoleLost) {
     private val screenScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate,
     )

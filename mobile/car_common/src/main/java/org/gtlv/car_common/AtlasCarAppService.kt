@@ -9,8 +9,7 @@ import androidx.car.app.SessionInfo
 import androidx.car.app.validation.HostValidator
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import org.gtlv.car_common.screen.DispatcherMainScreen
-import org.gtlv.car_common.screen.DriverMainScreen
+import org.gtlv.car_common.screen.MainScreen
 import org.gtlv.car_common.screen.TelemetryPermissionScreen
 import org.gtlv.car_common.screen.WaitingScreen
 import org.gtlv.car_common.screen.missingVehicleTelemetryPermissions
@@ -86,20 +85,18 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                 val onRoleLost: () -> Unit = {
                     carContext.getCarService(ScreenManager::class.java).pop()
                 }
-                val roleScreen = when (role) {
-                    ShiftRole.DRIVER -> DriverMainScreen(
-                        carContext = carContext,
-                        getRole = getRole,
-                        onRoleLost = onRoleLost,
-                        jobRepository = jobRepository,
-                        locationProvider = locationProvider,
-                        serverSettingsRepository = serverSettingsRepository,
-                        collectedJobStore = collectedJobStore,
-                        getUserId = getUserId,
-                        telemetryProvider = telemetryProvider,
-                    )
-                    ShiftRole.DISPATCHER -> DispatcherMainScreen(carContext, getRole, onRoleLost)
-                }
+                val roleScreen = MainScreen(
+                    carContext = carContext,
+                    role = role,
+                    getRole = getRole,
+                    onRoleLost = onRoleLost,
+                    jobRepository = jobRepository,
+                    locationProvider = locationProvider,
+                    serverSettingsRepository = serverSettingsRepository,
+                    collectedJobStore = collectedJobStore,
+                    getUserId = getUserId,
+                    telemetryProvider = telemetryProvider,
+                )
 
                 carContext.getCarService(ScreenManager::class.java).push(roleScreen)
             },
