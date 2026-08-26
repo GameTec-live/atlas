@@ -26,6 +26,7 @@ import org.gtlv.core.session.SessionManagerProvider
 import org.gtlv.core.session.SessionState
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryProviderRegistry
+import org.gtlv.core.telemetry.LiveMapUsersProvider
 
 class AtlasCarAppService : CarAppService() {
 
@@ -76,6 +77,9 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
             (sessionManager?.state?.value as? SessionState.SignedIn)
                 ?.userId
         }
+        val liveMapUsers =
+            (carContext.applicationContext as? LiveMapUsersProvider)
+                ?.liveMapUsers
 
         return WaitingScreen(
             carContext = carContext,
@@ -96,6 +100,7 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                     collectedJobStore = collectedJobStore,
                     getUserId = getUserId,
                     telemetryProvider = telemetryProvider,
+                    liveMapUsers = liveMapUsers,
                 )
 
                 carContext.getCarService(ScreenManager::class.java).push(roleScreen)

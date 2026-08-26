@@ -22,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -37,6 +38,7 @@ import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryVehicleState
+import org.gtlv.core.telemetry.LiveMapUser
 import kotlin.time.Duration.Companion.milliseconds
 import org.gtlv.core.job.Job as AtlasJob
 import androidx.core.graphics.createBitmap
@@ -52,6 +54,7 @@ class MainScreen(
     private val collectedJobStore: CollectedJobStore?,
     private val getUserId: () -> String?,
     private val telemetryProvider: TelemetryProvider?,
+    private val liveMapUsers: StateFlow<Map<String, LiveMapUser>>?,
 ) : RoleAwareScreen(carContext, role, getRole, onRoleLost) {
     private val screenScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate,
@@ -67,6 +70,7 @@ class MainScreen(
     private var styleJob: Job? = null
     private var collectedStateJob: Job? = null
     private var jobLifecycleJob: Job? = null
+    private var liveMapUsersJob: Job? = null
     private var observedCollectedUserId: String? = null
     private var currentJob: AtlasJob? = null
     private var queuedJobs: List<AtlasJob> = emptyList()
@@ -89,6 +93,7 @@ class MainScreen(
         observeLocation()
         observeCollectedJobState()
         observeJobLifecycle()
+        observeLiveMapUsers()
         startJobPolling()
     }
 
@@ -103,6 +108,8 @@ class MainScreen(
         collectedStateJob = null
         jobLifecycleJob?.cancel()
         jobLifecycleJob = null
+        liveMapUsersJob?.cancel()
+        liveMapUsersJob = null
         observedCollectedUserId = null
         super.onStop(owner)
     }
@@ -551,6 +558,31 @@ class MainScreen(
         ).show()
     }
 
+    private fun observeLiveMapUsers() {
+        if (
+            role != ShiftRole.DISPATCHER ||
+            liveMapUsersJob != null
+        ) {
+            return
+        }
+        mapRenderer.updateLiveUsers(TEMPORARY_SCROLL_TEST_USERS)
+        val users = liveMapUsers ?: return
+
+        liveMapUsersJob = screenScope.launch {
+            users.collectLatest { liveUsersById ->
+                val currentUserId = getUserId()
+                val visibleUsers = liveUsersById.values
+                    .asSequence()
+                    .filter { user -> user.userId != currentUserId }
+                    .plus(TEMPORARY_SCROLL_TEST_USERS.asSequence())
+                    .sortedBy { user -> user.userName.lowercase() }
+                    .toList()
+
+                mapRenderer.updateLiveUsers(visibleUsers)
+            }
+        }
+    }
+
     private fun onNewJobClick() {
         showToast(R.string.dispatcher_new_job_unavailable)
     }
@@ -560,6 +592,35 @@ class MainScreen(
     }
 
     private companion object {
+        // Temporary data for validating sidebar scrolling. Remove after UI approval.
+        val TEMPORARY_SCROLL_TEST_USERS = listOf(
+            temporaryUser("01", "Alex", TelemetryVehicleState.FREE),
+            temporaryUser("02", "Anna", TelemetryVehicleState.ON_THE_WAY),
+            temporaryUser("03", "Ben", TelemetryVehicleState.OCCUPIED),
+            temporaryUser("04", "Clara", TelemetryVehicleState.AWAY),
+            temporaryUser("05", "Daniel", TelemetryVehicleState.FREE),
+            temporaryUser("06", "Eva", TelemetryVehicleState.ON_THE_WAY),
+            temporaryUser("07", "Felix", TelemetryVehicleState.OCCUPIED),
+            temporaryUser("08", "Greta", TelemetryVehicleState.AWAY),
+            temporaryUser("09", "Jonas", TelemetryVehicleState.FREE),
+            temporaryUser("10", "Laura", TelemetryVehicleState.ON_THE_WAY),
+            temporaryUser("11", "Lukas", TelemetryVehicleState.OCCUPIED),
+            temporaryUser("12", "Mia", TelemetryVehicleState.AWAY),
+            temporaryUser("13", "Noah", TelemetryVehicleState.FREE),
+        )
+
+        fun temporaryUser(
+            id: String,
+            name: String,
+            state: TelemetryVehicleState,
+        ) = LiveMapUser(
+            userId = "scroll-test-$id",
+            userName = name,
+            latitude = 0.0,
+            longitude = 0.0,
+            state = state,
+        )
+
         const val JOB_REFRESH_INTERVAL_MILLIS = 15_000L
         const val CAR_ICON_SIZE_DP = 48
     }
