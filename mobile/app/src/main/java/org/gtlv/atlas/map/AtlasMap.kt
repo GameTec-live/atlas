@@ -389,35 +389,53 @@ internal fun AtlasMap(
         val map = readyMap ?: return@LaunchedEffect
 
         runCatching {
-            map.locationComponent.cameraMode =
-                if (isFollowingLocation) {
-                    CameraMode.TRACKING_GPS
-                } else {
-                    CameraMode.NONE
-                }
-
             if (
                 isFollowingLocation &&
                 availableLocation != null
             ) {
+                val trackingZoom =
+                    if (!hasInitiallyCentered) {
+                        MapConfiguration.USER_LOCATION_ZOOM
+                    } else {
+                        null
+                    }
+
+                if (
+                    map.locationComponent.cameraMode ==
+                    CameraMode.TRACKING_GPS
+                ) {
+                    map.locationComponent.tiltWhileTracking(
+                        navigationCameraTiltDegrees,
+                        CAMERA_TILT_TRANSITION_MILLIS
+                    )
+                    trackingZoom?.let { zoom ->
+                        map.locationComponent.zoomWhileTracking(
+                            zoom,
+                            INITIAL_CAMERA_TRANSITION_MILLIS
+                        )
+                    }
+                } else {
+                    map.locationComponent.setCameraMode(
+                        CameraMode.TRACKING_GPS,
+                        INITIAL_CAMERA_TRANSITION_MILLIS,
+                        trackingZoom,
+                        null,
+                        navigationCameraTiltDegrees,
+                        null
+                    )
+                }
                 map.locationComponent.paddingWhileTracking(
                     navigationCameraPadding(
                         navigationCameraTopPaddingPixels
                     ),
                     CAMERA_PADDING_TRANSITION_MILLIS
                 )
-                map.locationComponent.tiltWhileTracking(
-                    navigationCameraTiltDegrees,
-                    CAMERA_TILT_TRANSITION_MILLIS
-                )
-
                 if (!hasInitiallyCentered) {
                     hasInitiallyCentered = true
-                    map.locationComponent.zoomWhileTracking(
-                        MapConfiguration.USER_LOCATION_ZOOM,
-                        INITIAL_CAMERA_TRANSITION_MILLIS
-                    )
                 }
+            } else {
+                map.locationComponent.cameraMode =
+                    CameraMode.NONE
             }
         }.onFailure { exception ->
             Log.e(
@@ -453,21 +471,33 @@ internal fun AtlasMap(
                     displayBearingDegrees
                 )
             )
-            map.locationComponent.cameraMode =
+            if (
+                map.locationComponent.cameraMode ==
                 CameraMode.TRACKING_GPS
+            ) {
+                map.locationComponent.tiltWhileTracking(
+                    navigationCameraTiltDegrees,
+                    CAMERA_TILT_TRANSITION_MILLIS
+                )
+                map.locationComponent.zoomWhileTracking(
+                    MapConfiguration.USER_LOCATION_ZOOM,
+                    INITIAL_CAMERA_TRANSITION_MILLIS
+                )
+            } else {
+                map.locationComponent.setCameraMode(
+                    CameraMode.TRACKING_GPS,
+                    INITIAL_CAMERA_TRANSITION_MILLIS,
+                    MapConfiguration.USER_LOCATION_ZOOM,
+                    null,
+                    navigationCameraTiltDegrees,
+                    null
+                )
+            }
             map.locationComponent.paddingWhileTracking(
                 navigationCameraPadding(
                     navigationCameraTopPaddingPixels
                 ),
                 CAMERA_PADDING_TRANSITION_MILLIS
-            )
-            map.locationComponent.tiltWhileTracking(
-                navigationCameraTiltDegrees,
-                CAMERA_TILT_TRANSITION_MILLIS
-            )
-            map.locationComponent.zoomWhileTracking(
-                MapConfiguration.USER_LOCATION_ZOOM,
-                INITIAL_CAMERA_TRANSITION_MILLIS
             )
         }.onFailure { exception ->
             Log.e(
