@@ -88,6 +88,33 @@
     <string name="job_action_cancel_failed">Could not cancel the current job</string>
     <string name="job_action_job_finished">Job finished</string>
     <string name="job_action_finish_failed">Could not finish the current job</string>
+    <string name="dispatcher_action_unassigned_jobs">Unassigned jobs</string>
+    <string name="dispatcher_action_new_job">Create new job</string>
+
+    <plurals name="dispatcher_action_unassigned_jobs_count">
+        <item quantity="one">%1$d unassigned job</item>
+        <item quantity="other">%1$d unassigned jobs</item>
+    </plurals>
+
+    <string name="unassigned_jobs_title">Unassigned jobs</string>
+    <string name="unassigned_jobs_back">Back to dispatcher map</string>
+    <string name="unassigned_jobs_empty">No unassigned jobs</string>
+    <string name="unassigned_jobs_today">Today</string>
+    <string name="unassigned_jobs_no_due_date">No due date</string>
+    <string name="unassigned_jobs_load_error">Could not load unassigned jobs</string>
+    <string name="unassigned_jobs_retry">Retry</string>
+    <string name="unassigned_jobs_from">From</string>
+    <string name="unassigned_jobs_to">To</string>
+    <string name="unassigned_jobs_due">Due</string>
+    <string name="unassigned_jobs_note">Note</string>
+    <string name="unassigned_jobs_detail">%1$s: %2$s</string>
+    <string name="unassigned_jobs_unknown_location">Unknown location</string>
+    <string name="unassigned_jobs_no_destination">No destination</string>
+    <string name="unassigned_jobs_delete">Delete unassigned job</string>
+    <string name="unassigned_jobs_delete_title">Delete job?</string>
+    <string name="unassigned_jobs_delete_message">Delete the unassigned job from %1$s?</string>
+    <string name="unassigned_jobs_delete_confirm">Delete</string>
+    <string name="unassigned_jobs_delete_error">Could not delete the job. Please try again.</string>
 
     <string name="job_notification_channel">Assigned jobs</string>
     <string name="job_notification_channel_description">Notifications about newly assigned jobs</string>

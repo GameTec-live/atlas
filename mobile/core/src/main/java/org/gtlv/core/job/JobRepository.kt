@@ -8,6 +8,13 @@ interface JobRepository {
 
     suspend fun getJobs(): JobsResult
 
+    suspend fun getUnassignedJobs():
+            UnassignedJobsResult
+
+    suspend fun deleteUnassignedJob(
+        jobId: String
+    ): JobActionResult
+
     suspend fun startJob(
         jobId: String
     ): JobActionResult
@@ -52,6 +59,27 @@ sealed interface JobsResult {
         val statusCode: Int,
         val message: String?
     ) : JobsResult
+}
+
+sealed interface UnassignedJobsResult {
+
+    data class Success(
+        val jobs: List<Job>
+    ) : UnassignedJobsResult
+
+    data object Unauthorized :
+        UnassignedJobsResult
+
+    data object NetworkError :
+        UnassignedJobsResult
+
+    data object InvalidResponse :
+        UnassignedJobsResult
+
+    data class ServerError(
+        val statusCode: Int,
+        val message: String?
+    ) : UnassignedJobsResult
 }
 
 sealed interface JobActionResult {

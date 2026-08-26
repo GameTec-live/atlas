@@ -95,6 +95,44 @@ class JobRepositoryImpl(
             }
         }
 
+    override suspend fun getUnassignedJobs():
+            UnassignedJobsResult =
+        withContext(Dispatchers.IO) {
+            val serverAddress = serverSettingsRepository
+                .serverAddress
+                .first()
+                .removeSuffix("/")
+
+            val unassignedUrl = createUrl(
+                serverAddress = serverAddress,
+                path = "api/jobs/unassigned"
+            ) ?: return@withContext UnassignedJobsResult
+                .InvalidResponse
+
+            when (
+                val result = executeRequest(
+                    url = unassignedUrl,
+                    serverAddress = serverAddress
+                ) { responseText ->
+                    parseJobs(responseText)
+                }
+            ) {
+                is EndpointResult.Success -> {
+                    UnassignedJobsResult.Success(
+                        jobs = result.value
+                    )
+                }
+
+                is EndpointResult.Failure -> {
+                    result.toUnassignedJobsResult()
+                }
+
+                EndpointResult.NotFound -> {
+                    UnassignedJobsResult.InvalidResponse
+                }
+            }
+        }
+
     override suspend fun startJob(
         jobId: String
     ): JobActionResult {
@@ -102,6 +140,18 @@ class JobRepositoryImpl(
             jobId = jobId,
             action = "start"
         )
+    }
+
+    override suspend fun deleteUnassignedJob(
+        jobId: String
+    ): JobActionResult {
+        val result = executeDeleteJob(jobId)
+
+        if (result == JobActionResult.Success) {
+            _jobChanges.emit(Unit)
+        }
+
+        return result
     }
 
     override suspend fun cancelJob(
@@ -288,6 +338,67 @@ class JobRepositoryImpl(
         }
     }
 
+    private suspend fun executeDeleteJob(
+        jobId: String
+    ): JobActionResult = withContext(Dispatchers.IO) {
+        if (jobId.isBlank()) {
+            return@withContext JobActionResult.InvalidResponse
+        }
+
+        val serverAddress = serverSettingsRepository
+            .serverAddress
+            .first()
+            .removeSuffix("/")
+
+        val deleteUrl = serverAddress
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.addPathSegments("api/jobs")
+            ?.addPathSegment(jobId)
+            ?.build()
+            ?: return@withContext JobActionResult.InvalidResponse
+
+        val request = Request.Builder()
+            .url(deleteUrl)
+            .header("Origin", serverAddress)
+            .header("Accept", "application/json")
+            .delete()
+            .build()
+
+        try {
+            networkClient.okHttpClient
+                .newCall(request)
+                .execute()
+                .use { response ->
+                    val responseText =
+                        response.body?.string().orEmpty()
+
+                    when {
+                        response.code == 401 -> {
+                            JobActionResult.Unauthorized
+                        }
+
+                        !response.isSuccessful -> {
+                            JobActionResult.ServerError(
+                                statusCode = response.code,
+                                message = readServerMessage(
+                                    responseText
+                                )
+                            )
+                        }
+
+                        else -> {
+                            JobActionResult.Success
+                        }
+                    }
+                }
+        } catch (_: IOException) {
+            JobActionResult.NetworkError
+        } catch (_: Exception) {
+            JobActionResult.InvalidResponse
+        }
+    }
+
     private fun createUrl(
         serverAddress: String,
         path: String
@@ -308,7 +419,7 @@ class JobRepositoryImpl(
             url = url,
             serverAddress = serverAddress
         ) { responseText ->
-            parseAssignedJobs(responseText)
+            parseJobs(responseText)
         }
     }
 
@@ -397,7 +508,7 @@ class JobRepositoryImpl(
         }
     }
 
-    private fun parseAssignedJobs(
+    private fun parseJobs(
         responseText: String
     ): List<Job> {
         val array = JSONArray(responseText)
@@ -508,8 +619,12 @@ class JobRepositoryImpl(
         responseText: String
     ): String? {
         return runCatching {
-            JSONObject(responseText)
-                .optString("message")
+            val json = JSONObject(responseText)
+
+            json.optString("message")
+                .ifBlank {
+                    json.optString("error")
+                }
                 .ifBlank { null }
         }.getOrNull()
     }
@@ -553,6 +668,26 @@ class JobRepositoryImpl(
 
             is EndpointResult.Failure.Server ->
                 JobsResult.ServerError(
+                    statusCode = statusCode,
+                    message = message
+                )
+        }
+    }
+
+    private fun EndpointResult.Failure
+        .toUnassignedJobsResult(): UnassignedJobsResult {
+        return when (this) {
+            EndpointResult.Failure.Unauthorized ->
+                UnassignedJobsResult.Unauthorized
+
+            EndpointResult.Failure.Network ->
+                UnassignedJobsResult.NetworkError
+
+            EndpointResult.Failure.InvalidResponse ->
+                UnassignedJobsResult.InvalidResponse
+
+            is EndpointResult.Failure.Server ->
+                UnassignedJobsResult.ServerError(
                     statusCode = statusCode,
                     message = message
                 )

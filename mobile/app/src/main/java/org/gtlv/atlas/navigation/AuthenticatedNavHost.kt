@@ -8,7 +8,10 @@ import androidx.navigation.compose.rememberNavController
 import org.gtlv.atlas.main.MainScreen
 import org.gtlv.atlas.main.MainScreenUiState
 import org.gtlv.atlas.notification.JobNotificationUiState
+import org.gtlv.atlas.unassigned.UnassignedJobsScreen
+import org.gtlv.atlas.unassigned.UnassignedJobsUiState
 import org.gtlv.core.geoservice.AddressSuggestion
+import org.gtlv.core.job.Job
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.telemetry.LiveMapUser
@@ -22,6 +25,7 @@ internal fun AuthenticatedNavHost(
     onLogout: () -> Unit,
     serverAddress: String,
     mainScreenState: MainScreenUiState,
+    unassignedJobsState: UnassignedJobsUiState,
     jobNotificationState: JobNotificationUiState,
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
@@ -29,6 +33,11 @@ internal fun AuthenticatedNavHost(
     onCancelCurrentJob: () -> Unit,
     onPersonCollected: () -> Unit,
     onJobFinished: () -> Unit,
+    onNewJobClick: () -> Unit,
+    onRefreshUnassignedJobs: () -> Unit,
+    onRequestUnassignedJobDeletion: (Job) -> Unit,
+    onDismissUnassignedJobDeletion: () -> Unit,
+    onConfirmUnassignedJobDeletion: () -> Unit,
     onEditDestination: () -> Unit,
     onAddressQueryChanged: (String) -> Unit,
     onAddressSuggestionSelected:
@@ -62,6 +71,16 @@ internal fun AuthenticatedNavHost(
                 onCancelCurrentJob = onCancelCurrentJob,
                 onPersonCollected = onPersonCollected,
                 onJobFinished = onJobFinished,
+                unassignedJobCount =
+                    unassignedJobsState.loadedJobCount,
+                onUnassignedJobsClick = {
+                    navController.navigate(
+                        UnassignedJobsDestination
+                    ) {
+                        launchSingleTop = true
+                    }
+                },
+                onNewJobClick = onNewJobClick,
                 onEditDestination = onEditDestination,
                 onAddressQueryChanged = onAddressQueryChanged,
                 onAddressSuggestionSelected = onAddressSuggestionSelected,
@@ -71,6 +90,22 @@ internal fun AuthenticatedNavHost(
                 onDismissDeclineConfirmation = onDismissDeclineConfirmation,
                 onConfirmDecline = onConfirmDecline,
                 onLogout = onLogout
+            )
+        }
+
+        composable<UnassignedJobsDestination> {
+            UnassignedJobsScreen(
+                state = unassignedJobsState,
+                onBack = {
+                    navController.popBackStack()
+                },
+                onRetry = onRefreshUnassignedJobs,
+                onRequestDeletion =
+                    onRequestUnassignedJobDeletion,
+                onDismissDeletion =
+                    onDismissUnassignedJobDeletion,
+                onConfirmDeletion =
+                    onConfirmUnassignedJobDeletion
             )
         }
     }
