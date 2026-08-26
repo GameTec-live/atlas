@@ -25,6 +25,10 @@
     <string name="driver_start_job_error">Could not start the next job</string>
     <string name="driver_unknown_address">Unknown address</string>
     <string name="dispatcher_new_job_unavailable">New job creation is not available yet</string>
+    <string name="dispatcher_active_drivers">Active drivers (%1$d)</string>
+    <string name="driver_status_free">Free</string>
+    <string name="driver_status_on_the_way">On the way</string>
+    <string name="driver_status_occupied">Occupied</string>
     <string name="telemetry_permission_title">Vehicle data</string>
     <string name="telemetry_permission_explanation">Allow access to connected Bluetooth devices, fuel level, and mileage so Atlas can provide vehicle telemetry.</string>
     <string name="telemetry_permission_waiting">Waiting for vehicle data permissions on your phone.</string>

@@ -57,7 +57,10 @@ class MainScreen(
         SupervisorJob() + Dispatchers.Main.immediate,
     )
     private val jobRequestMutex = Mutex()
-    private val mapRenderer = MapLibreSurfaceRenderer(carContext)
+    private val mapRenderer = MapLibreSurfaceRenderer(
+        carContext = carContext,
+        showDispatcherDriverList = role == ShiftRole.DISPATCHER,
+    )
 
     private var pollingJob: Job? = null
     private var locationJob: Job? = null
@@ -203,6 +206,13 @@ class MainScreen(
     private fun addInteractiveMapControls(
         builder: NavigationTemplate.Builder,
     ) {
+        builder
+            .setMapActionStrip(buildMapActionStrip())
+            .setPanModeListener(::onPanModeChanged)
+    }
+
+    @RequiresCarApi(2)
+    private fun buildMapActionStrip(): ActionStrip {
         val panAction = Action.Builder(Action.PAN)
             .setIcon(carIcon(R.drawable.ic_pan))
             .build()
@@ -222,20 +232,18 @@ class MainScreen(
             recenterActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
         }
 
-        builder
-            .setMapActionStrip(
-                ActionStrip.Builder()
-                    .addAction(panAction)
-                    .addAction(zoomInActionBuilder.build())
-                    .addAction(zoomOutActionBuilder.build())
-                    .addAction(recenterActionBuilder.build())
-                    .build(),
-            )
-            .setPanModeListener { isInPanMode ->
-                if (isInPanMode) {
-                    mapRenderer.stopFollowingLocation()
-                }
-            }
+        return ActionStrip.Builder()
+            .addAction(panAction)
+            .addAction(zoomInActionBuilder.build())
+            .addAction(zoomOutActionBuilder.build())
+            .addAction(recenterActionBuilder.build())
+            .build()
+    }
+
+    private fun onPanModeChanged(isInPanMode: Boolean) {
+        if (isInPanMode) {
+            mapRenderer.stopFollowingLocation()
+        }
     }
 
     private fun carIcon(resourceId: Int): CarIcon {

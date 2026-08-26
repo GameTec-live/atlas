@@ -12,8 +12,10 @@ import android.location.Location
 import android.util.Log
 import android.view.Surface
 import android.view.Gravity
+import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.car.app.CarContext
 import androidx.car.app.SurfaceCallback
@@ -37,6 +39,7 @@ import kotlin.math.ln
 /** Renders MapLibre into the surface supplied by the Android Auto host. */
 internal class MapLibreSurfaceRenderer(
     private val carContext: CarContext,
+    private val showDispatcherDriverList: Boolean = false,
 ) : SurfaceCallback {
     private val displayManager = carContext.getSystemService(
         Context.DISPLAY_SERVICE,
@@ -51,6 +54,8 @@ internal class MapLibreSurfaceRenderer(
     private var jobCardView: LinearLayout? = null
     private var jobQueueView: TextView? = null
     private var jobSummaryView: TextView? = null
+    private var dispatcherSidebarView: LinearLayout? = null
+    private var dispatcherDriverScrollView: ScrollView? = null
     private var styleUrl: String? = null
     private var lastLocation: AtlasLocation? = null
     private var isStyleReady = false
@@ -164,11 +169,33 @@ internal class MapLibreSurfaceRenderer(
     }
 
     override fun onScroll(distanceX: Float, distanceY: Float) {
+        val driverScrollView = dispatcherDriverScrollView
+        val scrollDirection = if (distanceY > 0f) 1 else -1
+        if (
+            driverScrollView != null &&
+            abs(distanceY) > abs(distanceX) &&
+            driverScrollView.canScrollVertically(scrollDirection)
+        ) {
+            driverScrollView.scrollBy(0, distanceY.toInt())
+            return
+        }
+
         stopFollowingLocation()
         map?.scrollBy(-distanceX, -distanceY)
     }
 
     override fun onFling(velocityX: Float, velocityY: Float) {
+        val driverScrollView = dispatcherDriverScrollView
+        val scrollDirection = if (velocityY < 0f) 1 else -1
+        if (
+            driverScrollView != null &&
+            abs(velocityY) > abs(velocityX) &&
+            driverScrollView.canScrollVertically(scrollDirection)
+        ) {
+            driverScrollView.fling(-velocityY.toInt())
+            return
+        }
+
         stopFollowingLocation()
         map?.scrollBy(
             -velocityX * FLING_SECONDS,
@@ -354,10 +381,16 @@ internal class MapLibreSurfaceRenderer(
             0
         }
 
+        val sidebarWidth = dispatcherSidebarWidth()
+        val mapContentWidth = (surfaceWidth - sidebarWidth).coerceAtLeast(1)
+        val localVisibleLeft =
+            (area.left - sidebarWidth).coerceIn(0, mapContentWidth)
+        val localVisibleRight =
+            (area.right - sidebarWidth).coerceIn(0, mapContentWidth)
         val padding = intArrayOf(
-            area.left.coerceAtLeast(0),
+            localVisibleLeft,
             (area.top + followTopPadding).coerceAtLeast(0),
-            (surfaceWidth - area.right).coerceAtLeast(0),
+            (mapContentWidth - localVisibleRight).coerceAtLeast(0),
             (surfaceHeight - area.bottom).coerceAtLeast(0),
         )
         if (appliedMapPadding?.contentEquals(padding) == true) return
@@ -377,7 +410,11 @@ internal class MapLibreSurfaceRenderer(
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
-            ),
+            ).apply {
+                if (showDispatcherDriverList) {
+                    leftMargin = dp(DISPATCHER_SIDEBAR_WIDTH_DP)
+                }
+            },
         )
 
         val jobCard = LinearLayout(context).apply {
@@ -421,14 +458,29 @@ internal class MapLibreSurfaceRenderer(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.BOTTOM or Gravity.START,
             ).apply {
-                leftMargin = dp(24)
-                bottomMargin = dp(24)
+                leftMargin = dp(OVERLAY_MARGIN_DP)
+                bottomMargin = dp(OVERLAY_MARGIN_DP)
             },
         )
+
+        if (showDispatcherDriverList) {
+            val sidebar = createDispatcherSidebar(context)
+            dispatcherSidebarView = sidebar
+
+            root.addView(
+                sidebar,
+                FrameLayout.LayoutParams(
+                    dp(DISPATCHER_SIDEBAR_WIDTH_DP),
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    Gravity.TOP or Gravity.START,
+                ),
+            )
+        }
 
         root.post {
             applyOverlayInsets()
             jobCard.bringToFront()
+            dispatcherSidebarView?.bringToFront()
             Log.d(
                 LOG_TAG,
                 "overlay root=${root.width}x${root.height} " +
@@ -445,10 +497,105 @@ internal class MapLibreSurfaceRenderer(
         (jobSummaryView?.parent as? LinearLayout)?.layoutParams
             ?.let { it as? FrameLayout.LayoutParams }
             ?.apply {
-                leftMargin = area.left.coerceAtLeast(0) + dp(24)
-                bottomMargin = (surfaceHeight - area.bottom).coerceAtLeast(0) + dp(24)
+                leftMargin =
+                    (area.left - dispatcherSidebarWidth()).coerceAtLeast(0) +
+                        dp(OVERLAY_MARGIN_DP)
+                bottomMargin =
+                    (surfaceHeight - area.bottom).coerceAtLeast(0) +
+                        dp(OVERLAY_MARGIN_DP)
                 (jobSummaryView?.parent as? LinearLayout)?.layoutParams = this
             }
+
+    }
+
+    private fun createDispatcherSidebar(context: Context): LinearLayout {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.rgb(32, 33, 36))
+
+            addView(
+                TextView(context).apply {
+                    text = carContext.getString(
+                        org.gtlv.car_common.R.string.dispatcher_active_drivers,
+                        PREVIEW_DRIVERS.size,
+                    )
+                    setTextColor(Color.WHITE)
+                    textSize = 22f
+                    setPadding(dp(18), dp(16), dp(18), dp(16))
+                },
+            )
+
+            addView(createSidebarDivider(context))
+
+            val rows = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                PREVIEW_DRIVERS.forEachIndexed { index, driver ->
+                    addView(createDispatcherDriverRow(context, driver))
+                    if (index < PREVIEW_DRIVERS.lastIndex) {
+                        addView(createSidebarDivider(context))
+                    }
+                }
+            }
+
+            val scrollView = ScrollView(context).apply {
+                isFillViewport = true
+                isVerticalScrollBarEnabled = true
+                overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+                addView(
+                    rows,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                    ),
+                )
+            }
+            dispatcherDriverScrollView = scrollView
+
+            addView(
+                scrollView,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f,
+                ),
+            )
+        }
+    }
+
+    private fun createDispatcherDriverRow(
+        context: Context,
+        driver: PreviewDriver,
+    ): LinearLayout {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+
+            addView(
+                TextView(context).apply {
+                    text = driver.name
+                    setTextColor(Color.WHITE)
+                    textSize = 20f
+                },
+            )
+
+            addView(
+                TextView(context).apply {
+                    text = "\u25CF ${carContext.getString(driver.statusResource)}"
+                    setTextColor(driver.statusColor)
+                    textSize = 17f
+                },
+            )
+        }
+    }
+
+    private fun createSidebarDivider(context: Context): View {
+        return View(context).apply {
+            setBackgroundColor(Color.argb(80, 210, 213, 218))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(1),
+            )
+        }
     }
 
     private fun roundedBackground(
@@ -462,6 +609,13 @@ internal class MapLibreSurfaceRenderer(
 
     private fun dp(value: Int): Int =
         (value * carContext.resources.displayMetrics.density).toInt()
+
+    private fun dispatcherSidebarWidth(): Int =
+        if (showDispatcherDriverList) {
+            dp(DISPATCHER_SIDEBAR_WIDTH_DP)
+        } else {
+            0
+        }
 
     private fun queuedJobText(): String =
         carContext.resources.getQuantityString(
@@ -478,6 +632,8 @@ internal class MapLibreSurfaceRenderer(
         jobCardView = null
         jobQueueView = null
         jobSummaryView = null
+        dispatcherSidebarView = null
+        dispatcherDriverScrollView = null
         appliedMapPadding = null
         isStyleReady = false
 
@@ -510,8 +666,34 @@ internal class MapLibreSurfaceRenderer(
         }
 
     private companion object {
+        data class PreviewDriver(
+            val name: String,
+            val statusResource: Int,
+            val statusColor: Int,
+        )
+
+        val PREVIEW_DRIVERS = listOf(
+            PreviewDriver(
+                name = "Hermann",
+                statusResource = org.gtlv.car_common.R.string.driver_status_free,
+                statusColor = Color.rgb(0, 170, 70),
+            ),
+            PreviewDriver(
+                name = "Birgit",
+                statusResource = org.gtlv.car_common.R.string.driver_status_on_the_way,
+                statusColor = Color.rgb(210, 145, 0),
+            ),
+            PreviewDriver(
+                name = "Thomas",
+                statusResource = org.gtlv.car_common.R.string.driver_status_occupied,
+                statusColor = Color.rgb(220, 35, 45),
+            ),
+        )
+
         const val DISPLAY_NAME = "Atlas Android Auto map"
         const val LOG_TAG = "AtlasCarMap"
+        const val DISPATCHER_SIDEBAR_WIDTH_DP = 220
+        const val OVERLAY_MARGIN_DP = 8
         const val INITIAL_LATITUDE = 48.500
         const val INITIAL_LONGITUDE = 14.580
         const val INITIAL_ZOOM = 13.0
