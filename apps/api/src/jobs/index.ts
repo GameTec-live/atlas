@@ -424,7 +424,7 @@ export const jobs = new Elysia({
             params: t.Object({
                 id: t.String({ format: "uuid" }),
             }),
-            admin: true,
+            auth: true,
         },
     )
     .get(
@@ -495,6 +495,6 @@ export const jobs = new Elysia({
                     }),
                 ),
             }),
-            admin: true,
+            auth: true,
         },
     );
