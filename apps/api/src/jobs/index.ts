@@ -82,7 +82,12 @@ export const jobs = new Elysia({
             const jobs = await db
                 .select()
                 .from(job)
-                .where(eq(job.assignedDriverId, user.id))
+                .where(
+                    and(
+                        eq(job.assignedDriverId, user.id),
+                        isNull(job.completedAt),
+                    ),
+                )
                 .orderBy(asc(job.dueDate), asc(job.startedAt));
             return query.geocode === undefined
                 ? jobs

@@ -316,7 +316,7 @@ describe("GET /jobs/assigned", () => {
         expect(dbClientQueryMock).not.toHaveBeenCalled();
     });
 
-    it("returns the jobs assigned to the authenticated user without geocoding by default", async () => {
+    it("returns the authenticated user's incomplete assigned jobs without geocoding by default", async () => {
         getSessionMock.mockResolvedValue(session);
 
         const response = await request();
@@ -328,9 +328,8 @@ describe("GET /jobs/assigned", () => {
         expect(fetchMock).not.toHaveBeenCalled();
 
         const { sql, values } = getFirstQuery();
-        expect(sql).toContain(
-            'from "job" where "job"."assigned_driver_id" = $1',
-        );
+        expect(sql).toContain('"job"."assigned_driver_id" = $1');
+        expect(sql).toContain('"job"."completed_at" is null');
         expect(values).toEqual([session.user.id]);
     });
 
