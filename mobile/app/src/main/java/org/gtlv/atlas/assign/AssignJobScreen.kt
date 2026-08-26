@@ -10,8 +10,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -145,77 +148,88 @@ internal fun AssignJobScreen(
                 )
             }
         ) { contentPadding ->
-            Box(
+            BottomSheetScaffold(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(contentPadding)
-            ) {
-                AtlasMap(
-                    locationState = locationState,
-                    liveMapUsers = liveMapUsers,
-                    routePoints = state.route
-                        ?.points
-                        .orEmpty(),
-                    showRouteEndpoints = true,
-                    recenterRequestId = 0,
-                    isFollowingLocation = false,
-                    onUserCameraMove = {
-                        if (state.isAddressEditorOpen) {
-                            dismissAddressEditor()
-                        }
-                    },
-                    onMapClick = {
-                        if (state.isAddressEditorOpen) {
-                            dismissAddressEditor()
-                        }
-                    },
-                    styleUrl = MapConfiguration.createStyleUrl(
-                        serverAddress
-                    ),
-                    cameraFocusPoints =
-                        state.cameraFocusPoints,
-                    cameraFocusRequestId =
-                        state.cameraFocusRequestId,
-                    cameraFocusPadding = 112.dp,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                state.job?.let { job ->
-                    AddressFields(
+                    .padding(contentPadding),
+                containerColor = Color.Transparent,
+                sheetPeekHeight = 184.dp,
+                sheetShape = MaterialTheme.shapes.extraLarge,
+                sheetContainerColor =
+                    MaterialTheme.colorScheme.surface,
+                sheetShadowElevation = 6.dp,
+                sheetDragHandle = {
+                    BottomSheetDefaults.DragHandle()
+                },
+                sheetContent = {
+                    CandidatePanel(
                         state = state,
-                        job = job,
-                        enabled =
-                            !state.isAssigning &&
-                                    !state.isSavingChanges &&
-                                    !state.addressSearch.isSaving,
-                        onEditAddress = onEditAddress,
-                        onAddressQueryChanged =
-                            onAddressQueryChanged,
-                        onAddressSuggestionSelected =
-                            onAddressSuggestionSelected,
-                        onCloseAddressEditor =
-                            dismissAddressEditor,
-                        onDueDateChanged = onDueDateChanged,
-                        onSaveChanges = onSaveChanges,
+                        onRetry = retryCandidates,
+                        onCandidateClick = requestAssignment,
                         modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(12.dp)
-                            .widthIn(max = 600.dp)
                             .fillMaxWidth()
+                            .height(420.dp)
                     )
                 }
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AtlasMap(
+                        locationState = locationState,
+                        liveMapUsers = liveMapUsers,
+                        routePoints = state.route
+                            ?.points
+                            .orEmpty(),
+                        showRouteEndpoints = true,
+                        recenterRequestId = 0,
+                        isFollowingLocation = false,
+                        onUserCameraMove = {
+                            if (state.isAddressEditorOpen) {
+                                dismissAddressEditor()
+                            }
+                        },
+                        onMapClick = {
+                            if (state.isAddressEditorOpen) {
+                                dismissAddressEditor()
+                            }
+                        },
+                        styleUrl =
+                            MapConfiguration.createStyleUrl(
+                                serverAddress
+                            ),
+                        cameraFocusPoints =
+                            state.cameraFocusPoints,
+                        cameraFocusRequestId =
+                            state.cameraFocusRequestId,
+                        cameraFocusPadding = 112.dp,
+                        modifier = Modifier.fillMaxSize()
+                    )
 
-                CandidatePanel(
-                    state = state,
-                    onRetry = retryCandidates,
-                    onCandidateClick = requestAssignment,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(12.dp)
-                        .height(184.dp)
-                        .widthIn(max = 600.dp)
-                        .fillMaxWidth()
-                )
+                    state.job?.let { job ->
+                        AddressFields(
+                            state = state,
+                            job = job,
+                            enabled =
+                                !state.isAssigning &&
+                                        !state.isSavingChanges &&
+                                        !state.addressSearch.isSaving,
+                            onEditAddress = onEditAddress,
+                            onAddressQueryChanged =
+                                onAddressQueryChanged,
+                            onAddressSuggestionSelected =
+                                onAddressSuggestionSelected,
+                            onCloseAddressEditor =
+                                dismissAddressEditor,
+                            onDueDateChanged =
+                                onDueDateChanged,
+                            onSaveChanges = onSaveChanges,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(12.dp)
+                                .widthIn(max = 600.dp)
+                                .fillMaxWidth()
+                        )
+                    }
+                }
             }
         }
 

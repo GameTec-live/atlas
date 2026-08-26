@@ -13,7 +13,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,28 +47,26 @@ internal fun CandidatePanel(
         }
     }
 
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 6.dp
+    Column(
+        modifier = modifier.padding(
+            start = 12.dp,
+            end = 12.dp,
+            bottom = 12.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
+        Text(
+            text = stringResource(
+                R.string.assign_job_candidates
+            ),
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = stringResource(
-                    R.string.assign_job_candidates
-                ),
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
                 when {
                     state.isLoadingCandidates &&
                             state.candidates.isEmpty() -> {
@@ -186,7 +183,6 @@ internal fun CandidatePanel(
                         }
                     }
                 }
-            }
         }
     }
 }
