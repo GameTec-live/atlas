@@ -174,6 +174,19 @@ class MainScreen(
                 cancelActionBuilder.build()
             )
         }
+
+        if (role == ShiftRole.DISPATCHER) {
+            val newJobActionBuilder = Action.Builder()
+                .setIcon(carIcon(R.drawable.ic_add))
+                .setOnClickListener(::onNewJobClick)
+
+            if (carContext.carAppApiLevel >= 5) {
+                newJobActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
+            }
+
+            actionStripBuilder.addAction(newJobActionBuilder.build())
+        }
+
         actionStripBuilder.addAction(jobAction)
 
         val builder = NavigationTemplate.Builder()
@@ -528,6 +541,10 @@ class MainScreen(
             carContext.getString(messageResource),
             CarToast.LENGTH_SHORT,
         ).show()
+    }
+
+    private fun onNewJobClick() {
+        showToast(R.string.dispatcher_new_job_unavailable)
     }
 
     private fun invalidateSafely() {
