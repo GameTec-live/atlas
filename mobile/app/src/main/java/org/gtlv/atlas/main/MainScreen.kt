@@ -41,12 +41,14 @@ import org.gtlv.atlas.main.composable.AssignedJobDeclineDialog
 import org.gtlv.atlas.main.composable.AssignedJobNotificationBanner
 import org.gtlv.atlas.main.composable.JobActionButtons
 import org.gtlv.atlas.main.composable.JobPanel
+import org.gtlv.atlas.main.composable.NavigationPanel
 import org.gtlv.atlas.main.composable.ProfileButton
 import org.gtlv.atlas.main.composable.ProfileSidebar
 import org.gtlv.atlas.map.AtlasMap
 import org.gtlv.atlas.map.MapConfiguration
 import org.gtlv.atlas.notification.JobNotificationUiState
 import org.gtlv.core.geoservice.AddressSuggestion
+import org.gtlv.core.geoservice.RouteProgressCalculator
 import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.shift.ShiftRole
@@ -89,6 +91,14 @@ internal fun MainScreen(
 
     var recenterRequestId by remember {
         mutableIntStateOf(0)
+    }
+
+    LaunchedEffect(jobState.navigation.route) {
+        val route = jobState.navigation.route
+        if (route != null && route.points.size >= 2) {
+            isFollowingLocation = true
+            recenterRequestId += 1
+        }
     }
 
     var isProfileOpen by rememberSaveable(
@@ -162,6 +172,14 @@ internal fun MainScreen(
         AtlasMap(
             locationState = locationState,
             liveMapUsers = liveMapUsers,
+            routePoints = jobState.navigation.route
+                ?.let { route ->
+                    RouteProgressCalculator.remainingRoutePoints(
+                        route = route,
+                        progress = jobState.navigation.progress
+                    )
+                }
+                .orEmpty(),
             recenterRequestId =
                 recenterRequestId,
             isFollowingLocation =
@@ -178,6 +196,23 @@ internal fun MainScreen(
                 .fillMaxSize()
                 .safeDrawingPadding()
         ) {
+            if (
+                !jobState.isAddressEditorOpen &&
+                jobNotificationState.currentNotification == null
+            ) {
+                NavigationPanel(
+                    state = jobState.navigation,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(
+                            horizontal = 72.dp,
+                            vertical = 12.dp
+                        )
+                        .widthIn(max = 520.dp)
+                        .fillMaxWidth()
+                )
+            }
+
             JobPanel(
                 state = jobState,
                 onToggleExpanded =

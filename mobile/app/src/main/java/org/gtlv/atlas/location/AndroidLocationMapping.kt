@@ -4,7 +4,9 @@ import android.location.Location
 import android.os.SystemClock
 import org.gtlv.core.location.AtlasLocation
 
-internal fun AtlasLocation.toAndroidLocation(): Location {
+internal fun AtlasLocation.toAndroidLocation(
+    displayBearingDegrees: Float? = bearingDegrees
+): Location {
     return Location(source.name).apply {
         latitude = this@toAndroidLocation.latitude
         longitude = this@toAndroidLocation.longitude
@@ -15,7 +17,7 @@ internal fun AtlasLocation.toAndroidLocation(): Location {
             accuracy = it
         }
 
-        bearingDegrees?.let {
+        displayBearingDegrees?.let {
             bearing = it
         }
 

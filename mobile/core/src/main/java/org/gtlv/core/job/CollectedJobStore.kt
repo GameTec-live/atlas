@@ -3,23 +3,34 @@ package org.gtlv.core.job
 import android.content.Context
 import androidx.core.content.edit
 
+interface CollectedJobStateStore {
+    fun getCollectedJobId(userId: String): String?
+
+    fun setCollectedJobId(
+        userId: String,
+        jobId: String
+    )
+
+    fun clearCollectedJobId(userId: String)
+}
+
 class CollectedJobStore(
     context: Context
-) {
+) : CollectedJobStateStore {
     private val preferences =
         context.applicationContext.getSharedPreferences(
             PREFERENCES_NAME,
             Context.MODE_PRIVATE
         )
 
-    fun getCollectedJobId(userId: String): String? {
+    override fun getCollectedJobId(userId: String): String? {
         return preferences.getString(
             keyFor(userId),
             null
         )
     }
 
-    fun setCollectedJobId(
+    override fun setCollectedJobId(
         userId: String,
         jobId: String
     ) {
@@ -28,7 +39,7 @@ class CollectedJobStore(
         }
     }
 
-    fun clearCollectedJobId(userId: String) {
+    override fun clearCollectedJobId(userId: String) {
         preferences.edit {
             remove(keyFor(userId))
         }

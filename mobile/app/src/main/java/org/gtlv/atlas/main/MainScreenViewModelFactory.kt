@@ -3,7 +3,7 @@ package org.gtlv.atlas.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import org.gtlv.core.geoservice.GeoServiceRepository
-import org.gtlv.core.job.CollectedJobStore
+import org.gtlv.core.job.CollectedJobStateStore
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.telemetry.TelemetryProvider
 
@@ -11,7 +11,7 @@ class MainScreenViewModelFactory(
     private val jobRepository: JobRepository,
     private val geoServiceRepository: GeoServiceRepository,
     private val telemetryProvider: TelemetryProvider,
-    private val collectedJobStore: CollectedJobStore
+    private val collectedJobStore: CollectedJobStateStore
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
