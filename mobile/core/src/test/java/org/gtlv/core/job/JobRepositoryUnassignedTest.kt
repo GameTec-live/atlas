@@ -12,6 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.json.JSONObject
 
 class JobRepositoryUnassignedTest {
 
@@ -129,6 +130,136 @@ class JobRepositoryUnassignedTest {
             )
             assertEquals("DELETE", request.method)
         }
+
+    @Test
+    fun updateJobDetails_sendsDestinationAndDueDate() =
+        runBlocking {
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader(
+                        "Content-Type",
+                        "application/json"
+                    )
+                    .setBody("{}")
+            )
+
+            val result = repository.updateJobDetails(
+                jobId = "job-1",
+                destination = JobCoordinates(
+                    latitude = 48.3,
+                    longitude = 14.4
+                ),
+                dueDate = "2026-08-26T17:11:00Z"
+            )
+
+            assertEquals(JobActionResult.Success, result)
+
+            val request = server.takeRequest()
+            assertEquals("/api/jobs/job-1", request.path)
+            assertEquals("PUT", request.method)
+
+            val body = JSONObject(
+                request.body.readUtf8()
+            )
+            assertEquals(
+                "2026-08-26T17:11:00Z",
+                body.getString("dueDate")
+            )
+            assertEquals(
+                48.3,
+                body.getJSONArray("to").getDouble(0),
+                0.0
+            )
+            assertEquals(
+                14.4,
+                body.getJSONArray("to").getDouble(1),
+                0.0
+            )
+        }
+
+    @Test
+    fun getJobCandidates_parsesRankedDrivers() =
+        runBlocking {
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader(
+                        "Content-Type",
+                        "application/json"
+                    )
+                    .setBody(
+                        """
+                        [
+                          {
+                            "driverId": "driver-1",
+                            "driverName": "Hermann",
+                            "rankingTrace": {
+                              "rank": 1,
+                              "summary": "Best available driver"
+                            }
+                          }
+                        ]
+                        """.trimIndent()
+                    )
+            )
+
+            val result = repository
+                .getJobCandidates("job-1")
+
+            assertTrue(
+                result is JobCandidatesResult.Success
+            )
+
+            val candidate =
+                (result as JobCandidatesResult.Success)
+                    .candidates
+                    .single()
+
+            assertEquals("driver-1", candidate.driverId)
+            assertEquals("Hermann", candidate.driverName)
+            assertEquals(1, candidate.rank)
+
+            val request = server.takeRequest()
+            assertEquals(
+                "/api/jobs/job-1/candidates",
+                request.path
+            )
+            assertEquals("GET", request.method)
+        }
+
+    @Test
+    fun assignJob_postsSelectedDriver() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader(
+                    "Content-Type",
+                    "application/json"
+                )
+                .setBody("{}")
+        )
+
+        val result = repository.assignJob(
+            jobId = "job-1",
+            driverId = "driver-1"
+        )
+
+        assertEquals(JobActionResult.Success, result)
+
+        val request = server.takeRequest()
+        assertEquals(
+            "/api/jobs/job-1/assign",
+            request.path
+        )
+        assertEquals("POST", request.method)
+        assertTrue(
+            request.body.readUtf8()
+                .contains(
+                    "\"assignedDriverId\":\"driver-1\""
+                )
+        )
+    }
 
     private class FakeServerSettingsRepository(
         initialAddress: String

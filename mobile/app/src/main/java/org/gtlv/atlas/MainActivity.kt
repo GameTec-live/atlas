@@ -33,6 +33,8 @@ import kotlinx.coroutines.launch
 import org.gtlv.atlas.auth.LoginScreen
 import org.gtlv.atlas.auth.LoginViewModel
 import org.gtlv.atlas.auth.LoginViewModelFactory
+import org.gtlv.atlas.assign.AssignJobViewModel
+import org.gtlv.atlas.assign.AssignJobViewModelFactory
 import org.gtlv.atlas.location.RequiredLocationPermissionGate
 import org.gtlv.atlas.main.MainScreenViewModel
 import org.gtlv.atlas.main.MainScreenViewModelFactory
@@ -79,6 +81,16 @@ class MainActivity : ComponentActivity() {
             UnassignedJobsViewModel by viewModels {
         UnassignedJobsViewModelFactory(
             jobRepository = atlasApplication.jobRepository
+        )
+    }
+
+    private val assignJobViewModel:
+            AssignJobViewModel by viewModels {
+        AssignJobViewModelFactory(
+            jobRepository = atlasApplication.jobRepository,
+            geoServiceRepository =
+                atlasApplication.geoServiceRepository,
+            roleRepository = atlasApplication.roleRepository
         )
     }
 
@@ -155,6 +167,8 @@ class MainActivity : ComponentActivity() {
 
                             unassignedJobsViewModel
                                 .clear()
+
+                            assignJobViewModel.clear()
 
                             jobNotificationViewModel
                                 .clear()
@@ -299,6 +313,11 @@ class MainActivity : ComponentActivity() {
                                     .uiState
                                     .collectAsStateWithLifecycle()
 
+                                val assignJobState by
+                                assignJobViewModel
+                                    .uiState
+                                    .collectAsStateWithLifecycle()
+
                                 val liveMapUsers by
                                 atlasApplication
                                     .telemetryWebSocketSender
@@ -343,6 +362,7 @@ class MainActivity : ComponentActivity() {
                                         liveMapUsers = otherMapUsers,
                                         mainScreenState = mainScreenState,
                                         unassignedJobsState = unassignedJobsState,
+                                        assignJobState = assignJobState,
                                         onToggleJobList = mainScreenViewModel::toggleJobList,
                                         onRetryJobs = mainScreenViewModel::refresh,
                                         onStartNextJob = mainScreenViewModel::startNextJob,
@@ -354,6 +374,18 @@ class MainActivity : ComponentActivity() {
                                         onRequestUnassignedJobDeletion = unassignedJobsViewModel::requestDeletion,
                                         onDismissUnassignedJobDeletion = unassignedJobsViewModel::dismissDeletion,
                                         onConfirmUnassignedJobDeletion = unassignedJobsViewModel::confirmDeletion,
+                                        onRemoveUnassignedJob = unassignedJobsViewModel::removeJob,
+                                        onLoadAssignJob = assignJobViewModel::load,
+                                        onEditAssignJobAddress = assignJobViewModel::openAddressEditor,
+                                        onAssignJobAddressQueryChanged = assignJobViewModel::onAddressQueryChanged,
+                                        onAssignJobAddressSelected = assignJobViewModel::selectAddressSuggestion,
+                                        onCloseAssignJobAddressEditor = assignJobViewModel::closeAddressEditor,
+                                        onAssignJobDueDateChanged = assignJobViewModel::updateDueDate,
+                                        onSaveAssignJobChanges = assignJobViewModel::saveChanges,
+                                        onRetryAssignJobCandidates = assignJobViewModel::retryCandidates,
+                                        onRequestJobAssignment = assignJobViewModel::requestAssignment,
+                                        onDismissJobAssignment = assignJobViewModel::dismissAssignment,
+                                        onConfirmJobAssignment = assignJobViewModel::confirmAssignment,
                                         onEditDestination = mainScreenViewModel::openDestinationEditor,
                                         onAddressQueryChanged = mainScreenViewModel::onAddressQueryChanged,
                                         onAddressSuggestionSelected = mainScreenViewModel::selectAddressSuggestion,

@@ -116,6 +116,31 @@
     <string name="unassigned_jobs_delete_confirm">Delete</string>
     <string name="unassigned_jobs_delete_error">Could not delete the job. Please try again.</string>
 
+    <string name="assign_job_title">Assign job</string>
+    <string name="assign_job_back">Back to unassigned jobs</string>
+    <string name="assign_job_due">Due: %1$s</string>
+    <string name="assign_job_set_due_date">Set date</string>
+    <string name="assign_job_date_next">Next</string>
+    <string name="assign_job_select_time">Select time</string>
+    <string name="assign_job_date_time_confirm">OK</string>
+    <string name="assign_job_use_time_input">Enter time with keyboard</string>
+    <string name="assign_job_use_time_dial">Select time on clock</string>
+    <string name="assign_job_destination_placeholder">Enter destination</string>
+    <string name="assign_job_save_changes">Save changes</string>
+    <string name="assign_job_saving_changes">Saving…</string>
+    <string name="assign_job_save_changes_failed">Could not save the job changes</string>
+    <string name="assign_job_candidates">Recommended drivers</string>
+    <string name="assign_job_candidates_error">Could not load driver recommendations</string>
+    <string name="assign_job_no_candidates">No available drivers</string>
+    <string name="assign_job_all_drivers">All drivers</string>
+    <string name="assign_job_no_other_drivers">No other drivers</string>
+    <string name="assign_job_drivers_error">Could not load all drivers</string>
+    <string name="assign_job_recommended_rank">#%1$d recommended</string>
+    <string name="assign_job_confirm_title">Assign job?</string>
+    <string name="assign_job_confirm_message">Assign this job to %1$s?</string>
+    <string name="assign_job_confirm">Assign</string>
+    <string name="assign_job_failed">Could not assign the job. Please try again.</string>
+
     <string name="job_notification_channel">Assigned jobs</string>
     <string name="job_notification_channel_description">Notifications about newly assigned jobs</string>
     <string name="job_notification_title">New Job</string>
@@ -135,6 +160,7 @@
     <string name="address_search_load_error">Could not load address suggestions</string>
     <string name="address_search_save_error">Could not update the job location</string>
     <string name="address_search_no_results">No matching addresses found</string>
+    <string name="address_search_loading">Searching addresses…</string>
 
     <string name="active_shift_channel">Active shift</string>
     <string name="active_shift_channel_description">Keeps Atlas connected while a shift is active</string>

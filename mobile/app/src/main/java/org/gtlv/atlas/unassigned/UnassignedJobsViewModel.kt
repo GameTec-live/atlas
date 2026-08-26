@@ -77,6 +77,16 @@ class UnassignedJobsViewModel(
         }
     }
 
+    fun removeJob(jobId: String) {
+        _uiState.update {
+            it.copy(
+                jobs = it.jobs.filterNot { job ->
+                    job.id == jobId
+                }
+            )
+        }
+    }
+
     fun requestDeletion(
         job: org.gtlv.core.job.Job
     ) {

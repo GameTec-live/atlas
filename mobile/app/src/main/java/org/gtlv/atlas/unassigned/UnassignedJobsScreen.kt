@@ -49,6 +49,7 @@ internal fun UnassignedJobsScreen(
     state: UnassignedJobsUiState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onJobClick: (Job) -> Unit,
     onRequestDeletion: (Job) -> Unit,
     onDismissDeletion: () -> Unit,
     onConfirmDeletion: () -> Unit,
@@ -191,6 +192,9 @@ internal fun UnassignedJobsScreen(
                                     onDelete = {
                                         onRequestDeletion(job)
                                     },
+                                    onClick = {
+                                        onJobClick(job)
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(
@@ -268,9 +272,13 @@ private fun UnassignedJobCard(
     deletionEnabled: Boolean,
     isDeleting: Boolean,
     onDelete: () -> Unit,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ElevatedCard(modifier = modifier) {
+    ElevatedCard(
+        onClick = onClick,
+        modifier = modifier
+    ) {
         Row(
             modifier = Modifier.padding(
                 start = 16.dp,

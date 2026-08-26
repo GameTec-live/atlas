@@ -4,6 +4,7 @@ import androidx.core.graphics.toColorInt
 import org.gtlv.core.geoservice.RoutePoint
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
@@ -23,34 +24,51 @@ internal fun Style.addRouteLayer() {
         )
     }
 
-    if (getLayer(ROUTE_LAYER_ID) != null) {
-        return
+    addEndpointSourceIfMissing(ORIGIN_SOURCE_ID)
+    addEndpointSourceIfMissing(DESTINATION_SOURCE_ID)
+
+    if (getLayer(ROUTE_LAYER_ID) == null) {
+        val routeLayer = LineLayer(
+            ROUTE_LAYER_ID,
+            ROUTE_SOURCE_ID
+        ).withProperties(
+            PropertyFactory.lineColor("#2563EB".toColorInt()),
+            PropertyFactory.lineWidth(6f),
+            PropertyFactory.lineOpacity(0.92f),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND)
+        )
+
+        val firstLabelLayerId = layers
+            .firstOrNull { it is SymbolLayer }
+            ?.id
+
+        if (firstLabelLayerId != null) {
+            addLayerBelow(routeLayer, firstLabelLayerId)
+        } else {
+            addLayer(routeLayer)
+        }
     }
 
-    val routeLayer = LineLayer(
-        ROUTE_LAYER_ID,
-        ROUTE_SOURCE_ID
-    ).withProperties(
-        PropertyFactory.lineColor("#2563EB".toColorInt()),
-        PropertyFactory.lineWidth(6f),
-        PropertyFactory.lineOpacity(0.92f),
-        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
-        PropertyFactory.lineCap(Property.LINE_CAP_ROUND)
+    addEndpointLayersIfMissing(
+        sourceId = ORIGIN_SOURCE_ID,
+        layerPrefix = ORIGIN_LAYER_PREFIX,
+        color = "#10B981".toColorInt(),
+        letter = "A",
+        label = "From"
     )
-
-    val firstLabelLayerId = layers
-        .firstOrNull { it is SymbolLayer }
-        ?.id
-
-    if (firstLabelLayerId != null) {
-        addLayerBelow(routeLayer, firstLabelLayerId)
-    } else {
-        addLayer(routeLayer)
-    }
+    addEndpointLayersIfMissing(
+        sourceId = DESTINATION_SOURCE_ID,
+        layerPrefix = DESTINATION_LAYER_PREFIX,
+        color = "#2563EB".toColorInt(),
+        letter = "B",
+        label = "To"
+    )
 }
 
 internal fun Style.updateRoute(
-    routePoints: List<RoutePoint>
+    routePoints: List<RoutePoint>,
+    showEndpoints: Boolean
 ) {
     val featureCollection = if (routePoints.size >= 2) {
         FeatureCollection.fromFeature(
@@ -71,6 +89,133 @@ internal fun Style.updateRoute(
 
     getSourceAs<GeoJsonSource>(ROUTE_SOURCE_ID)
         ?.setGeoJson(featureCollection)
+
+    updateEndpoint(
+        sourceId = ORIGIN_SOURCE_ID,
+        point = routePoints.firstOrNull()
+            ?.takeIf { showEndpoints }
+    )
+    updateEndpoint(
+        sourceId = DESTINATION_SOURCE_ID,
+        point = routePoints.lastOrNull()
+            ?.takeIf {
+                showEndpoints && routePoints.size >= 2
+            }
+    )
+}
+
+private fun Style.addEndpointSourceIfMissing(sourceId: String) {
+    if (getSource(sourceId) == null) {
+        addSource(
+            GeoJsonSource(
+                sourceId,
+                emptyRouteFeatureCollection()
+            )
+        )
+    }
+}
+
+private fun Style.addEndpointLayersIfMissing(
+    sourceId: String,
+    layerPrefix: String,
+    color: Int,
+    letter: String,
+    label: String
+) {
+    val circleLayerId = "$layerPrefix-circle"
+    if (getLayer(circleLayerId) == null) {
+        addLayer(
+            CircleLayer(
+                circleLayerId,
+                sourceId
+            ).withProperties(
+                PropertyFactory.circleRadius(14f),
+                PropertyFactory.circleColor(color),
+                PropertyFactory.circleStrokeColor(
+                    "#111827".toColorInt()
+                ),
+                PropertyFactory.circleStrokeWidth(4f),
+                PropertyFactory.circleOpacity(1f)
+            )
+        )
+    }
+
+    val letterLayerId = "$layerPrefix-letter"
+    if (getLayer(letterLayerId) == null) {
+        addLayer(
+            SymbolLayer(
+                letterLayerId,
+                sourceId
+            ).withProperties(
+                PropertyFactory.textField(letter),
+                PropertyFactory.textFont(
+                    arrayOf("Noto Sans Bold")
+                ),
+                PropertyFactory.textSize(13f),
+                PropertyFactory.textColor(
+                    "#FFFFFF".toColorInt()
+                ),
+                PropertyFactory.textAllowOverlap(true),
+                PropertyFactory.textIgnorePlacement(true)
+            )
+        )
+    }
+
+    val labelLayerId = "$layerPrefix-label"
+    if (getLayer(labelLayerId) == null) {
+        addLayer(
+            SymbolLayer(
+                labelLayerId,
+                sourceId
+            ).withProperties(
+                PropertyFactory.textField(label),
+                PropertyFactory.textFont(
+                    arrayOf("Noto Sans Regular")
+                ),
+                PropertyFactory.textSize(13f),
+                PropertyFactory.textColor(
+                    "#FFFFFF".toColorInt()
+                ),
+                PropertyFactory.textHaloColor(
+                    "#111827".toColorInt()
+                ),
+                PropertyFactory.textHaloWidth(7f),
+                PropertyFactory.textAnchor(
+                    Property.TEXT_ANCHOR_LEFT
+                ),
+                PropertyFactory.textOffset(
+                    arrayOf(1.65f, 0f)
+                ),
+                PropertyFactory.textAllowOverlap(true),
+                PropertyFactory.textIgnorePlacement(true),
+                PropertyFactory.textOptional(true)
+            )
+        )
+    }
+}
+
+private fun Style.updateEndpoint(
+    sourceId: String,
+    point: RoutePoint?
+) {
+    val features = point
+        ?.takeIf(RoutePoint::isValid)
+        ?.let {
+            arrayOf(
+                Feature.fromGeometry(
+                    Point.fromLngLat(
+                        it.longitude,
+                        it.latitude
+                    )
+                )
+            )
+        }
+        ?: emptyArray()
+
+    getSourceAs<GeoJsonSource>(sourceId)
+        ?.setGeoJson(
+            FeatureCollection.fromFeatures(features)
+        )
 }
 
 internal fun canAnimateRouteTransition(
@@ -188,3 +333,11 @@ private const val ROUTE_SOURCE_ID =
     "atlas-navigation-route-source"
 private const val ROUTE_LAYER_ID =
     "atlas-navigation-route-layer"
+private const val ORIGIN_SOURCE_ID =
+    "atlas-route-origin-source"
+private const val DESTINATION_SOURCE_ID =
+    "atlas-route-destination-source"
+private const val ORIGIN_LAYER_PREFIX =
+    "atlas-route-origin"
+private const val DESTINATION_LAYER_PREFIX =
+    "atlas-route-destination"

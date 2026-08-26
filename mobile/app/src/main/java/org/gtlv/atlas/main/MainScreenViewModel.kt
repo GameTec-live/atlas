@@ -738,6 +738,7 @@ class MainScreenViewModel(
                         query = query,
                         suggestions = emptyList(),
                         isLoading = shouldSearch,
+                        hasSearched = false,
                         hasError = false,
                         saveFailed = false
                     )
@@ -780,6 +781,7 @@ class MainScreenViewModel(
                                         suggestions =
                                             result.suggestions,
                                         isLoading = false,
+                                        hasSearched = true,
                                         hasError = false
                                     )
                             )
@@ -794,6 +796,7 @@ class MainScreenViewModel(
                                         suggestions =
                                             emptyList(),
                                         isLoading = false,
+                                        hasSearched = true,
                                         hasError = true
                                     )
                             )
