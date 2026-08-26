@@ -26,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -124,6 +125,17 @@ class MainActivity : ComponentActivity() {
                 val jobNotificationState by
                 jobNotificationViewModel.uiState
                     .collectAsStateWithLifecycle()
+
+                val navigationLanguage = stringResource(
+                    R.string.navigation_route_language
+                )
+
+                LaunchedEffect(navigationLanguage) {
+                    mainScreenViewModel
+                        .updateNavigationLanguage(
+                            navigationLanguage
+                        )
+                }
 
                 LaunchedEffect(sessionState) {
                     when (sessionState) {
@@ -274,6 +286,13 @@ class MainActivity : ComponentActivity() {
                                         atlasApplication
                                             .locationProvider
                                 ) { locationState ->
+                                    LaunchedEffect(locationState) {
+                                        mainScreenViewModel
+                                            .updateLocationState(
+                                                locationState
+                                            )
+                                    }
+
                                     LaunchedEffect(Unit) {
                                         ActiveShiftService.start(
                                             this@MainActivity

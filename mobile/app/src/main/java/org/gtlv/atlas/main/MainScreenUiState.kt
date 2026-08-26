@@ -20,5 +20,7 @@ data class MainScreenUiState(
     val isAddressEditorOpen: Boolean = false,
     val editedLocationField: JobLocationField? = null,
     val addressSearch: AddressSearchUiState =
-        AddressSearchUiState()
+        AddressSearchUiState(),
+    val navigation: NavigationUiState =
+        NavigationUiState()
 )

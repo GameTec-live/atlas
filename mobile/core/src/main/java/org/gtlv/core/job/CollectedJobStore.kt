@@ -5,9 +5,20 @@ import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
+interface CollectedJobStateStore {
+    fun getCollectedJobId(userId: String): String?
+
+    fun setCollectedJobId(
+        userId: String,
+        jobId: String
+    )
+
+    fun clearCollectedJobId(userId: String)
+}
+
 class CollectedJobStore(
     context: Context
-) {
+) : CollectedJobStateStore {
     private val preferences =
         context.applicationContext.getSharedPreferences(
             PREFERENCES_NAME,
@@ -16,14 +27,14 @@ class CollectedJobStore(
     private val collectedJobFlows =
         mutableMapOf<String, MutableStateFlow<String?>>()
 
-    fun getCollectedJobId(userId: String): String? {
+    override fun getCollectedJobId(userId: String): String? {
         return preferences.getString(
             keyFor(userId),
             null
         )
     }
 
-    fun setCollectedJobId(
+    override fun setCollectedJobId(
         userId: String,
         jobId: String
     ) {
@@ -33,7 +44,7 @@ class CollectedJobStore(
         flowFor(userId).value = jobId
     }
 
-    fun clearCollectedJobId(userId: String) {
+    override fun clearCollectedJobId(userId: String) {
         preferences.edit {
             remove(keyFor(userId))
         }
