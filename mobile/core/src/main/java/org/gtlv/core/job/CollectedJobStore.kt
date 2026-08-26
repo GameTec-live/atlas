@@ -2,6 +2,8 @@ package org.gtlv.core.job
 
 import android.content.Context
 import androidx.core.content.edit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 interface CollectedJobStateStore {
     fun getCollectedJobId(userId: String): String?
@@ -12,6 +14,10 @@ interface CollectedJobStateStore {
     )
 
     fun clearCollectedJobId(userId: String)
+
+    fun observeCollectedJobId(
+        userId: String
+    ): StateFlow<String?>
 }
 
 class CollectedJobStore(
@@ -22,6 +28,8 @@ class CollectedJobStore(
             PREFERENCES_NAME,
             Context.MODE_PRIVATE
         )
+    private val collectedJobFlows =
+        mutableMapOf<String, MutableStateFlow<String?>>()
 
     override fun getCollectedJobId(userId: String): String? {
         return preferences.getString(
@@ -37,13 +45,37 @@ class CollectedJobStore(
         preferences.edit {
             putString(keyFor(userId), jobId)
         }
+        flowFor(userId).value = jobId
     }
 
     override fun clearCollectedJobId(userId: String) {
         preferences.edit {
             remove(keyFor(userId))
         }
+        flowFor(userId).value = null
     }
+
+    override fun observeCollectedJobId(
+        userId: String
+    ): StateFlow<String?> {
+        return flowFor(userId)
+    }
+
+    private fun flowFor(
+        userId: String
+    ): MutableStateFlow<String?> {
+        return synchronized(collectedJobFlows) {
+            collectedJobFlows.getOrPut(userId) {
+                MutableStateFlow(
+                    preferences.getString(
+                        keyFor(userId),
+                        null
+                    )
+                )
+            }
+        }
+    }
+
     private fun keyFor(userId: String): String {
         return "$COLLECTED_JOB_PREFIX$userId"
     }
@@ -55,4 +87,8 @@ class CollectedJobStore(
         const val COLLECTED_JOB_PREFIX =
             "collected_job_"
     }
+}
+
+interface CollectedJobStoreProvider {
+    val collectedJobStore: CollectedJobStore
 }

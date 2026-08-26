@@ -313,6 +313,7 @@ class MainActivity : ComponentActivity() {
                                         onStartNextJob = mainScreenViewModel::startNextJob,
                                         onCancelCurrentJob = mainScreenViewModel::cancelCurrentJob,
                                         onPersonCollected = mainScreenViewModel::personCollected,
+                                        onJobFinished = mainScreenViewModel::finishCurrentJob,
                                         onEditDestination = mainScreenViewModel::openDestinationEditor,
                                         onAddressQueryChanged = mainScreenViewModel::onAddressQueryChanged,
                                         onAddressSuggestionSelected = mainScreenViewModel::selectAddressSuggestion,

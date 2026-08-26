@@ -72,6 +72,7 @@ internal fun MainScreen(
     onStartNextJob: () -> Unit,
     onCancelCurrentJob: () -> Unit,
     onPersonCollected: () -> Unit,
+    onJobFinished: () -> Unit,
     serverAddress: String,
     onEditDestination: () -> Unit,
     onAddressQueryChanged: (String) -> Unit,
@@ -147,6 +148,12 @@ internal fun MainScreen(
         jobState.cancelCurrentJobFailed -> {
             stringResource(
                 R.string.job_action_cancel_failed
+            )
+        }
+
+        jobState.finishCurrentJobFailed -> {
+            stringResource(
+                R.string.job_action_finish_failed
             )
         }
 
@@ -258,20 +265,24 @@ internal fun MainScreen(
                         jobState.isStartingNextJob,
                     isCancellingCurrentJob =
                         jobState.isCancellingCurrentJob,
+                    isFinishingCurrentJob =
+                        jobState.isFinishingCurrentJob,
                     isPersonCollected =
                         jobState.isPersonCollected,
-                    isPersonCollectionEnabled =
+                    isPrimaryJobActionEnabled =
                         !jobState.isLoading &&
                                 !jobState.isStartingNextJob &&
                                 !jobState.isCancellingCurrentJob &&
-                                !jobState.isPersonCollected &&
+                                !jobState.isFinishingCurrentJob &&
                                 !jobState.addressSearch.isSaving,
                     onNextJobClick =
                         onStartNextJob,
                     onCancelCurrentJobClick =
                         onCancelCurrentJob,
                     onPersonCollectedClick =
-                        onPersonCollected
+                        onPersonCollected,
+                    onJobFinishedClick =
+                        onJobFinished
                 )
             }
 

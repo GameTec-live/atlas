@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
@@ -19,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
-import androidx.compose.material3.MaterialTheme
 
 @Composable
 internal fun JobActionButtons(
@@ -27,11 +25,13 @@ internal fun JobActionButtons(
     hasNextJob: Boolean,
     isStartingNextJob: Boolean,
     isCancellingCurrentJob: Boolean,
+    isFinishingCurrentJob: Boolean,
     isPersonCollected: Boolean,
-    isPersonCollectionEnabled: Boolean,
+    isPrimaryJobActionEnabled: Boolean,
     onNextJobClick: () -> Unit,
     onCancelCurrentJobClick: () -> Unit,
     onPersonCollectedClick: () -> Unit,
+    onJobFinishedClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -42,7 +42,9 @@ internal fun JobActionButtons(
         if (hasCurrentJob) {
             FilledTonalIconButton(
                 onClick = onCancelCurrentJobClick,
-                enabled = !isCancellingCurrentJob,
+                enabled =
+                    !isCancellingCurrentJob &&
+                            !isFinishingCurrentJob,
                 modifier = Modifier.size(48.dp)
             ) {
                 if (isCancellingCurrentJob) {
@@ -61,21 +63,33 @@ internal fun JobActionButtons(
             }
 
             Button(
-                onClick = onPersonCollectedClick,
-                enabled = isPersonCollectionEnabled,
+                onClick =
+                    if (isPersonCollected) {
+                        onJobFinishedClick
+                    } else {
+                        onPersonCollectedClick
+                    },
+                enabled = isPrimaryJobActionEnabled,
                 modifier = Modifier.widthIn(
                     min = 108.dp
                 )
             ) {
-                Text(
-                    text = stringResource(
-                        if (isPersonCollected) {
-                            R.string.job_action_job_finished
-                        } else {
-                            R.string.job_action_person_collected
-                        }
+                if (isFinishingCurrentJob) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
                     )
-                )
+                } else {
+                    Text(
+                        text = stringResource(
+                            if (isPersonCollected) {
+                                R.string.job_action_job_finished
+                            } else {
+                                R.string.job_action_person_collected
+                            }
+                        )
+                    )
+                }
             }
         } else {
             Button(

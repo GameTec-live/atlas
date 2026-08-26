@@ -8,6 +8,7 @@ import kotlinx.coroutines.SupervisorJob
 import org.gtlv.core.location.CarAwareLocationProvider
 import org.gtlv.core.location.CarLocationProviderRegistry
 import org.gtlv.core.location.LocationProvider
+import org.gtlv.core.location.LocationProviderProvider
 import org.gtlv.core.location.PhoneLocationProvider
 import org.gtlv.core.shift.ShiftSessionProvider
 import org.gtlv.core.network.NetworkClient
@@ -23,16 +24,21 @@ import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryProviderRegistry
 import org.gtlv.core.telemetry.Telemetry
 import org.gtlv.core.job.JobRepositoryImpl
+import org.gtlv.core.job.JobRepositoryProvider
 import org.gtlv.core.geoservice.GeoServiceRepositoryImpl
 import org.gtlv.core.telemetry.TelemetryWebSocketSender
 import org.gtlv.core.job.CollectedJobStore
+import org.gtlv.core.job.CollectedJobStoreProvider
+import org.gtlv.core.session.SessionManagerProvider
 import org.gtlv.atlas.notification.AppVisibilityTracker
 import org.gtlv.atlas.notification.JobNotificationWebSocket
 import org.gtlv.atlas.notification.JobSystemNotificationManager
 
 class AtlasApplication : Application(), ShiftSessionProvider,
     ServerSettingsProvider, CarLocationProviderRegistry,
-    TelemetryProviderRegistry {
+    TelemetryProviderRegistry, LocationProviderProvider,
+    JobRepositoryProvider, CollectedJobStoreProvider,
+    SessionManagerProvider {
 
     private val applicationScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate
@@ -51,7 +57,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         )
     }
 
-    val locationProvider: LocationProvider
+    override val locationProvider: LocationProvider
         get() = carAwareLocationProvider
 
     private val applicationTelemetry by lazy {
@@ -151,7 +157,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         )
     }
 
-    val sessionManager by lazy {
+    override val sessionManager by lazy {
         SessionManager(
             authRepository = authRepository,
             roleRepository = roleRepository,
@@ -159,7 +165,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         )
     }
 
-    val jobRepository by lazy {
+    override val jobRepository by lazy {
         JobRepositoryImpl(
             networkClient = networkClient,
             serverSettingsRepository =
@@ -186,7 +192,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         )
     }
 
-    val collectedJobStore by lazy {
+    override val collectedJobStore by lazy {
         CollectedJobStore(
             context = applicationContext
         )

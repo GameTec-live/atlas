@@ -87,6 +87,7 @@
     <string name="job_action_start_failed">Could not start the next job</string>
     <string name="job_action_cancel_failed">Could not cancel the current job</string>
     <string name="job_action_job_finished">Job finished</string>
+    <string name="job_action_finish_failed">Could not finish the current job</string>
 
     <string name="job_notification_channel">Assigned jobs</string>
     <string name="job_notification_channel_description">Notifications about newly assigned jobs</string>

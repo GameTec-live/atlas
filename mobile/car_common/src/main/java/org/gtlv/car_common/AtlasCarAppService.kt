@@ -20,6 +20,11 @@ import org.gtlv.core.shift.ShiftSessionProvider
 import org.gtlv.core.settings.ServerSettingsProvider
 import org.gtlv.core.location.CarLocationProvider
 import org.gtlv.core.location.CarLocationProviderRegistry
+import org.gtlv.core.location.LocationProviderProvider
+import org.gtlv.core.job.JobRepositoryProvider
+import org.gtlv.core.job.CollectedJobStoreProvider
+import org.gtlv.core.session.SessionManagerProvider
+import org.gtlv.core.session.SessionState
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryProviderRegistry
 
@@ -56,6 +61,22 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
         val serverSettingsRepository =
             (carContext.applicationContext as? ServerSettingsProvider)
                 ?.serverSettingsRepository
+        val jobRepository =
+            (carContext.applicationContext as? JobRepositoryProvider)
+                ?.jobRepository
+        val locationProvider =
+            (carContext.applicationContext as? LocationProviderProvider)
+                ?.locationProvider
+        val collectedJobStore =
+            (carContext.applicationContext as? CollectedJobStoreProvider)
+                ?.collectedJobStore
+        val sessionManager =
+            (carContext.applicationContext as? SessionManagerProvider)
+                ?.sessionManager
+        val getUserId: () -> String? = {
+            (sessionManager?.state?.value as? SessionState.SignedIn)
+                ?.userId
+        }
 
         return WaitingScreen(
             carContext = carContext,
@@ -66,7 +87,17 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                     carContext.getCarService(ScreenManager::class.java).pop()
                 }
                 val roleScreen = when (role) {
-                    ShiftRole.DRIVER -> DriverMainScreen(carContext, getRole, onRoleLost)
+                    ShiftRole.DRIVER -> DriverMainScreen(
+                        carContext = carContext,
+                        getRole = getRole,
+                        onRoleLost = onRoleLost,
+                        jobRepository = jobRepository,
+                        locationProvider = locationProvider,
+                        serverSettingsRepository = serverSettingsRepository,
+                        collectedJobStore = collectedJobStore,
+                        getUserId = getUserId,
+                        telemetryProvider = telemetryProvider,
+                    )
                     ShiftRole.DISPATCHER -> DispatcherMainScreen(carContext, getRole, onRoleLost)
                 }
 

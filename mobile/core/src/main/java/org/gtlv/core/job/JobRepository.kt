@@ -1,6 +1,10 @@
 package org.gtlv.core.job
 
+import kotlinx.coroutines.flow.Flow
+
 interface JobRepository {
+
+    val jobChanges: Flow<Unit>
 
     suspend fun getJobs(): JobsResult
 
@@ -9,6 +13,10 @@ interface JobRepository {
     ): JobActionResult
 
     suspend fun cancelJob(
+        jobId: String
+    ): JobActionResult
+
+    suspend fun completeJob(
         jobId: String
     ): JobActionResult
 
@@ -60,4 +68,9 @@ sealed interface JobActionResult {
         val statusCode: Int,
         val message: String?
     ) : JobActionResult
+}
+
+/** Makes the application's authenticated job repository available to car sessions. */
+interface JobRepositoryProvider {
+    val jobRepository: JobRepository
 }

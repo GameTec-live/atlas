@@ -14,6 +14,8 @@ data class MainScreenUiState(
     val startNextJobFailed: Boolean = false,
     val isCancellingCurrentJob: Boolean = false,
     val cancelCurrentJobFailed: Boolean = false,
+    val isFinishingCurrentJob: Boolean = false,
+    val finishCurrentJobFailed: Boolean = false,
     val isPersonCollected: Boolean = false,
     val isAddressEditorOpen: Boolean = false,
     val editedLocationField: JobLocationField? = null,

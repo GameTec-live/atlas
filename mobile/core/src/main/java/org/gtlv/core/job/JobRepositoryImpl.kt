@@ -2,6 +2,9 @@ package org.gtlv.core.job
 
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -20,6 +23,13 @@ class JobRepositoryImpl(
     private val serverSettingsRepository:
     ServerSettingsRepository
 ) : JobRepository {
+
+    private val _jobChanges = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1
+    )
+
+    override val jobChanges: SharedFlow<Unit> =
+        _jobChanges.asSharedFlow()
 
     override suspend fun getJobs(): JobsResult =
         withContext(Dispatchers.IO) {
@@ -56,16 +66,15 @@ class JobRepositoryImpl(
 
                             JobsResult.Success(
                                 queuedJobs =
-                                    assignedResult.value.filterNot {
-                                        it.id == currentJob.id
-                                    },
+                                    assignedResult.value.pendingJobs(),
                                 currentJob = currentJob
                             )
                         }
 
                         EndpointResult.NotFound -> {
                             JobsResult.Success(
-                                queuedJobs = assignedResult.value,
+                                queuedJobs =
+                                    assignedResult.value.pendingJobs(),
                                 currentJob = null
                             )
                         }
@@ -89,7 +98,7 @@ class JobRepositoryImpl(
     override suspend fun startJob(
         jobId: String
     ): JobActionResult {
-        return executeJobAction(
+        return executeAndNotifyJobAction(
             jobId = jobId,
             action = "start"
         )
@@ -98,10 +107,35 @@ class JobRepositoryImpl(
     override suspend fun cancelJob(
         jobId: String
     ): JobActionResult {
-        return executeJobAction(
+        return executeAndNotifyJobAction(
             jobId = jobId,
             action = "cancel"
         )
+    }
+
+    override suspend fun completeJob(
+        jobId: String
+    ): JobActionResult {
+        return executeAndNotifyJobAction(
+            jobId = jobId,
+            action = "complete"
+        )
+    }
+
+    private suspend fun executeAndNotifyJobAction(
+        jobId: String,
+        action: String
+    ): JobActionResult {
+        val result = executeJobAction(
+            jobId = jobId,
+            action = action
+        )
+
+        if (result == JobActionResult.Success) {
+            _jobChanges.emit(Unit)
+        }
+
+        return result
     }
 
     override suspend fun updateJobLocation(
@@ -378,6 +412,13 @@ class JobRepositoryImpl(
 
                 add(job)
             }
+        }
+    }
+
+    private fun List<Job>.pendingJobs(): List<Job> {
+        return filter { job ->
+            job.startedAt == null &&
+                    job.completedAt == null
         }
     }
 
