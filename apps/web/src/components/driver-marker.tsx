@@ -37,7 +37,7 @@ export function DriverMarker({ driver }: { driver: LiveDriver }) {
                         <p className="truncate font-semibold">
                             {driver.userName}
                         </p>
-                        <Badge>{driverStateLabels[driver.state]}</Badge>
+                        <Badge>{driverStateLabels[driver.state]()}</Badge>
                     </div>
 
                     {driver.fuelLevel !== undefined ||

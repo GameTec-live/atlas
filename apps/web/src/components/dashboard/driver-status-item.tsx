@@ -26,7 +26,7 @@ export function DriverStatusItem({
                     <span
                         className={`size-1.5 rounded-full ${driverStateBackgrounds[driver.state]}`}
                     />
-                    {driverStateLabels[driver.state]}
+                    {driverStateLabels[driver.state]()}
                 </Badge>
             </div>
             {job && addresses ? (

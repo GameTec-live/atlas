@@ -9,8 +9,8 @@ export const driverStateBackgrounds = {
 } satisfies Record<LiveDriver["state"], string>;
 
 export const driverStateLabels = {
-    free: m.dizzy_silly_gopher_boil(),
-    onTheWay: m.fit_mild_halibut_grace(),
-    occupied: m.inclusive_bright_halibut_flop(),
-    away: m.small_house_grizzly_view(),
-} satisfies Record<LiveDriver["state"], string>;
+    free: m.dizzy_silly_gopher_boil,
+    onTheWay: m.fit_mild_halibut_grace,
+    occupied: m.inclusive_bright_halibut_flop,
+    away: m.small_house_grizzly_view,
+} satisfies Record<LiveDriver["state"], () => string>;

@@ -1,4 +1,3 @@
-import { CarFrontIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/date";
 import { formatOdometer, type UpcomingMaintenance } from "@/lib/fleet";
