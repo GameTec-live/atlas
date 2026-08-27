@@ -81,9 +81,7 @@ internal fun AddressFields(
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface.copy(
-            alpha = 0.86f
-        ),
+        color = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         shadowElevation = 6.dp
     ) {

@@ -50,6 +50,7 @@ internal fun CandidatePanel(
     Column(
         modifier = modifier.padding(
             start = 12.dp,
+            top = 12.dp,
             end = 12.dp,
             bottom = 12.dp
         ),

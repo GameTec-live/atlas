@@ -1,12 +1,16 @@
 package org.gtlv.atlas.assign
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -16,24 +20,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
-import org.gtlv.atlas.assign.composable.AddressFields
+import org.gtlv.atlas.assign.composable.AssignJobMapContent
 import org.gtlv.atlas.assign.composable.AssignmentConfirmationDialog
 import org.gtlv.atlas.assign.composable.CandidatePanel
-import org.gtlv.atlas.map.AtlasMap
-import org.gtlv.atlas.map.MapConfiguration
 import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.job.JobCandidate
 import org.gtlv.core.job.JobLocationField
@@ -61,6 +64,14 @@ internal fun AssignJobScreen(
     onAssignmentCompleted: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val configuration = LocalConfiguration.current
+    val isLandscape =
+        configuration.orientation ==
+                Configuration.ORIENTATION_LANDSCAPE
+    val landscapeDriverPanelWidth =
+        (configuration.screenWidthDp * 0.36f)
+            .coerceIn(320f, 420f)
+            .dp
     val focusManager = LocalFocusManager.current
     val keyboardController =
         LocalSoftwareKeyboardController.current
@@ -148,87 +159,94 @@ internal fun AssignJobScreen(
                 )
             }
         ) { contentPadding ->
-            BottomSheetScaffold(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(contentPadding),
-                containerColor = Color.Transparent,
-                sheetPeekHeight = 184.dp,
-                sheetShape = MaterialTheme.shapes.extraLarge,
-                sheetContainerColor =
-                    MaterialTheme.colorScheme.surface,
-                sheetShadowElevation = 6.dp,
-                sheetDragHandle = {
-                    BottomSheetDefaults.DragHandle()
-                },
-                sheetContent = {
-                    CandidatePanel(
+            if (isLandscape) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(contentPadding)
+                ) {
+                    AssignJobMapContent(
                         state = state,
-                        onRetry = retryCandidates,
-                        onCandidateClick = requestAssignment,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(420.dp)
-                    )
-                }
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    AtlasMap(
+                        serverAddress = serverAddress,
                         locationState = locationState,
                         liveMapUsers = liveMapUsers,
-                        routePoints = state.route
-                            ?.points
-                            .orEmpty(),
-                        showRouteEndpoints = true,
-                        recenterRequestId = 0,
-                        isFollowingLocation = false,
-                        onUserCameraMove = {
-                            if (state.isAddressEditorOpen) {
-                                dismissAddressEditor()
-                            }
-                        },
-                        onMapClick = {
-                            if (state.isAddressEditorOpen) {
-                                dismissAddressEditor()
-                            }
-                        },
-                        styleUrl =
-                            MapConfiguration.createStyleUrl(
-                                serverAddress
-                            ),
-                        cameraFocusPoints =
-                            state.cameraFocusPoints,
-                        cameraFocusRequestId =
-                            state.cameraFocusRequestId,
-                        cameraFocusPadding = 112.dp,
-                        modifier = Modifier.fillMaxSize()
+                        onEditAddress = onEditAddress,
+                        onAddressQueryChanged =
+                            onAddressQueryChanged,
+                        onAddressSuggestionSelected =
+                            onAddressSuggestionSelected,
+                        onCloseAddressEditor =
+                            dismissAddressEditor,
+                        onDueDateChanged = onDueDateChanged,
+                        onSaveChanges = onSaveChanges,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
 
-                    state.job?.let { job ->
-                        AddressFields(
+                    Surface(
+                        modifier = Modifier
+                            .width(landscapeDriverPanelWidth)
+                            .fillMaxHeight(),
+                        shape = RoundedCornerShape(
+                            topStart = 28.dp,
+                            bottomStart = 28.dp
+                        ),
+                        color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 8.dp
+                    ) {
+                        CandidatePanel(
                             state = state,
-                            job = job,
-                            enabled =
-                                !state.isAssigning &&
-                                        !state.isSavingChanges &&
-                                        !state.addressSearch.isSaving,
-                            onEditAddress = onEditAddress,
-                            onAddressQueryChanged =
-                                onAddressQueryChanged,
-                            onAddressSuggestionSelected =
-                                onAddressSuggestionSelected,
-                            onCloseAddressEditor =
-                                dismissAddressEditor,
-                            onDueDateChanged =
-                                onDueDateChanged,
-                            onSaveChanges = onSaveChanges,
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(12.dp)
-                                .widthIn(max = 600.dp)
-                                .fillMaxWidth()
+                            onRetry = retryCandidates,
+                            onCandidateClick =
+                                requestAssignment,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
+                }
+            } else {
+                BottomSheetScaffold(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(contentPadding),
+                    containerColor = Color.Transparent,
+                    sheetPeekHeight = 184.dp,
+                    sheetShape =
+                        MaterialTheme.shapes.extraLarge,
+                    sheetContainerColor =
+                        MaterialTheme.colorScheme.surface,
+                    sheetShadowElevation = 6.dp,
+                    sheetDragHandle = {
+                        BottomSheetDefaults.DragHandle()
+                    },
+                    sheetContent = {
+                        CandidatePanel(
+                            state = state,
+                            onRetry = retryCandidates,
+                            onCandidateClick =
+                                requestAssignment,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(420.dp)
+                        )
+                    }
+                ) {
+                    AssignJobMapContent(
+                        state = state,
+                        serverAddress = serverAddress,
+                        locationState = locationState,
+                        liveMapUsers = liveMapUsers,
+                        onEditAddress = onEditAddress,
+                        onAddressQueryChanged =
+                            onAddressQueryChanged,
+                        onAddressSuggestionSelected =
+                            onAddressSuggestionSelected,
+                        onCloseAddressEditor =
+                            dismissAddressEditor,
+                        onDueDateChanged = onDueDateChanged,
+                        onSaveChanges = onSaveChanges,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }
