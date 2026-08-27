@@ -49,19 +49,13 @@ export const configSchema = v.object({
     ),
     dispatchers: v.optional(
         v.object({
-            max: v.optional(
-                v.pipe(v.number(), v.integer(), v.minValue(1)),
-                1,
-            ),
+            max: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1)), 1),
         }),
         { max: 1 },
     ),
     pricing: v.optional(
         v.object({
-            pricePerKilometer: v.optional(
-                v.pipe(v.number(), v.minValue(0)),
-                0,
-            ),
+            pricePerKilometer: v.optional(v.pipe(v.number(), v.minValue(0)), 0),
         }),
         { pricePerKilometer: 0 },
     ),
