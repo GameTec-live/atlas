@@ -202,7 +202,8 @@ internal class MapLibreSurfaceRenderer(
         val driverScrollView = dispatcherUserScrollView
         if (
             driverScrollView != null &&
-            interactionTarget == InteractionTarget.SIDEBAR
+            interactionTarget == InteractionTarget.SIDEBAR &&
+            isDispatcherSidebarScrollable()
         ) {
             driverScrollView.scrollBy(0, distanceY.toInt())
             return
@@ -216,7 +217,8 @@ internal class MapLibreSurfaceRenderer(
         val driverScrollView = dispatcherUserScrollView
         if (
             driverScrollView != null &&
-            interactionTarget == InteractionTarget.SIDEBAR
+            interactionTarget == InteractionTarget.SIDEBAR &&
+            isDispatcherSidebarScrollable()
         ) {
             driverScrollView.fling(-velocityY.toInt())
             return
@@ -243,9 +245,10 @@ internal class MapLibreSurfaceRenderer(
             return
         }
 
-        interactionTarget = if (
+        val target = if (
             showDispatcherDriverList &&
             isDispatcherSidebarExpanded &&
+            isDispatcherSidebarScrollable() &&
             x >= 0f &&
             x < dispatcherSidebarWidth().toFloat()
         ) {
@@ -253,7 +256,15 @@ internal class MapLibreSurfaceRenderer(
         } else {
             InteractionTarget.MAP
         }
+
+        interactionTarget = target
     }
+
+    private fun isDispatcherSidebarScrollable(): Boolean =
+        dispatcherUserScrollView?.let { scrollView ->
+            scrollView.canScrollVertically(-1) ||
+                scrollView.canScrollVertically(1)
+        } == true
 
     override fun onScale(
         focusX: Float,
@@ -1028,6 +1039,9 @@ internal class MapLibreSurfaceRenderer(
 
         dispatcherUserScrollView?.post {
             dispatcherUserScrollView?.scrollTo(0, previousScrollY)
+            if (!isDispatcherSidebarScrollable()) {
+                interactionTarget = InteractionTarget.MAP
+            }
         }
     }
 
