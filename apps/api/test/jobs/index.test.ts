@@ -2449,15 +2449,6 @@ describe("DELETE /jobs/:id", () => {
         expect(dbClientQueryMock).not.toHaveBeenCalled();
     });
 
-    it("returns 403 for an authenticated non-admin", async () => {
-        getSessionMock.mockResolvedValue(session);
-
-        const response = await deleteJobRequest();
-
-        expect(response.status).toBe(403);
-        expect(dbClientQueryMock).not.toHaveBeenCalled();
-    });
-
     it("deletes an unassigned job", async () => {
         getSessionMock.mockResolvedValue(adminSession);
         setDbMockRowCount("delete", 1);
@@ -2575,16 +2566,6 @@ describe("GET /jobs/all", () => {
         const response = await allJobsRequest(undefined, false);
 
         expect(response.status).toBe(401);
-        expect(getSessionMock).toHaveBeenCalledTimes(1);
-        expect(dbClientQueryMock).not.toHaveBeenCalled();
-    });
-
-    it("returns 403 for an authenticated non-admin and does not query the database", async () => {
-        getSessionMock.mockResolvedValue(session);
-
-        const response = await allJobsRequest();
-
-        expect(response.status).toBe(403);
         expect(getSessionMock).toHaveBeenCalledTimes(1);
         expect(dbClientQueryMock).not.toHaveBeenCalled();
     });

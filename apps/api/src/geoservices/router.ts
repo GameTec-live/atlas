@@ -11,7 +11,7 @@ export interface RoutePoint {
 
 export async function requestRoute(
     points: RoutePoint[],
-    language = config.routing.defaultLanguage,
+    language: string = config.routing.defaultLanguage,
 ) {
     const routerUrl = env.ROUTER_URL.replace(/\/+$/, "");
     const routeQuery = {
