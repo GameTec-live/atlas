@@ -27,6 +27,19 @@ type MaintenanceSummary = {
     createdAt: Date;
 };
 
+type FleetMaintenanceRow = {
+    vehicle: {
+        maintenanceEvery: number;
+        odometer: number | null;
+    };
+    maintenance: MaintenanceSummary | null;
+};
+
+export type UpcomingMaintenance<T> = T & {
+    nextOdometer: number;
+    remaining: number | null;
+};
+
 export function formatOdometer(value: number | null, locale: string) {
     return value === null ? unavailable : `${formatNumber(value, locale)} km`;
 }
@@ -55,6 +68,30 @@ export function calculateNextMaintenanceOdometer(
     return lastMaintenanceOdometer === null
         ? null
         : lastMaintenanceOdometer + maintenanceInterval;
+}
+
+export function getUpcomingMaintenance<T extends FleetMaintenanceRow>(
+    fleet: readonly T[],
+): UpcomingMaintenance<T>[] {
+    return fleet
+        .flatMap((row) => {
+            const nextOdometer = calculateNextMaintenanceOdometer(
+                row.maintenance?.odometer ?? null,
+                row.vehicle.maintenanceEvery,
+            );
+            if (nextOdometer === null) return [];
+
+            const remaining =
+                row.vehicle.odometer === null
+                    ? null
+                    : nextOdometer - row.vehicle.odometer;
+            return [{ ...row, nextOdometer, remaining }];
+        })
+        .sort(
+            (left, right) =>
+                (left.remaining ?? Number.POSITIVE_INFINITY) -
+                (right.remaining ?? Number.POSITIVE_INFINITY),
+        );
 }
 
 export function formatNextMaintenance(
