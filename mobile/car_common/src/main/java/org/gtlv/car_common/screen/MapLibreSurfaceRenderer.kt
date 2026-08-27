@@ -74,6 +74,8 @@ internal class MapLibreSurfaceRenderer(
     private var lastLocation: AtlasLocation? = null
     private var isStyleReady = false
     private var isFollowingLocation = true
+    private var selectedFollowZoom = FOLLOW_ZOOM
+    private var selectedFollowTilt = FOLLOW_TILT
     private var surfaceWidth = 0
     private var surfaceHeight = 0
     private var renderDensity = 1f
@@ -318,13 +320,79 @@ internal class MapLibreSurfaceRenderer(
     }
 
     fun zoomIn() {
-        stopFollowingLocation()
-        map?.animateCamera(CameraUpdateFactory.zoomIn())
+        changeZoom(ZOOM_STEP)
     }
 
     fun zoomOut() {
-        stopFollowingLocation()
-        map?.animateCamera(CameraUpdateFactory.zoomOut())
+        changeZoom(-ZOOM_STEP)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun changeZoom(change: Double) {
+        val readyMap = map ?: return
+        val currentZoom = if (isFollowingLocation) {
+            selectedFollowZoom
+        } else {
+            readyMap.cameraPosition.zoom
+        }
+        val targetZoom = (currentZoom + change).coerceIn(
+            MIN_USER_ZOOM,
+            MAX_USER_ZOOM,
+        )
+        selectedFollowZoom = targetZoom
+
+        if (isFollowingLocation && isStyleReady && lastLocation != null) {
+            runCatching {
+                readyMap.locationComponent.zoomWhileTracking(
+                    targetZoom,
+                    ZOOM_DURATION_MILLIS.toLong(),
+                )
+            }.onFailure {
+                readyMap.animateCamera(
+                    CameraUpdateFactory.zoomTo(targetZoom),
+                    ZOOM_DURATION_MILLIS,
+                )
+            }
+        } else {
+            readyMap.animateCamera(
+                CameraUpdateFactory.zoomTo(targetZoom),
+                ZOOM_DURATION_MILLIS,
+            )
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun cycleTilt() {
+        val readyMap = map ?: return
+        val currentIndex = TILT_LEVELS.indices.minByOrNull { index ->
+            abs(TILT_LEVELS[index] - selectedFollowTilt)
+        } ?: 0
+        val targetTilt = TILT_LEVELS[(currentIndex + 1) % TILT_LEVELS.size]
+        selectedFollowTilt = targetTilt
+
+        if (isFollowingLocation && isStyleReady && lastLocation != null) {
+            runCatching {
+                readyMap.locationComponent.tiltWhileTracking(
+                    targetTilt,
+                    TILT_DURATION_MILLIS,
+                )
+            }.onFailure {
+                animateTilt(readyMap, targetTilt)
+            }
+        } else {
+            animateTilt(readyMap, targetTilt)
+        }
+    }
+
+    private fun animateTilt(readyMap: MapLibreMap, targetTilt: Double) {
+        readyMap.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder(readyMap.cameraPosition)
+                    .tilt(targetTilt)
+                    .build(),
+            ),
+            TILT_DURATION_MILLIS.toInt(),
+        )
     }
 
     fun recenter() {
@@ -424,19 +492,31 @@ internal class MapLibreSurfaceRenderer(
                 component.setCameraMode(
                     cameraMode,
                     RECENTER_DURATION_MILLIS,
-                    FOLLOW_ZOOM,
+                    selectedFollowZoom,
                     bearing,
-                    FOLLOW_TILT,
+                    selectedFollowTilt,
                     null,
                 )
                 return@runCatching
             }
 
-            if (readyMap.cameraPosition.zoom < FOLLOW_ZOOM) {
-                component.zoomWhileTracking(FOLLOW_ZOOM, RECENTER_DURATION_MILLIS)
+            if (
+                abs(readyMap.cameraPosition.zoom - selectedFollowZoom) >
+                ZOOM_COMPARISON_TOLERANCE
+            ) {
+                component.zoomWhileTracking(
+                    selectedFollowZoom,
+                    RECENTER_DURATION_MILLIS,
+                )
             }
-            if (abs(readyMap.cameraPosition.tilt - FOLLOW_TILT) > 0.5) {
-                component.tiltWhileTracking(FOLLOW_TILT, RECENTER_DURATION_MILLIS)
+            if (
+                abs(readyMap.cameraPosition.tilt - selectedFollowTilt) >
+                TILT_COMPARISON_TOLERANCE
+            ) {
+                component.tiltWhileTracking(
+                    selectedFollowTilt,
+                    RECENTER_DURATION_MILLIS,
+                )
             }
         }
     }
@@ -1200,7 +1280,15 @@ internal class MapLibreSurfaceRenderer(
         const val INITIAL_LONGITUDE = 14.580
         const val INITIAL_ZOOM = 12.5
         const val FOLLOW_ZOOM = 15.5
+        const val MIN_USER_ZOOM = 3.0
+        const val MAX_USER_ZOOM = 20.0
+        const val ZOOM_STEP = 1.0
+        const val ZOOM_COMPARISON_TOLERANCE = 0.01
+        const val ZOOM_DURATION_MILLIS = 300
         const val FOLLOW_TILT = 45.0
+        const val TILT_COMPARISON_TOLERANCE = 0.5
+        const val TILT_DURATION_MILLIS = 300L
+        val TILT_LEVELS = doubleArrayOf(0.0, 30.0, 45.0, 60.0)
         const val LOCATION_MARKER_SCALE = 1.5f
         const val RECENTER_DURATION_MILLIS = 500L
         const val FLING_SECONDS = 0.18f
