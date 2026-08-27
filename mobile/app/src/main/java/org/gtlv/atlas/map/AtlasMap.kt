@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -40,7 +41,9 @@ import org.gtlv.core.location.VehicleHeadingEstimator
 import org.gtlv.core.geoservice.RoutePoint
 import org.gtlv.core.telemetry.LiveMapUser
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.LocationComponentOptions
 import org.maplibre.android.location.modes.CameraMode
@@ -54,10 +57,15 @@ internal fun AtlasMap(
     locationState: LocationState,
     liveMapUsers: Collection<LiveMapUser>,
     routePoints: List<RoutePoint>,
+    showRouteEndpoints: Boolean = false,
     recenterRequestId: Int,
     isFollowingLocation: Boolean,
     onUserCameraMove: () -> Unit,
+    onMapClick: () -> Unit = {},
     styleUrl: String,
+    cameraFocusPoints: List<RoutePoint> = emptyList(),
+    cameraFocusRequestId: Int = 0,
+    cameraFocusPadding: Dp = 72.dp,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -145,6 +153,9 @@ internal fun AtlasMap(
     val currentOnUserCameraMove by
     rememberUpdatedState(onUserCameraMove)
 
+    val currentOnMapClick by
+    rememberUpdatedState(onMapClick)
+
     val initialCameraPosition =
         CameraPosition.Builder()
             .target(
@@ -226,6 +237,10 @@ internal fun AtlasMap(
                 false
 
             map.uiSettings.isLogoEnabled = false
+            map.uiSettings.isScrollGesturesEnabled = true
+            map.uiSettings.isZoomGesturesEnabled = true
+            map.uiSettings.isRotateGesturesEnabled = true
+            map.uiSettings.isTiltGesturesEnabled = true
 
             map.setStyle(
                 Style.Builder().fromUri(styleUrl)
@@ -318,6 +333,11 @@ internal fun AtlasMap(
                     }
                 }
 
+                map.addOnMapClickListener {
+                    currentOnMapClick()
+                    false
+                }
+
                 readyMap = map
                 loadState = MapLoadState.Loaded
             }
@@ -369,35 +389,53 @@ internal fun AtlasMap(
         val map = readyMap ?: return@LaunchedEffect
 
         runCatching {
-            map.locationComponent.cameraMode =
-                if (isFollowingLocation) {
-                    CameraMode.TRACKING_GPS
-                } else {
-                    CameraMode.NONE
-                }
-
             if (
                 isFollowingLocation &&
                 availableLocation != null
             ) {
+                val trackingZoom =
+                    if (!hasInitiallyCentered) {
+                        MapConfiguration.USER_LOCATION_ZOOM
+                    } else {
+                        null
+                    }
+
+                if (
+                    map.locationComponent.cameraMode ==
+                    CameraMode.TRACKING_GPS
+                ) {
+                    map.locationComponent.tiltWhileTracking(
+                        navigationCameraTiltDegrees,
+                        CAMERA_TILT_TRANSITION_MILLIS
+                    )
+                    trackingZoom?.let { zoom ->
+                        map.locationComponent.zoomWhileTracking(
+                            zoom,
+                            INITIAL_CAMERA_TRANSITION_MILLIS
+                        )
+                    }
+                } else {
+                    map.locationComponent.setCameraMode(
+                        CameraMode.TRACKING_GPS,
+                        INITIAL_CAMERA_TRANSITION_MILLIS,
+                        trackingZoom,
+                        null,
+                        navigationCameraTiltDegrees,
+                        null
+                    )
+                }
                 map.locationComponent.paddingWhileTracking(
                     navigationCameraPadding(
                         navigationCameraTopPaddingPixels
                     ),
                     CAMERA_PADDING_TRANSITION_MILLIS
                 )
-                map.locationComponent.tiltWhileTracking(
-                    navigationCameraTiltDegrees,
-                    CAMERA_TILT_TRANSITION_MILLIS
-                )
-
                 if (!hasInitiallyCentered) {
                     hasInitiallyCentered = true
-                    map.locationComponent.zoomWhileTracking(
-                        MapConfiguration.USER_LOCATION_ZOOM,
-                        INITIAL_CAMERA_TRANSITION_MILLIS
-                    )
                 }
+            } else {
+                map.locationComponent.cameraMode =
+                    CameraMode.NONE
             }
         }.onFailure { exception ->
             Log.e(
@@ -433,21 +471,33 @@ internal fun AtlasMap(
                     displayBearingDegrees
                 )
             )
-            map.locationComponent.cameraMode =
+            if (
+                map.locationComponent.cameraMode ==
                 CameraMode.TRACKING_GPS
+            ) {
+                map.locationComponent.tiltWhileTracking(
+                    navigationCameraTiltDegrees,
+                    CAMERA_TILT_TRANSITION_MILLIS
+                )
+                map.locationComponent.zoomWhileTracking(
+                    MapConfiguration.USER_LOCATION_ZOOM,
+                    INITIAL_CAMERA_TRANSITION_MILLIS
+                )
+            } else {
+                map.locationComponent.setCameraMode(
+                    CameraMode.TRACKING_GPS,
+                    INITIAL_CAMERA_TRANSITION_MILLIS,
+                    MapConfiguration.USER_LOCATION_ZOOM,
+                    null,
+                    navigationCameraTiltDegrees,
+                    null
+                )
+            }
             map.locationComponent.paddingWhileTracking(
                 navigationCameraPadding(
                     navigationCameraTopPaddingPixels
                 ),
                 CAMERA_PADDING_TRANSITION_MILLIS
-            )
-            map.locationComponent.tiltWhileTracking(
-                navigationCameraTiltDegrees,
-                CAMERA_TILT_TRANSITION_MILLIS
-            )
-            map.locationComponent.zoomWhileTracking(
-                MapConfiguration.USER_LOCATION_ZOOM,
-                INITIAL_CAMERA_TRANSITION_MILLIS
             )
         }.onFailure { exception ->
             Log.e(
@@ -458,9 +508,79 @@ internal fun AtlasMap(
         }
     }
 
+    val cameraFocusPaddingPixels = with(density) {
+        cameraFocusPadding.roundToPx()
+    }
+
     LaunchedEffect(
         readyMap,
-        routePoints
+        cameraFocusRequestId,
+        cameraFocusPoints,
+        cameraFocusPaddingPixels
+    ) {
+        if (cameraFocusRequestId == 0) {
+            return@LaunchedEffect
+        }
+
+        val map = readyMap ?: return@LaunchedEffect
+        val points = cameraFocusPoints
+            .filter(RoutePoint::isValid)
+            .distinct()
+
+        if (points.isEmpty()) {
+            return@LaunchedEffect
+        }
+
+        runCatching {
+            map.locationComponent.cameraMode =
+                CameraMode.NONE
+
+            val cameraUpdate = if (points.size == 1) {
+                val point = points.single()
+
+                CameraUpdateFactory.newLatLngZoom(
+                    LatLng(
+                        point.latitude,
+                        point.longitude
+                    ),
+                    ADDRESS_FOCUS_ZOOM
+                )
+            } else {
+                val boundsBuilder =
+                    LatLngBounds.Builder()
+
+                points.forEach { point ->
+                    boundsBuilder.include(
+                        LatLng(
+                            point.latitude,
+                            point.longitude
+                        )
+                    )
+                }
+
+                CameraUpdateFactory.newLatLngBounds(
+                    boundsBuilder.build(),
+                    cameraFocusPaddingPixels
+                )
+            }
+
+            map.animateCamera(
+                cameraUpdate,
+                CAMERA_FOCUS_TRANSITION_MILLIS
+            )
+        }.onFailure { exception ->
+            Log.e(
+                TAG,
+                "Failed to focus map camera",
+                exception
+            )
+        }
+    }
+
+    LaunchedEffect(
+        readyMap,
+        routePoints,
+        showRouteEndpoints
     ) {
         val map = readyMap ?: return@LaunchedEffect
         val style = map.style
@@ -484,6 +604,7 @@ internal fun AtlasMap(
             updateDisplayedRoute(
                 style = style,
                 points = routePoints,
+                showEndpoints = showRouteEndpoints,
                 state = routeRenderState
             )
             return@LaunchedEffect
@@ -501,6 +622,7 @@ internal fun AtlasMap(
             updateDisplayedRoute(
                 style = style,
                 points = displayedPoints,
+                showEndpoints = showRouteEndpoints,
                 state = routeRenderState
             )
         }
@@ -572,10 +694,14 @@ internal fun AtlasMap(
 private fun updateDisplayedRoute(
     style: Style,
     points: List<RoutePoint>,
+    showEndpoints: Boolean,
     state: RouteRenderState
 ) {
     runCatching {
-        style.updateRoute(points)
+        style.updateRoute(
+            routePoints = points,
+            showEndpoints = showEndpoints
+        )
         state.points = points
     }.onFailure { exception ->
         Log.e(
@@ -621,6 +747,8 @@ private fun navigationCameraPadding(
 private const val TAG = "AtlasMap"
 private const val INITIAL_CAMERA_TRANSITION_MILLIS = 750L
 private const val CAMERA_PADDING_TRANSITION_MILLIS = 650L
+private const val CAMERA_FOCUS_TRANSITION_MILLIS = 650
+private const val ADDRESS_FOCUS_ZOOM = 15.0
 private const val CAMERA_TILT_TRANSITION_MILLIS = 650L
 private const val ROUTE_TRANSITION_FRAME_MILLIS = 50L
 private const val ROUTE_TRANSITION_FRAME_COUNT = 18

@@ -88,6 +88,60 @@
     <string name="job_action_cancel_failed">Could not cancel the current job</string>
     <string name="job_action_job_finished">Job finished</string>
     <string name="job_action_finish_failed">Could not finish the current job</string>
+    <string name="dispatcher_action_unassigned_jobs">Unassigned jobs</string>
+    <string name="dispatcher_action_new_job">Create new job</string>
+
+    <plurals name="dispatcher_action_unassigned_jobs_count">
+        <item quantity="one">%1$d unassigned job</item>
+        <item quantity="other">%1$d unassigned jobs</item>
+    </plurals>
+
+    <string name="unassigned_jobs_title">Unassigned jobs</string>
+    <string name="unassigned_jobs_back">Back to dispatcher map</string>
+    <string name="unassigned_jobs_empty">No unassigned jobs</string>
+    <string name="unassigned_jobs_today">Today</string>
+    <string name="unassigned_jobs_no_due_date">No due date</string>
+    <string name="unassigned_jobs_load_error">Could not load unassigned jobs</string>
+    <string name="unassigned_jobs_retry">Retry</string>
+    <string name="unassigned_jobs_from">From</string>
+    <string name="unassigned_jobs_to">To</string>
+    <string name="unassigned_jobs_due">Due</string>
+    <string name="unassigned_jobs_note">Note</string>
+    <string name="unassigned_jobs_detail">%1$s: %2$s</string>
+    <string name="unassigned_jobs_unknown_location">Unknown location</string>
+    <string name="unassigned_jobs_no_destination">No destination</string>
+    <string name="unassigned_jobs_delete">Delete unassigned job</string>
+    <string name="unassigned_jobs_delete_title">Delete job?</string>
+    <string name="unassigned_jobs_delete_message">Delete the unassigned job from %1$s?</string>
+    <string name="unassigned_jobs_delete_confirm">Delete</string>
+    <string name="unassigned_jobs_delete_error">Could not delete the job. Please try again.</string>
+
+    <string name="assign_job_title">Assign job</string>
+    <string name="assign_job_back">Back to unassigned jobs</string>
+    <string name="assign_job_loading">Loading job...</string>
+    <string name="assign_job_not_found">This job is no longer available for assignment.</string>
+    <string name="assign_job_due">Due: %1$s</string>
+    <string name="assign_job_set_due_date">Set date</string>
+    <string name="assign_job_date_next">Next</string>
+    <string name="assign_job_select_time">Select time</string>
+    <string name="assign_job_date_time_confirm">OK</string>
+    <string name="assign_job_use_time_input">Enter time with keyboard</string>
+    <string name="assign_job_use_time_dial">Select time on clock</string>
+    <string name="assign_job_destination_placeholder">Enter destination</string>
+    <string name="assign_job_save_changes">Save changes</string>
+    <string name="assign_job_saving_changes">Saving…</string>
+    <string name="assign_job_save_changes_failed">Could not save the job changes</string>
+    <string name="assign_job_candidates">Recommended drivers</string>
+    <string name="assign_job_candidates_error">Could not load driver recommendations</string>
+    <string name="assign_job_no_candidates">No available drivers</string>
+    <string name="assign_job_all_drivers">All drivers</string>
+    <string name="assign_job_no_other_drivers">No other drivers</string>
+    <string name="assign_job_drivers_error">Could not load all drivers</string>
+    <string name="assign_job_recommended_rank">#%1$d recommended</string>
+    <string name="assign_job_confirm_title">Assign job?</string>
+    <string name="assign_job_confirm_message">Assign this job to %1$s?</string>
+    <string name="assign_job_confirm">Assign</string>
+    <string name="assign_job_failed">Could not assign the job. Please try again.</string>
 
     <string name="job_notification_channel">Assigned jobs</string>
     <string name="job_notification_channel_description">Notifications about newly assigned jobs</string>
@@ -108,6 +162,7 @@
     <string name="address_search_load_error">Could not load address suggestions</string>
     <string name="address_search_save_error">Could not update the job location</string>
     <string name="address_search_no_results">No matching addresses found</string>
+    <string name="address_search_loading">Searching addresses…</string>
 
     <string name="active_shift_channel">Active shift</string>
     <string name="active_shift_channel_description">Keeps Atlas connected while a shift is active</string>

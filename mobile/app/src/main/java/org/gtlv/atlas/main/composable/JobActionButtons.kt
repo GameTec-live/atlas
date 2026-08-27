@@ -2,6 +2,7 @@ package org.gtlv.atlas.main.composable
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
@@ -32,6 +33,7 @@ internal fun JobActionButtons(
     onCancelCurrentJobClick: () -> Unit,
     onPersonCollectedClick: () -> Unit,
     onJobFinishedClick: () -> Unit,
+    additionalActions: @Composable () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -40,25 +42,33 @@ internal fun JobActionButtons(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (hasCurrentJob) {
-            FilledTonalIconButton(
-                onClick = onCancelCurrentJobClick,
-                enabled =
-                    !isCancellingCurrentJob &&
-                            !isFinishingCurrentJob,
-                modifier = Modifier.size(48.dp)
+            Row(
+                horizontalArrangement =
+                    Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isCancellingCurrentJob) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = stringResource(
-                            R.string.job_action_cancel
+                additionalActions()
+
+                FilledTonalIconButton(
+                    onClick = onCancelCurrentJobClick,
+                    enabled =
+                        !isCancellingCurrentJob &&
+                                !isFinishingCurrentJob,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    if (isCancellingCurrentJob) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
                         )
-                    )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(
+                                R.string.job_action_cancel
+                            )
+                        )
+                    }
                 }
             }
 
@@ -92,6 +102,8 @@ internal fun JobActionButtons(
                 }
             }
         } else {
+            additionalActions()
+
             Button(
                 onClick = onNextJobClick,
                 enabled =

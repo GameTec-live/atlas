@@ -95,6 +95,44 @@ class JobRepositoryImpl(
             }
         }
 
+    override suspend fun getUnassignedJobs():
+            UnassignedJobsResult =
+        withContext(Dispatchers.IO) {
+            val serverAddress = serverSettingsRepository
+                .serverAddress
+                .first()
+                .removeSuffix("/")
+
+            val unassignedUrl = createUrl(
+                serverAddress = serverAddress,
+                path = "api/jobs/unassigned"
+            ) ?: return@withContext UnassignedJobsResult
+                .InvalidResponse
+
+            when (
+                val result = executeRequest(
+                    url = unassignedUrl,
+                    serverAddress = serverAddress
+                ) { responseText ->
+                    parseJobs(responseText)
+                }
+            ) {
+                is EndpointResult.Success -> {
+                    UnassignedJobsResult.Success(
+                        jobs = result.value
+                    )
+                }
+
+                is EndpointResult.Failure -> {
+                    result.toUnassignedJobsResult()
+                }
+
+                EndpointResult.NotFound -> {
+                    UnassignedJobsResult.InvalidResponse
+                }
+            }
+        }
+
     override suspend fun startJob(
         jobId: String
     ): JobActionResult {
@@ -102,6 +140,83 @@ class JobRepositoryImpl(
             jobId = jobId,
             action = "start"
         )
+    }
+
+    override suspend fun deleteUnassignedJob(
+        jobId: String
+    ): JobActionResult {
+        val result = executeDeleteJob(jobId)
+
+        if (result == JobActionResult.Success) {
+            _jobChanges.emit(Unit)
+        }
+
+        return result
+    }
+
+    override suspend fun getJobCandidates(
+        jobId: String
+    ): JobCandidatesResult = withContext(Dispatchers.IO) {
+        if (jobId.isBlank()) {
+            return@withContext JobCandidatesResult.InvalidResponse
+        }
+
+        val serverAddress = serverSettingsRepository
+            .serverAddress
+            .first()
+            .removeSuffix("/")
+
+        val candidatesUrl = serverAddress
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.addPathSegments("api/jobs")
+            ?.addPathSegment(jobId)
+            ?.addPathSegment("candidates")
+            ?.build()
+            ?: return@withContext JobCandidatesResult.InvalidResponse
+
+        when (
+            val result = executeRequest(
+                url = candidatesUrl,
+                serverAddress = serverAddress
+            ) { responseText ->
+                parseJobCandidates(responseText)
+            }
+        ) {
+            is EndpointResult.Success -> {
+                JobCandidatesResult.Success(
+                    candidates = result.value
+                )
+            }
+
+            is EndpointResult.Failure -> {
+                result.toJobCandidatesResult()
+            }
+
+            EndpointResult.NotFound -> {
+                JobCandidatesResult.InvalidResponse
+            }
+        }
+    }
+
+    override suspend fun assignJob(
+        jobId: String,
+        driverId: String
+    ): JobActionResult {
+        if (jobId.isBlank() || driverId.isBlank()) {
+            return JobActionResult.InvalidResponse
+        }
+
+        val result = executeAssignment(
+            jobId = jobId,
+            driverId = driverId
+        )
+
+        if (result == JobActionResult.Success) {
+            _jobChanges.emit(Unit)
+        }
+
+        return result
     }
 
     override suspend fun cancelJob(
@@ -143,15 +258,75 @@ class JobRepositoryImpl(
         field: JobLocationField,
         latitude: Double,
         longitude: Double
-    ): JobActionResult = withContext(Dispatchers.IO) {
+    ): JobActionResult {
         if (
             jobId.isBlank() ||
             latitude !in -90.0..90.0 ||
             longitude !in -180.0..180.0
         ) {
-            return@withContext JobActionResult.InvalidResponse
+            return JobActionResult.InvalidResponse
         }
 
+        val coordinates = JSONArray()
+            .put(latitude)
+            .put(longitude)
+
+        val requestJson = JSONObject()
+            .put(field.apiName, coordinates)
+            .toString()
+
+        return executeJobUpdate(
+            jobId = jobId,
+            requestJson = requestJson
+        )
+    }
+
+    override suspend fun updateJobDetails(
+        jobId: String,
+        destination: JobCoordinates?,
+        dueDate: String
+    ): JobActionResult {
+        if (
+            jobId.isBlank() ||
+            dueDate.isBlank() ||
+            destination?.latitude?.let {
+                it !in -90.0..90.0
+            } == true ||
+            destination?.longitude?.let {
+                it !in -180.0..180.0
+            } == true
+        ) {
+            return JobActionResult.InvalidResponse
+        }
+
+        val request = JSONObject()
+            .put("dueDate", dueDate)
+
+        destination?.let { coordinates ->
+            request.put(
+                "to",
+                JSONArray()
+                    .put(coordinates.latitude)
+                    .put(coordinates.longitude)
+            )
+        }
+
+        val result = executeJobUpdate(
+            jobId = jobId,
+            requestJson = request.toString()
+        )
+
+        if (result == JobActionResult.Success) {
+            _jobChanges.emit(Unit)
+        }
+
+        return result
+    }
+
+    private suspend fun executeJobUpdate(
+        jobId: String,
+        requestJson: String
+    ): JobActionResult = withContext(Dispatchers.IO) {
         val serverAddress = serverSettingsRepository
             .serverAddress
             .first()
@@ -163,18 +338,7 @@ class JobRepositoryImpl(
             ?.addPathSegments("api/jobs")
             ?.addPathSegment(jobId)
             ?.build()
-
-        if (updateUrl == null) {
-            return@withContext JobActionResult.InvalidResponse
-        }
-
-        val coordinates = JSONArray()
-            .put(latitude)
-            .put(longitude)
-
-        val requestJson = JSONObject()
-            .put(field.apiName, coordinates)
-            .toString()
+            ?: return@withContext JobActionResult.InvalidResponse
 
         val requestBody = requestJson.toRequestBody(
             "application/json".toMediaType()
@@ -288,6 +452,131 @@ class JobRepositoryImpl(
         }
     }
 
+    private suspend fun executeDeleteJob(
+        jobId: String
+    ): JobActionResult = withContext(Dispatchers.IO) {
+        if (jobId.isBlank()) {
+            return@withContext JobActionResult.InvalidResponse
+        }
+
+        val serverAddress = serverSettingsRepository
+            .serverAddress
+            .first()
+            .removeSuffix("/")
+
+        val deleteUrl = serverAddress
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.addPathSegments("api/jobs")
+            ?.addPathSegment(jobId)
+            ?.build()
+            ?: return@withContext JobActionResult.InvalidResponse
+
+        val request = Request.Builder()
+            .url(deleteUrl)
+            .header("Origin", serverAddress)
+            .header("Accept", "application/json")
+            .delete()
+            .build()
+
+        try {
+            networkClient.okHttpClient
+                .newCall(request)
+                .execute()
+                .use { response ->
+                    val responseText =
+                        response.body?.string().orEmpty()
+
+                    when {
+                        response.code == 401 -> {
+                            JobActionResult.Unauthorized
+                        }
+
+                        !response.isSuccessful -> {
+                            JobActionResult.ServerError(
+                                statusCode = response.code,
+                                message = readServerMessage(
+                                    responseText
+                                )
+                            )
+                        }
+
+                        else -> {
+                            JobActionResult.Success
+                        }
+                    }
+                }
+        } catch (_: IOException) {
+            JobActionResult.NetworkError
+        } catch (_: Exception) {
+            JobActionResult.InvalidResponse
+        }
+    }
+
+    private suspend fun executeAssignment(
+        jobId: String,
+        driverId: String
+    ): JobActionResult = withContext(Dispatchers.IO) {
+        val serverAddress = serverSettingsRepository
+            .serverAddress
+            .first()
+            .removeSuffix("/")
+
+        val assignmentUrl = serverAddress
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.addPathSegments("api/jobs")
+            ?.addPathSegment(jobId)
+            ?.addPathSegment("assign")
+            ?.build()
+            ?: return@withContext JobActionResult.InvalidResponse
+
+        val requestBody = JSONObject()
+            .put("assignedDriverId", driverId)
+            .toString()
+            .toRequestBody(
+                "application/json".toMediaType()
+            )
+
+        val request = Request.Builder()
+            .url(assignmentUrl)
+            .header("Origin", serverAddress)
+            .header("Accept", "application/json")
+            .post(requestBody)
+            .build()
+
+        try {
+            networkClient.okHttpClient
+                .newCall(request)
+                .execute()
+                .use { response ->
+                    val responseText =
+                        response.body?.string().orEmpty()
+
+                    when {
+                        response.code == 401 -> {
+                            JobActionResult.Unauthorized
+                        }
+
+                        !response.isSuccessful -> {
+                            JobActionResult.ServerError(
+                                statusCode = response.code,
+                                message = readServerMessage(
+                                    responseText
+                                )
+                            )
+                        }
+
+                        else -> JobActionResult.Success
+                    }
+                }
+        } catch (_: IOException) {
+            JobActionResult.NetworkError
+        } catch (_: Exception) {
+            JobActionResult.InvalidResponse
+        }
+    }
+
     private fun createUrl(
         serverAddress: String,
         path: String
@@ -308,7 +597,7 @@ class JobRepositoryImpl(
             url = url,
             serverAddress = serverAddress
         ) { responseText ->
-            parseAssignedJobs(responseText)
+            parseJobs(responseText)
         }
     }
 
@@ -397,7 +686,7 @@ class JobRepositoryImpl(
         }
     }
 
-    private fun parseAssignedJobs(
+    private fun parseJobs(
         responseText: String
     ): List<Job> {
         val array = JSONArray(responseText)
@@ -508,8 +797,12 @@ class JobRepositoryImpl(
         responseText: String
     ): String? {
         return runCatching {
-            JSONObject(responseText)
-                .optString("message")
+            val json = JSONObject(responseText)
+
+            json.optString("message")
+                .ifBlank {
+                    json.optString("error")
+                }
                 .ifBlank { null }
         }.getOrNull()
     }
@@ -553,6 +846,88 @@ class JobRepositoryImpl(
 
             is EndpointResult.Failure.Server ->
                 JobsResult.ServerError(
+                    statusCode = statusCode,
+                    message = message
+                )
+        }
+    }
+
+    private fun parseJobCandidates(
+        responseText: String
+    ): List<JobCandidate> {
+        val array = JSONArray(responseText)
+
+        return buildList {
+            for (index in 0 until array.length()) {
+                val json = array.getJSONObject(index)
+                val driverId = json.optString("driverId")
+                val driverName = json.optString(
+                    "driverName"
+                )
+
+                if (
+                    driverId.isBlank() ||
+                    driverName.isBlank()
+                ) {
+                    throw IllegalArgumentException(
+                        "Invalid job candidate"
+                    )
+                }
+
+                val rankingTrace = json.optJSONObject(
+                    "rankingTrace"
+                )
+
+                add(
+                    JobCandidate(
+                        driverId = driverId,
+                        driverName = driverName,
+                        rank = rankingTrace
+                            ?.optInt("rank", index + 1)
+                            ?.coerceAtLeast(1)
+                            ?: index + 1,
+                        summary = rankingTrace
+                            ?.nullableString("summary")
+                    )
+                )
+            }
+        }.sortedBy(JobCandidate::rank)
+    }
+
+    private fun EndpointResult.Failure
+        .toUnassignedJobsResult(): UnassignedJobsResult {
+        return when (this) {
+            EndpointResult.Failure.Unauthorized ->
+                UnassignedJobsResult.Unauthorized
+
+            EndpointResult.Failure.Network ->
+                UnassignedJobsResult.NetworkError
+
+            EndpointResult.Failure.InvalidResponse ->
+                UnassignedJobsResult.InvalidResponse
+
+            is EndpointResult.Failure.Server ->
+                UnassignedJobsResult.ServerError(
+                    statusCode = statusCode,
+                    message = message
+                )
+        }
+    }
+
+    private fun EndpointResult.Failure
+        .toJobCandidatesResult(): JobCandidatesResult {
+        return when (this) {
+            EndpointResult.Failure.Unauthorized ->
+                JobCandidatesResult.Unauthorized
+
+            EndpointResult.Failure.Network ->
+                JobCandidatesResult.NetworkError
+
+            EndpointResult.Failure.InvalidResponse ->
+                JobCandidatesResult.InvalidResponse
+
+            is EndpointResult.Failure.Server ->
+                JobCandidatesResult.ServerError(
                     statusCode = statusCode,
                     message = message
                 )

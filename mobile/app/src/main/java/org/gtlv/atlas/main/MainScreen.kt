@@ -39,6 +39,7 @@ import org.gtlv.atlas.R
 import org.gtlv.atlas.address.AddressSearchField
 import org.gtlv.atlas.main.composable.AssignedJobDeclineDialog
 import org.gtlv.atlas.main.composable.AssignedJobNotificationBanner
+import org.gtlv.atlas.main.composable.DispatcherActionButtons
 import org.gtlv.atlas.main.composable.JobActionButtons
 import org.gtlv.atlas.main.composable.JobPanel
 import org.gtlv.atlas.main.composable.NavigationPanel
@@ -73,6 +74,9 @@ internal fun MainScreen(
     onCancelCurrentJob: () -> Unit,
     onPersonCollected: () -> Unit,
     onJobFinished: () -> Unit,
+    unassignedJobCount: Int?,
+    onUnassignedJobsClick: () -> Unit,
+    onNewJobClick: () -> Unit,
     serverAddress: String,
     onEditDestination: () -> Unit,
     onAddressQueryChanged: (String) -> Unit,
@@ -282,7 +286,19 @@ internal fun MainScreen(
                     onPersonCollectedClick =
                         onPersonCollected,
                     onJobFinishedClick =
-                        onJobFinished
+                        onJobFinished,
+                    additionalActions = {
+                        if (role == ShiftRole.DISPATCHER) {
+                            DispatcherActionButtons(
+                                unassignedJobCount =
+                                    unassignedJobCount,
+                                onUnassignedJobsClick =
+                                    onUnassignedJobsClick,
+                                onNewJobClick =
+                                    onNewJobClick
+                            )
+                        }
+                    }
                 )
             }
 
