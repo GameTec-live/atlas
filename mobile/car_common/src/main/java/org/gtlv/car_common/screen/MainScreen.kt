@@ -197,6 +197,15 @@ class MainScreen(
             actionStripBuilder.addAction(newJobActionBuilder.build())
         }
 
+        val recenterActionBuilder = Action.Builder()
+            .setIcon(carIcon(R.drawable.ic_recenter))
+            .setOnClickListener(mapRenderer::recenter)
+
+        if (carContext.carAppApiLevel >= 5) {
+            recenterActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
+        }
+
+        actionStripBuilder.addAction(recenterActionBuilder.build())
         actionStripBuilder.addAction(jobAction)
 
         val builder = NavigationTemplate.Builder()
@@ -220,6 +229,9 @@ class MainScreen(
 
     @RequiresCarApi(2)
     private fun buildMapActionStrip(): ActionStrip {
+        val panAction = Action.Builder(Action.PAN)
+            .setIcon(carIcon(R.drawable.ic_pan))
+            .build()
         val tiltActionBuilder = Action.Builder()
             .setIcon(carIcon(R.drawable.ic_tilt))
             .setOnClickListener(mapRenderer::cycleTilt)
@@ -229,22 +241,18 @@ class MainScreen(
         val zoomOutActionBuilder = Action.Builder()
             .setIcon(carIcon(R.drawable.ic_zoom_out))
             .setOnClickListener(mapRenderer::zoomOut)
-        val recenterActionBuilder = Action.Builder()
-            .setIcon(carIcon(R.drawable.ic_recenter))
-            .setOnClickListener(mapRenderer::recenter)
 
         if (carContext.carAppApiLevel >= 5) {
             tiltActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
             zoomInActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
             zoomOutActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
-            recenterActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
         }
 
         return ActionStrip.Builder()
+            .addAction(panAction)
             .addAction(zoomInActionBuilder.build())
             .addAction(zoomOutActionBuilder.build())
             .addAction(tiltActionBuilder.build())
-            .addAction(recenterActionBuilder.build())
             .build()
     }
 
