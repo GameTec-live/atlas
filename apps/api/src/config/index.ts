@@ -61,10 +61,9 @@ export const configSchema = v.object({
     ),
     storage: v.optional(
         v.object({
-            dataLocation: v.optional(
-                v.string(),
-                env.DATA_STORAGE_PATH ?? "./data",
-            ),
+            dataLocation: env.DATA_STORAGE_PATH
+                ? v.literal(env.DATA_STORAGE_PATH)
+                : v.optional(v.string(), env.DATA_STORAGE_PATH ?? "./data"),
             logoName: v.optional(v.string(), "logo"),
         }),
         { dataLocation: env.DATA_STORAGE_PATH ?? "./data", logoName: "logo" },
