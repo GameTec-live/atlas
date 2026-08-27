@@ -1,8 +1,12 @@
 package org.gtlv.car_common.screen
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Presentation
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
@@ -13,7 +17,9 @@ import android.util.Log
 import android.view.Surface
 import android.view.Gravity
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -37,6 +43,8 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import kotlin.math.abs
 import kotlin.math.ln
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Renders MapLibre into the surface supplied by the Android Auto host. */
 internal class MapLibreSurfaceRenderer(
@@ -54,9 +62,11 @@ internal class MapLibreSurfaceRenderer(
     private var map: MapLibreMap? = null
     private var rootView: FrameLayout? = null
     private var jobCardView: LinearLayout? = null
+    private var jobCardToggleView: ImageView? = null
     private var jobQueueView: TextView? = null
     private var jobSummaryView: TextView? = null
     private var dispatcherSidebarView: LinearLayout? = null
+    private var dispatcherSidebarToggleView: TextView? = null
     private var dispatcherUserScrollView: ScrollView? = null
     private var dispatcherUserRowsView: LinearLayout? = null
     private var dispatcherUserCountView: TextView? = null
@@ -66,10 +76,15 @@ internal class MapLibreSurfaceRenderer(
     private var isFollowingLocation = true
     private var surfaceWidth = 0
     private var surfaceHeight = 0
+    private var renderDensity = 1f
     private var visibleArea = Rect()
     private var stableArea = Rect()
     private var appliedMapPadding: IntArray? = null
     private var interactionTarget = InteractionTarget.MAP
+    private var isDispatcherSidebarExpanded = false
+    private var dispatcherSidebarAnimator: ValueAnimator? = null
+    private var isJobCardExpanded = true
+    private var jobCardAnimator: ValueAnimator? = null
     private var jobSummary = carContext.getString(
         org.gtlv.car_common.R.string.driver_loading_job,
     )
@@ -97,6 +112,12 @@ internal class MapLibreSurfaceRenderer(
         outputSurface = surface
         surfaceWidth = surfaceContainer.width
         surfaceHeight = surfaceContainer.height
+        val renderDpi = responsiveRenderDpi(
+            width = surfaceContainer.width,
+            height = surfaceContainer.height,
+            hostDpi = surfaceContainer.dpi,
+        )
+        renderDensity = renderDpi / BASE_DENSITY_DPI.toFloat()
 
         MapLibre.getInstance(carContext.applicationContext)
 
@@ -104,7 +125,7 @@ internal class MapLibreSurfaceRenderer(
             DISPLAY_NAME,
             surfaceContainer.width,
             surfaceContainer.height,
-            surfaceContainer.dpi,
+            renderDpi,
             surface,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
         ) ?: run {
@@ -147,6 +168,7 @@ internal class MapLibreSurfaceRenderer(
 
             map = readyMap
             jobCardView?.bringToFront()
+            jobCardToggleView?.bringToFront()
             readyMap.uiSettings.apply {
                 isAttributionEnabled = false
                 isLogoEnabled = false
@@ -207,8 +229,21 @@ internal class MapLibreSurfaceRenderer(
     }
 
     override fun onClick(x: Float, y: Float) {
+        if (dispatcherSidebarAnimator != null || jobCardAnimator != null) return
+
+        if (isJobCardToggleClick(x, y)) {
+            setJobCardExpanded(!isJobCardExpanded)
+            return
+        }
+
+        if (isDispatcherSidebarToggleClick(x, y)) {
+            setDispatcherSidebarExpanded(!isDispatcherSidebarExpanded)
+            return
+        }
+
         interactionTarget = if (
             showDispatcherDriverList &&
+            isDispatcherSidebarExpanded &&
             x >= 0f &&
             x < dispatcherSidebarWidth().toFloat()
         ) {
@@ -252,11 +287,13 @@ internal class MapLibreSurfaceRenderer(
     fun updateJobSummary(summary: String) {
         jobSummary = summary
         jobSummaryView?.text = summary
+        jobCardView?.post(::positionJobCardToggle)
     }
 
     fun updateQueuedJobCount(count: Int) {
         queuedJobCount = count.coerceAtLeast(0)
         jobQueueView?.text = queuedJobText()
+        jobCardView?.post(::positionJobCardToggle)
     }
 
     fun updateLiveUsers(users: Collection<LiveMapUser>) {
@@ -408,14 +445,6 @@ internal class MapLibreSurfaceRenderer(
         val readyMap = map ?: return
         val area = visibleArea
         if (area.isEmpty || surfaceWidth <= 0 || surfaceHeight <= 0) return
-        val followTopPadding = if (
-            isFollowingLocation && isStyleReady && lastLocation != null
-        ) {
-            (area.height() * FOLLOW_TOP_PADDING_FRACTION).toInt()
-        } else {
-            0
-        }
-
         val sidebarWidth = dispatcherSidebarWidth()
         val mapContentWidth = (surfaceWidth - sidebarWidth).coerceAtLeast(1)
         val localVisibleLeft =
@@ -424,7 +453,7 @@ internal class MapLibreSurfaceRenderer(
             (area.right - sidebarWidth).coerceIn(0, mapContentWidth)
         val padding = intArrayOf(
             localVisibleLeft,
-            (area.top + followTopPadding).coerceAtLeast(0),
+            area.top.coerceAtLeast(0),
             (mapContentWidth - localVisibleRight).coerceAtLeast(0),
             (surfaceHeight - area.bottom).coerceAtLeast(0),
         )
@@ -447,7 +476,7 @@ internal class MapLibreSurfaceRenderer(
                 FrameLayout.LayoutParams.MATCH_PARENT,
             ).apply {
                 if (showDispatcherDriverList) {
-                    leftMargin = dp(DISPATCHER_SIDEBAR_WIDTH_DP)
+                    leftMargin = dispatcherSidebarWidth()
                 }
             },
         )
@@ -489,7 +518,7 @@ internal class MapLibreSurfaceRenderer(
         newMapView.addView(
             jobCard,
             FrameLayout.LayoutParams(
-                dp(360),
+                responsiveJobCardWidth(),
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.BOTTOM or Gravity.START,
             ).apply {
@@ -498,24 +527,58 @@ internal class MapLibreSurfaceRenderer(
             },
         )
 
+        val jobToggle = createJobCardToggle(context)
+        jobCardToggleView = jobToggle
+        newMapView.addView(
+            jobToggle,
+            FrameLayout.LayoutParams(
+                dp(JOB_CARD_TOGGLE_WIDTH_DP),
+                dp(JOB_CARD_TOGGLE_HEIGHT_DP),
+                Gravity.BOTTOM or Gravity.START,
+            ),
+        )
+
         if (showDispatcherDriverList) {
-            val sidebar = createDispatcherSidebar(context)
+            val sidebar = createDispatcherSidebar(context).apply {
+                visibility = if (isDispatcherSidebarExpanded) {
+                    View.VISIBLE
+                } else {
+                    View.GONE
+                }
+            }
             dispatcherSidebarView = sidebar
 
             root.addView(
                 sidebar,
                 FrameLayout.LayoutParams(
-                    dp(DISPATCHER_SIDEBAR_WIDTH_DP),
+                    expandedDispatcherSidebarWidth(),
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     Gravity.TOP or Gravity.START,
                 ),
+            )
+
+            val toggle = createDispatcherSidebarToggle(context)
+            dispatcherSidebarToggleView = toggle
+            root.addView(
+                toggle,
+                FrameLayout.LayoutParams(
+                    dp(SIDEBAR_TOGGLE_WIDTH_DP),
+                    dp(SIDEBAR_TOGGLE_HEIGHT_DP),
+                    Gravity.TOP or Gravity.START,
+                ).apply {
+                    leftMargin = dispatcherSidebarWidth()
+                    topMargin = dispatcherSidebarToggleTop()
+                },
             )
         }
 
         root.post {
             applyOverlayInsets()
             jobCard.bringToFront()
+            jobToggle.bringToFront()
+            positionJobCardToggle()
             dispatcherSidebarView?.bringToFront()
+            dispatcherSidebarToggleView?.bringToFront()
             Log.d(
                 LOG_TAG,
                 "overlay root=${root.width}x${root.height} " +
@@ -540,7 +603,128 @@ internal class MapLibreSurfaceRenderer(
                         dp(OVERLAY_MARGIN_DP)
                 (jobSummaryView?.parent as? LinearLayout)?.layoutParams = this
             }
+        jobCardView?.post(::positionJobCardToggle)
+    }
 
+    private fun createJobCardToggle(context: Context): ImageView =
+        ImageView(context).apply {
+            setImageResource(org.gtlv.car_common.R.drawable.ic_chevron_down)
+            imageTintList = ColorStateList.valueOf(Color.WHITE)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(dp(16), dp(6), dp(16), dp(6))
+            contentDescription = carContext.getString(
+                org.gtlv.car_common.R.string.driver_hide_job_card,
+            )
+            background = topRoundedBackground(
+                color = Color.argb(230, 32, 33, 36),
+                radiusDp = JOB_CARD_TOGGLE_RADIUS_DP,
+            )
+            elevation = dp(12).toFloat()
+        }
+
+    private fun positionJobCardToggle() {
+        val card = jobCardView ?: return
+        val toggle = jobCardToggleView ?: return
+        val cardParams = card.layoutParams as? FrameLayout.LayoutParams ?: return
+        val toggleParams =
+            toggle.layoutParams as? FrameLayout.LayoutParams ?: return
+        val cardWidth = cardParams.width.takeIf { width -> width > 0 }
+            ?: card.width
+        if (cardWidth <= 0 || card.height <= 0) return
+
+        toggleParams.leftMargin = cardParams.leftMargin +
+            ((cardWidth - toggleParams.width) / 2).coerceAtLeast(0)
+        toggleParams.bottomMargin = cardParams.bottomMargin +
+            card.height
+        toggle.layoutParams = toggleParams
+
+        if (jobCardAnimator == null) {
+            if (isJobCardExpanded) {
+                card.translationY = 0f
+                toggle.translationY = 0f
+            } else {
+                val collapseDistance = jobCardCollapseDistance(
+                    card = card,
+                    cardParams = cardParams,
+                )
+                card.translationY = collapseDistance
+                toggle.translationY = collapseDistance
+            }
+        }
+    }
+
+    private fun jobCardCollapseDistance(
+        card: LinearLayout,
+        cardParams: FrameLayout.LayoutParams,
+    ): Float {
+        val queueHeight = jobQueueView?.height ?: 0
+        val visibleHeight = (
+            card.paddingTop + queueHeight + card.paddingBottom
+            ).coerceAtMost(card.height)
+        return (
+            card.height - visibleHeight + cardParams.bottomMargin
+            ).coerceAtLeast(0).toFloat()
+    }
+
+    private fun isJobCardToggleClick(x: Float, y: Float): Boolean {
+        val toggle = jobCardToggleView ?: return false
+        val bounds = Rect()
+        return toggle.getGlobalVisibleRect(bounds) &&
+            bounds.contains(x.toInt(), y.toInt())
+    }
+
+    private fun setJobCardExpanded(expanded: Boolean) {
+        if (isJobCardExpanded == expanded || jobCardAnimator != null) return
+
+        val card = jobCardView ?: return
+        val toggle = jobCardToggleView ?: return
+        positionJobCardToggle()
+        val cardParams = card.layoutParams as? FrameLayout.LayoutParams ?: return
+        if (card.height <= 0) return
+
+        val collapseDistance = jobCardCollapseDistance(
+            card = card,
+            cardParams = cardParams,
+        )
+        val startProgress = if (expanded) 1f else 0f
+        val endProgress = if (expanded) 0f else 1f
+
+        isJobCardExpanded = expanded
+        card.visibility = View.VISIBLE
+        toggle.setImageResource(if (expanded) {
+            org.gtlv.car_common.R.drawable.ic_chevron_down
+        } else {
+            org.gtlv.car_common.R.drawable.ic_chevron_up
+        })
+        toggle.contentDescription = carContext.getString(
+            if (expanded) {
+                org.gtlv.car_common.R.string.driver_hide_job_card
+            } else {
+                org.gtlv.car_common.R.string.driver_show_job_card
+            },
+        )
+
+        val animator = ValueAnimator.ofFloat(startProgress, endProgress).apply {
+            duration = JOB_CARD_ANIMATION_DURATION_MILLIS
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { valueAnimator ->
+                val progress = valueAnimator.animatedValue as Float
+                card.translationY = collapseDistance * progress
+                toggle.translationY = collapseDistance * progress
+            }
+            addListener(
+                object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        if (jobCardAnimator !== animation) return
+
+                        card.visibility = View.VISIBLE
+                        jobCardAnimator = null
+                    }
+                },
+            )
+        }
+        jobCardAnimator = animator
+        animator.start()
     }
 
     private fun createDispatcherSidebar(context: Context): LinearLayout {
@@ -592,6 +776,144 @@ internal class MapLibreSurfaceRenderer(
 
             renderDispatcherUsers()
         }
+    }
+
+    private fun createDispatcherSidebarToggle(context: Context): TextView =
+        TextView(context).apply {
+            text = if (isDispatcherSidebarExpanded) {
+                SIDEBAR_COLLAPSE_CHEVRON
+            } else {
+                SIDEBAR_EXPAND_CHEVRON
+            }
+            contentDescription = carContext.getString(
+                if (isDispatcherSidebarExpanded) {
+                    org.gtlv.car_common.R.string.dispatcher_hide_sidebar
+                } else {
+                    org.gtlv.car_common.R.string.dispatcher_show_sidebar
+                },
+            )
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            textSize = 26f
+            background = rightRoundedBackground(
+                color = Color.rgb(32, 33, 36),
+                radiusDp = SIDEBAR_TOGGLE_RADIUS_DP,
+            )
+            elevation = dp(14).toFloat()
+        }
+
+    private fun isDispatcherSidebarToggleClick(x: Float, y: Float): Boolean {
+        if (!showDispatcherDriverList) return false
+
+        val toggleWidth = dp(SIDEBAR_TOGGLE_WIDTH_DP)
+        val toggleLeft = if (isDispatcherSidebarExpanded) {
+            dispatcherSidebarWidth()
+        } else {
+            0
+        }
+        val toggleTop = dispatcherSidebarToggleTop()
+        return x >= toggleLeft &&
+            x < toggleLeft + toggleWidth &&
+            y >= toggleTop &&
+            y < toggleTop + dp(SIDEBAR_TOGGLE_HEIGHT_DP)
+    }
+
+    private fun dispatcherSidebarToggleTop(): Int =
+        ((surfaceHeight - dp(SIDEBAR_TOGGLE_HEIGHT_DP)) / 2)
+            .coerceAtLeast(0)
+
+    private fun setDispatcherSidebarExpanded(expanded: Boolean) {
+        if (
+            !showDispatcherDriverList ||
+            isDispatcherSidebarExpanded == expanded ||
+            dispatcherSidebarAnimator != null
+        ) {
+            return
+        }
+
+        val sidebar = dispatcherSidebarView ?: return
+        val expandedWidth = expandedDispatcherSidebarWidth()
+        val startWidth = if (expanded) 0 else expandedWidth
+        val endWidth = if (expanded) expandedWidth else 0
+
+        isDispatcherSidebarExpanded = expanded
+        if (!expanded) {
+            interactionTarget = InteractionTarget.MAP
+        }
+
+        sidebar.visibility = View.VISIBLE
+        sidebar.translationX = (startWidth - expandedWidth).toFloat()
+        dispatcherSidebarToggleView?.apply {
+            text = if (expanded) {
+                SIDEBAR_COLLAPSE_CHEVRON
+            } else {
+                SIDEBAR_EXPAND_CHEVRON
+            }
+            contentDescription = carContext.getString(
+                if (expanded) {
+                    org.gtlv.car_common.R.string.dispatcher_hide_sidebar
+                } else {
+                    org.gtlv.car_common.R.string.dispatcher_show_sidebar
+                },
+            )
+            bringToFront()
+        }
+
+        val animator = ValueAnimator.ofInt(startWidth, endWidth).apply {
+            duration = SIDEBAR_ANIMATION_DURATION_MILLIS
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { valueAnimator ->
+                val visibleSidebarWidth = valueAnimator.animatedValue as Int
+                updateDispatcherSidebarAnimationFrame(
+                    visibleSidebarWidth = visibleSidebarWidth,
+                    expandedSidebarWidth = expandedWidth,
+                )
+            }
+            addListener(
+                object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        if (dispatcherSidebarAnimator !== animation) return
+
+                        sidebar.visibility =
+                            if (expanded) View.VISIBLE else View.GONE
+                        sidebar.translationX = 0f
+                        dispatcherSidebarAnimator = null
+                        appliedMapPadding = null
+                        rootView?.post {
+                            applyVisibleArea()
+                            applyOverlayInsets()
+                        }
+                    }
+                },
+            )
+        }
+        dispatcherSidebarAnimator = animator
+        animator.start()
+    }
+
+    private fun updateDispatcherSidebarAnimationFrame(
+        visibleSidebarWidth: Int,
+        expandedSidebarWidth: Int,
+    ) {
+        dispatcherSidebarView?.translationX =
+            (visibleSidebarWidth - expandedSidebarWidth).toFloat()
+
+        (mapView?.layoutParams as? FrameLayout.LayoutParams)?.apply {
+            leftMargin = visibleSidebarWidth
+            mapView?.layoutParams = this
+        }
+        (dispatcherSidebarToggleView?.layoutParams as? FrameLayout.LayoutParams)
+            ?.apply {
+                leftMargin = visibleSidebarWidth
+                dispatcherSidebarToggleView?.layoutParams = this
+            }
+        jobCardView?.layoutParams?.apply {
+            width = responsiveJobCardWidth(visibleSidebarWidth)
+            jobCardView?.layoutParams = this
+        }
+        positionJobCardToggle()
+
+        rootView?.requestLayout()
     }
 
     private fun renderDispatcherUsers() {
@@ -699,15 +1021,88 @@ internal class MapLibreSurfaceRenderer(
         cornerRadius = dp(radiusDp).toFloat()
     }
 
-    private fun dp(value: Int): Int =
-        (value * carContext.resources.displayMetrics.density).toInt()
+    private fun rightRoundedBackground(
+        color: Int,
+        radiusDp: Int,
+    ): GradientDrawable = GradientDrawable().apply {
+        val radius = dp(radiusDp).toFloat()
+        shape = GradientDrawable.RECTANGLE
+        setColor(color)
+        cornerRadii = floatArrayOf(
+            0f,
+            0f,
+            radius,
+            radius,
+            radius,
+            radius,
+            0f,
+            0f,
+        )
+    }
+
+    private fun topRoundedBackground(
+        color: Int,
+        radiusDp: Int,
+    ): GradientDrawable = GradientDrawable().apply {
+        val radius = dp(radiusDp).toFloat()
+        shape = GradientDrawable.RECTANGLE
+        setColor(color)
+        cornerRadii = floatArrayOf(
+            radius,
+            radius,
+            radius,
+            radius,
+            0f,
+            0f,
+            0f,
+            0f,
+        )
+    }
+
+    private fun dp(value: Int): Int = (value * renderDensity).roundToInt()
+
+    private fun responsiveRenderDpi(
+        width: Int,
+        height: Int,
+        hostDpi: Int,
+    ): Int {
+        val resolutionScale = min(
+            width.toFloat() / REFERENCE_SURFACE_WIDTH,
+            height.toFloat() / REFERENCE_SURFACE_HEIGHT,
+        ).coerceIn(MIN_RESOLUTION_SCALE, 1f)
+        val responsiveMaximum =
+            (MAX_RENDER_DPI * resolutionScale).roundToInt()
+                .coerceAtLeast(MIN_RENDER_DPI)
+        return min(hostDpi, responsiveMaximum)
+    }
 
     private fun dispatcherSidebarWidth(): Int =
-        if (showDispatcherDriverList) {
-            dp(DISPATCHER_SIDEBAR_WIDTH_DP)
+        if (showDispatcherDriverList && isDispatcherSidebarExpanded) {
+            expandedDispatcherSidebarWidth()
         } else {
             0
         }
+
+    private fun expandedDispatcherSidebarWidth(): Int =
+        if (showDispatcherDriverList) {
+            min(
+                dp(DISPATCHER_SIDEBAR_WIDTH_DP),
+                (surfaceWidth * SIDEBAR_MAX_WIDTH_FRACTION).roundToInt(),
+            ).coerceAtLeast(1)
+        } else {
+            0
+        }
+
+    private fun responsiveJobCardWidth(
+        sidebarWidth: Int = dispatcherSidebarWidth(),
+    ): Int {
+        val mapContentWidth =
+            (surfaceWidth - sidebarWidth).coerceAtLeast(1)
+        return min(
+            dp(JOB_CARD_WIDTH_DP),
+            (mapContentWidth * JOB_CARD_MAX_WIDTH_FRACTION).roundToInt(),
+        ).coerceAtLeast(1)
+    }
 
     private fun queuedJobText(): String =
         carContext.resources.getQuantityString(
@@ -717,19 +1112,29 @@ internal class MapLibreSurfaceRenderer(
         )
 
     private fun destroyDisplay(releaseSurface: Boolean = true) {
+        dispatcherSidebarAnimator?.removeAllListeners()
+        dispatcherSidebarAnimator?.cancel()
+        dispatcherSidebarAnimator = null
+        jobCardAnimator?.removeAllListeners()
+        jobCardAnimator?.cancel()
+        jobCardAnimator = null
         val oldMapView = mapView
         map = null
         mapView = null
         rootView = null
         jobCardView = null
+        jobCardToggleView = null
         jobQueueView = null
         jobSummaryView = null
         dispatcherSidebarView = null
+        dispatcherSidebarToggleView = null
         dispatcherUserScrollView = null
         dispatcherUserRowsView = null
         dispatcherUserCountView = null
         appliedMapPadding = null
         interactionTarget = InteractionTarget.MAP
+        isDispatcherSidebarExpanded = false
+        isJobCardExpanded = true
         isStyleReady = false
 
         if (oldMapView != null) {
@@ -748,6 +1153,7 @@ internal class MapLibreSurfaceRenderer(
         outputSurface = null
         surfaceWidth = 0
         surfaceHeight = 0
+        renderDensity = 1f
     }
 
     private fun AtlasLocation.toAndroidLocation(): Location =
@@ -770,13 +1176,31 @@ internal class MapLibreSurfaceRenderer(
         const val DISPLAY_NAME = "Atlas Android Auto map"
         const val LOG_TAG = "AtlasCarMap"
         const val DISPATCHER_SIDEBAR_WIDTH_DP = 220
+        const val SIDEBAR_TOGGLE_WIDTH_DP = 42
+        const val SIDEBAR_TOGGLE_HEIGHT_DP = 88
+        const val SIDEBAR_TOGGLE_RADIUS_DP = 18
+        const val SIDEBAR_ANIMATION_DURATION_MILLIS = 280L
+        const val SIDEBAR_COLLAPSE_CHEVRON = "\u2039"
+        const val SIDEBAR_EXPAND_CHEVRON = "\u203A"
+        const val JOB_CARD_WIDTH_DP = 360
+        const val JOB_CARD_TOGGLE_WIDTH_DP = 64
+        const val JOB_CARD_TOGGLE_HEIGHT_DP = 32
+        const val JOB_CARD_TOGGLE_RADIUS_DP = 14
+        const val JOB_CARD_ANIMATION_DURATION_MILLIS = 240L
         const val OVERLAY_MARGIN_DP = 8
+        const val BASE_DENSITY_DPI = 160
+        const val MAX_RENDER_DPI = 200
+        const val MIN_RENDER_DPI = 140
+        const val REFERENCE_SURFACE_WIDTH = 1920f
+        const val REFERENCE_SURFACE_HEIGHT = 1080f
+        const val MIN_RESOLUTION_SCALE = 0.75f
+        const val SIDEBAR_MAX_WIDTH_FRACTION = 0.24f
+        const val JOB_CARD_MAX_WIDTH_FRACTION = 0.55f
         const val INITIAL_LATITUDE = 48.500
         const val INITIAL_LONGITUDE = 14.580
-        const val INITIAL_ZOOM = 13.0
-        const val FOLLOW_ZOOM = 16.5
+        const val INITIAL_ZOOM = 12.5
+        const val FOLLOW_ZOOM = 15.5
         const val FOLLOW_TILT = 45.0
-        const val FOLLOW_TOP_PADDING_FRACTION = 0.35f
         const val LOCATION_MARKER_SCALE = 1.5f
         const val RECENTER_DURATION_MILLIS = 500L
         const val FLING_SECONDS = 0.18f

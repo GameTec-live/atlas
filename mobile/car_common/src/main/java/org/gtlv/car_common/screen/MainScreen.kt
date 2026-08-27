@@ -565,7 +565,6 @@ class MainScreen(
         ) {
             return
         }
-        mapRenderer.updateLiveUsers(TEMPORARY_SCROLL_TEST_USERS) // remove after UI tested successfully
         val users = liveMapUsers ?: return
 
         liveMapUsersJob = screenScope.launch {
@@ -574,7 +573,6 @@ class MainScreen(
                 val visibleUsers = liveUsersById.values
                     .asSequence()
                     .filter { user -> user.userId != currentUserId }
-                    .plus(TEMPORARY_SCROLL_TEST_USERS.asSequence()) // remove after UI tested successfully
                     .toList()
 
                 mapRenderer.updateLiveUsers(visibleUsers)
@@ -591,35 +589,6 @@ class MainScreen(
     }
 
     private companion object {
-        // Temporary data for validating sidebar scrolling. Remove after UI approval.
-        val TEMPORARY_SCROLL_TEST_USERS = listOf(
-            temporaryUser("01", "Alex", TelemetryVehicleState.FREE),
-            temporaryUser("02", "Anna", TelemetryVehicleState.ON_THE_WAY),
-            temporaryUser("03", "Ben", TelemetryVehicleState.OCCUPIED),
-            temporaryUser("04", "Clara", TelemetryVehicleState.AWAY),
-            temporaryUser("05", "Daniel", TelemetryVehicleState.FREE),
-            temporaryUser("06", "Eva", TelemetryVehicleState.ON_THE_WAY),
-            temporaryUser("07", "Felix", TelemetryVehicleState.OCCUPIED),
-            temporaryUser("08", "Greta", TelemetryVehicleState.AWAY),
-            temporaryUser("09", "Jonas", TelemetryVehicleState.FREE),
-            temporaryUser("10", "Laura", TelemetryVehicleState.ON_THE_WAY),
-            temporaryUser("11", "Lukas", TelemetryVehicleState.OCCUPIED),
-            temporaryUser("12", "Mia", TelemetryVehicleState.AWAY),
-            temporaryUser("13", "Noah", TelemetryVehicleState.FREE),
-        )
-
-        fun temporaryUser(
-            id: String,
-            name: String,
-            state: TelemetryVehicleState,
-        ) = LiveMapUser(
-            userId = "scroll-test-$id",
-            userName = name,
-            latitude = 0.0,
-            longitude = 0.0,
-            state = state,
-        )
-
         const val JOB_REFRESH_INTERVAL_MILLIS = 15_000L
         const val CAR_ICON_SIZE_DP = 48
     }

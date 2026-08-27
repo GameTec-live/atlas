@@ -5,6 +5,8 @@
     <string name="main_screen_title">Atlas</string>
     <string name="main_screen_message">You are signed in.</string>
     <string name="driver_current_job">Current job</string>
+    <string name="driver_hide_job_card">Hide current job</string>
+    <string name="driver_show_job_card">Show current job</string>
     <string name="driver_no_job">No job</string>
     <string name="driver_loading_job">Loading job…</string>
     <string name="driver_job_load_error">Could not load the current job</string>
@@ -27,6 +29,8 @@
     <string name="dispatcher_new_job_unavailable">New job creation is not available yet</string>
     <string name="dispatcher_active_users">Active drivers (%1$d)</string>
     <string name="dispatcher_no_active_users">No other active users</string>
+    <string name="dispatcher_hide_sidebar">Hide active drivers</string>
+    <string name="dispatcher_show_sidebar">Show active drivers</string>
     <string name="driver_status_free">Free</string>
     <string name="driver_status_on_the_way">On the way</string>
     <string name="driver_status_occupied">Occupied</string>
