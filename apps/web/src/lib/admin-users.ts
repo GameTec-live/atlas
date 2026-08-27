@@ -29,6 +29,10 @@ export interface AdminUserInput {
     administrator: boolean;
 }
 
+export type SaveAdminUserResult =
+    | { status: "saved" }
+    | { status: "profile-saved" };
+
 export async function saveAdminUser(
     user: AdminUser | null,
     input: AdminUserInput,
@@ -46,7 +50,7 @@ export async function saveAdminUser(
             data: { username, displayUsername: username },
         });
         if (response.error) throw response.error;
-        return;
+        return { status: "saved" } satisfies SaveAdminUserResult;
     }
 
     const data = {
@@ -57,7 +61,8 @@ export async function saveAdminUser(
             ? { role: input.administrator ? "admin" : "user" }
             : {}),
     };
-    if (Object.keys(data).length) {
+    const profileChanged = Object.keys(data).length > 0;
+    if (profileChanged) {
         const response = await authClient.admin.updateUser({
             userId: user.id,
             data,
@@ -70,8 +75,17 @@ export async function saveAdminUser(
             userId: user.id,
             newPassword: input.password,
         });
-        if (response.error) throw response.error;
+        if (response.error) {
+            if (profileChanged) {
+                return {
+                    status: "profile-saved",
+                } satisfies SaveAdminUserResult;
+            }
+            throw response.error;
+        }
     }
+
+    return { status: "saved" } satisfies SaveAdminUserResult;
 }
 
 export async function removeAdminUser(userId: string) {

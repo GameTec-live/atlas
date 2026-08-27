@@ -64,10 +64,21 @@ export function UserFormDialog({
     const isEditing = user !== null;
     const saveMutation = useMutation({
         mutationFn: (value: AdminUserInput) => saveAdminUser(user, value),
-        onSuccess: async () => {
+        onSuccess: async (result) => {
             await queryClient.invalidateQueries({
                 queryKey: settingsUsersQueryKey,
             });
+            if (result.status === "profile-saved") {
+                toast.add({
+                    id: "settings-user-partially-saved",
+                    type: "warning",
+                    title: m.settings_user_partially_saved(),
+                    description: m.settings_user_password_save_error(),
+                    priority: "high",
+                });
+                onClose();
+                return;
+            }
             toast.add({
                 id: isEditing ? "settings-user-saved" : "settings-user-created",
                 type: "success",

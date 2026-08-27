@@ -227,6 +227,8 @@
     "settings_cancel": "Abbrechen",
     "settings_save_changes": "Änderungen speichern",
     "settings_user_saved": "Benutzer aktualisiert",
+    "settings_user_partially_saved": "Benutzerdaten gespeichert",
+    "settings_user_password_save_error": "Das neue Passwort konnte nicht gesetzt werden. Öffnen Sie den Benutzer erneut, um es noch einmal zu versuchen.",
     "settings_user_save_error": "Dieser Benutzer konnte nicht aktualisiert werden.",
     "settings_user_deleted": "Benutzer gelöscht",
     "settings_user_delete_error": "Dieser Benutzer konnte nicht gelöscht werden.",
