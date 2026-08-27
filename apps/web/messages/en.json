@@ -39,6 +39,7 @@
     "dashboard_map_title": "Live map",
     "dashboard_distance_title": "KM driven (last 5 days)",
     "dashboard_distance_total": "Total distance over the last five days",
+    "dashboard_card_error": "This section could not be loaded.",
     "dashboard_kilometers": "Kilometres",
     "shortnames_title": "Address shortnames",
     "shortnames_description": "Use memorable names in place of frequently used addresses.",
