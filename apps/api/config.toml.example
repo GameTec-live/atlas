@@ -1,5 +1,8 @@
 [routing]
-defaultLanguage = "de-AT"
+defaultLanguage = "de-DE"
 
 [dispatchers]
 max = 2
+
+[pricing]
+pricePerKilometer = 0

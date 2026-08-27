@@ -3,6 +3,7 @@ import * as v from "valibot";
 import { env } from "@/env";
 import { authHandler } from "../authHandler";
 import {
+    deleteLogo,
     findLogoFile,
     getLogoContentType,
     isLogoContentType,
@@ -13,6 +14,7 @@ import {
     replaceLogo,
 } from "./logo";
 import { createConfig } from "./provider";
+import { valhallaLanguageCodes } from "./valhalla-languages";
 
 export {
     type Config,
@@ -29,7 +31,7 @@ export {
  * @example
  * ```toml
  * [routing]
- * defaultLanguage = "de-AT"
+ * defaultLanguage = "de-DE"
  *
  * [dispatchers]
  * max = 2
@@ -39,7 +41,7 @@ export const configSchema = v.object({
     routing: v.optional(
         v.object({
             defaultLanguage: v.optional(
-                v.pipe(v.string(), v.minLength(2), v.maxLength(5)),
+                v.picklist(valhallaLanguageCodes),
                 "en-US",
             ),
         }),
@@ -47,9 +49,21 @@ export const configSchema = v.object({
     ),
     dispatchers: v.optional(
         v.object({
-            max: v.optional(v.number(), 1),
+            max: v.optional(
+                v.pipe(v.number(), v.integer(), v.minValue(1)),
+                1,
+            ),
         }),
         { max: 1 },
+    ),
+    pricing: v.optional(
+        v.object({
+            pricePerKilometer: v.optional(
+                v.pipe(v.number(), v.minValue(0)),
+                0,
+            ),
+        }),
+        { pricePerKilometer: 0 },
     ),
     storage: v.optional(
         v.object({
@@ -151,4 +165,20 @@ export const configApp = new Elysia({
                 },
             },
         },
+    )
+    .delete(
+        "/logo",
+        async () => {
+            try {
+                await deleteLogo(config.storage);
+            } catch (error) {
+                if (error instanceof LogoLockError) {
+                    return status(503, error.message);
+                }
+                throw error;
+            }
+
+            return;
+        },
+        { admin: true },
     );

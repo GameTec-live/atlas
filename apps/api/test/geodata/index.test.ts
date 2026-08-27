@@ -388,6 +388,28 @@ describe("geodata API", () => {
         });
     });
 
+    it("forwards job cancellation", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        const cancelledJob = { ...job, state: "cancelled" as const };
+        fetchMock.mockResolvedValueOnce(
+            Response.json(cancelledJob, { status: 202 }),
+        );
+
+        const response = await request(`/jobs/${job.id}`, "DELETE");
+
+        expect(response.status).toBe(202);
+        expect(await response.json()).toEqual({
+            ...publicJob,
+            state: "cancelled",
+        });
+        expect(fetchMock.mock.calls[0]?.[0]).toBe(
+            `${GEODATA_URL}/api/v1/jobs/${job.id}`,
+        );
+        expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+            method: "DELETE",
+        });
+    });
+
     it("relays live job updates over an authenticated WebSocket", async () => {
         getSessionMock.mockResolvedValue(adminSession);
 
