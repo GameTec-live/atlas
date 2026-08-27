@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_authenticated/_app/realtime")({
 
 function RealtimeMap() {
     return (
-        <div className="h-full">
+        <div className="h-full" data-dashboard-transition-target>
             <LiveDriversMap />
 
             <NewJobButton className="absolute right-4 bottom-4 z-10 shadow-lg" />

@@ -27,11 +27,12 @@ const chartConfig = {
 
 export function DistanceChartCard() {
     return (
-        <Card className={cardClassName}>
+        <Card className={cardClassName} data-dashboard-transition="distance">
             <DashboardCardHeader
                 title={m.dashboard_distance_title()}
                 to="/logbook"
                 icon={<RouteIcon />}
+                transition="distance"
             />
             <DashboardCardBoundary>
                 <DistanceChartCardContent />

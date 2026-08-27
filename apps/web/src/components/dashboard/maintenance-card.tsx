@@ -14,11 +14,12 @@ const cardClassName = "min-h-80 xl:col-span-3 xl:min-h-0";
 
 export function MaintenanceCard() {
     return (
-        <Card className={cardClassName}>
+        <Card className={cardClassName} data-dashboard-transition="maintenance">
             <DashboardCardHeader
                 title={m.dashboard_maintenance_title()}
                 to="/fleet"
                 icon={<WrenchIcon />}
+                transition="maintenance"
             />
             <DashboardCardBoundary>
                 <MaintenanceCardContent />

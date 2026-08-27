@@ -7,14 +7,28 @@ import { m } from "@/paraglide/messages";
 
 type DashboardDestination = "/realtime" | "/fleet" | "/jobs" | "/logbook";
 
+type DashboardViewTransition = { types: string[] };
+
+export const dashboardViewTransitions = {
+    drivers: { types: ["dashboard-drivers"] },
+    maintenance: { types: ["dashboard-maintenance"] },
+    map: { types: ["dashboard-map"] },
+    distance: { types: ["dashboard-distance"] },
+    jobs: { types: ["dashboard-jobs"] },
+} satisfies Record<string, DashboardViewTransition>;
+
+export type DashboardTransition = keyof typeof dashboardViewTransitions;
+
 export function DashboardCardHeader({
     title,
     to,
     icon,
+    transition,
 }: {
     title: string;
     to: DashboardDestination;
     icon: ReactNode;
+    transition: DashboardTransition;
 }) {
     const linkLabel = m.dashboard_open_section({ section: title });
 
@@ -31,7 +45,14 @@ export function DashboardCardHeader({
                     variant="ghost"
                     size="icon"
                     nativeButton={false}
-                    render={<Link to={to} />}
+                    render={
+                        <Link
+                            to={to}
+                            viewTransition={
+                                dashboardViewTransitions[transition]
+                            }
+                        />
+                    }
                     aria-label={linkLabel}
                     title={linkLabel}
                 >

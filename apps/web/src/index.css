@@ -179,3 +179,75 @@
         @apply font-sans;
     }
 }
+
+[data-dashboard-transition-target] {
+    background-color: var(--background);
+}
+
+::view-transition-old(root) {
+    animation: none;
+    opacity: 0;
+}
+
+::view-transition-new(root) {
+    animation: none;
+    opacity: 1;
+}
+
+html:active-view-transition-type(dashboard-drivers)
+    [data-dashboard-transition="drivers"],
+html:active-view-transition-type(dashboard-maintenance)
+    [data-dashboard-transition="maintenance"],
+html:active-view-transition-type(dashboard-map)
+    [data-dashboard-transition="map"],
+html:active-view-transition-type(dashboard-distance)
+    [data-dashboard-transition="distance"],
+html:active-view-transition-type(dashboard-jobs)
+    [data-dashboard-transition="jobs"],
+html:active-view-transition-type(dashboard-drivers)
+    [data-dashboard-transition-target],
+html:active-view-transition-type(dashboard-maintenance)
+    [data-dashboard-transition-target],
+html:active-view-transition-type(dashboard-map)
+    [data-dashboard-transition-target],
+html:active-view-transition-type(dashboard-distance)
+    [data-dashboard-transition-target],
+html:active-view-transition-type(dashboard-jobs)
+    [data-dashboard-transition-target] {
+    view-transition-name: dashboard-card;
+}
+
+::view-transition-group(dashboard-card) {
+    z-index: 1;
+    animation-duration: 440ms;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-image-pair(dashboard-card) {
+    isolation: isolate;
+}
+
+::view-transition-old(dashboard-card),
+::view-transition-new(dashboard-card) {
+    height: 100%;
+    mix-blend-mode: normal;
+    object-fit: cover;
+}
+
+::view-transition-old(dashboard-card) {
+    animation: none;
+    opacity: 0;
+}
+
+::view-transition-new(dashboard-card) {
+    animation: none;
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+        animation-duration: 1ms;
+    }
+}

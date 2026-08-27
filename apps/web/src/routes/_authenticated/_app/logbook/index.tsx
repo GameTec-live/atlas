@@ -116,7 +116,10 @@ function LogbookPage() {
     } satisfies LogbookCsvLabels;
 
     return (
-        <main className="h-full overflow-y-auto">
+        <main
+            className="h-full overflow-y-auto"
+            data-dashboard-transition-target
+        >
             <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 sm:p-6">
                 <h1 className="font-heading text-xl font-semibold tracking-tight">
                     {m.logbook_title()}

@@ -42,7 +42,10 @@ function JobsPage() {
     const deleteJob = useDeleteJob(() => setJobToDelete(null));
 
     return (
-        <main className="flex h-full min-h-0 flex-col overflow-hidden lg:flex-row">
+        <main
+            className="flex h-full min-h-0 flex-col overflow-hidden lg:flex-row"
+            data-dashboard-transition-target
+        >
             <JobHistorySection
                 jobs={assignedJobs}
                 onDownload={() =>

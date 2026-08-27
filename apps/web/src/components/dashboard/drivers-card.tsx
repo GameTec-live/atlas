@@ -16,11 +16,12 @@ const cardClassName = "min-h-80 xl:col-span-3 xl:min-h-0";
 
 export function DriversCard() {
     return (
-        <Card className={cardClassName}>
+        <Card className={cardClassName} data-dashboard-transition="drivers">
             <DashboardCardHeader
                 title={m.dashboard_drivers_title()}
                 to="/realtime"
                 icon={<UserRoundIcon />}
+                transition="drivers"
             />
             <DashboardCardBoundary>
                 <DriversCardContent />

@@ -151,7 +151,10 @@ function FleetPage() {
     }, []);
 
     return (
-        <main className="flex h-full min-h-0 flex-col gap-4 p-4">
+        <main
+            className="flex h-full min-h-0 flex-col gap-4 p-4"
+            data-dashboard-transition-target
+        >
             <h1 className="font-heading text-xl font-semibold tracking-tight">
                 {m.fleet_title()}
             </h1>

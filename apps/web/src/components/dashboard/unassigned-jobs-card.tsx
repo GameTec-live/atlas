@@ -19,11 +19,12 @@ export function UnassignedJobsCard({
     onDelete: (job: Job) => void;
 }) {
     return (
-        <Card className={cardClassName}>
+        <Card className={cardClassName} data-dashboard-transition="jobs">
             <DashboardCardHeader
                 title={m.jobs_unassigned_title()}
                 to="/jobs"
                 icon={<RouteIcon />}
+                transition="jobs"
             />
             <DashboardCardBoundary>
                 <UnassignedJobsCardContent onDelete={onDelete} />
