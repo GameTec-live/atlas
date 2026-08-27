@@ -565,7 +565,7 @@ class MainScreen(
         ) {
             return
         }
-        mapRenderer.updateLiveUsers(TEMPORARY_SCROLL_TEST_USERS)
+        mapRenderer.updateLiveUsers(TEMPORARY_SCROLL_TEST_USERS) // remove after UI tested successfully
         val users = liveMapUsers ?: return
 
         liveMapUsersJob = screenScope.launch {
@@ -574,8 +574,7 @@ class MainScreen(
                 val visibleUsers = liveUsersById.values
                     .asSequence()
                     .filter { user -> user.userId != currentUserId }
-                    .plus(TEMPORARY_SCROLL_TEST_USERS.asSequence())
-                    .sortedBy { user -> user.userName.lowercase() }
+                    .plus(TEMPORARY_SCROLL_TEST_USERS.asSequence()) // remove after UI tested successfully
                     .toList()
 
                 mapRenderer.updateLiveUsers(visibleUsers)

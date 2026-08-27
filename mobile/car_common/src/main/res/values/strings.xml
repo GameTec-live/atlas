@@ -25,7 +25,7 @@
     <string name="driver_start_job_error">Could not start the next job</string>
     <string name="driver_unknown_address">Unknown address</string>
     <string name="dispatcher_new_job_unavailable">New job creation is not available yet</string>
-    <string name="dispatcher_active_users">Active users (%1$d)</string>
+    <string name="dispatcher_active_users">Active drivers (%1$d)</string>
     <string name="dispatcher_no_active_users">No other active users</string>
     <string name="driver_status_free">Free</string>
     <string name="driver_status_on_the_way">On the way</string>

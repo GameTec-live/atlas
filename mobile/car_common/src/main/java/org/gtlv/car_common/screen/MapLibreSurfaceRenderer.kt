@@ -268,7 +268,12 @@ internal class MapLibreSurfaceRenderer(
                     state = user.state,
                 )
             }
-            .sortedBy { user -> user.name.lowercase() }
+            .sortedWith(
+                compareBy<SidebarUser>(
+                    { user -> user.state.sidebarSortOrder() },
+                    { user -> user.name.lowercase() },
+                ),
+            )
 
         if (sidebarUsers == updatedUsers) return
         sidebarUsers = updatedUsers
@@ -666,6 +671,13 @@ internal class MapLibreSurfaceRenderer(
         TelemetryVehicleState.ON_THE_WAY -> Color.rgb(210, 145, 0)
         TelemetryVehicleState.OCCUPIED -> Color.rgb(220, 35, 45)
         TelemetryVehicleState.AWAY -> Color.rgb(150, 155, 165)
+    }
+
+    private fun TelemetryVehicleState.sidebarSortOrder(): Int = when (this) {
+        TelemetryVehicleState.FREE -> 0
+        TelemetryVehicleState.ON_THE_WAY -> 1
+        TelemetryVehicleState.OCCUPIED -> 2
+        TelemetryVehicleState.AWAY -> 3
     }
 
     private fun createSidebarDivider(context: Context): View {
