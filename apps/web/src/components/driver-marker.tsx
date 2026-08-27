@@ -6,21 +6,8 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { LiveDriver } from "@/hooks/use-live-drivers";
+import { driverStateBackgrounds, driverStateLabels } from "@/lib/drivers";
 import { m } from "@/paraglide/messages";
-
-const markerColors = {
-    free: "bg-emerald-500",
-    onTheWay: "bg-blue-500",
-    occupied: "bg-amber-500",
-    away: "bg-slate-400",
-} satisfies Record<LiveDriver["state"], string>;
-
-const stateLabels = {
-    free: m.dizzy_silly_gopher_boil(),
-    onTheWay: m.fit_mild_halibut_grace(),
-    occupied: m.inclusive_bright_halibut_flop(),
-    away: m.small_house_grizzly_view(),
-} satisfies Record<LiveDriver["state"], string>;
 
 export function DriverMarker({ driver }: { driver: LiveDriver }) {
     return (
@@ -37,7 +24,7 @@ export function DriverMarker({ driver }: { driver: LiveDriver }) {
                             title={driver.userName}
                         >
                             <span
-                                className={`size-3 rounded-full ${markerColors[driver.state]}`}
+                                className={`size-3 rounded-full ${driverStateBackgrounds[driver.state]}`}
                             />
                             <span className="max-w-36 truncate text-xs font-medium">
                                 {driver.userName}
@@ -50,7 +37,7 @@ export function DriverMarker({ driver }: { driver: LiveDriver }) {
                         <p className="truncate font-semibold">
                             {driver.userName}
                         </p>
-                        <Badge>{stateLabels[driver.state]}</Badge>
+                        <Badge>{driverStateLabels[driver.state]}</Badge>
                     </div>
 
                     {driver.fuelLevel !== undefined ||

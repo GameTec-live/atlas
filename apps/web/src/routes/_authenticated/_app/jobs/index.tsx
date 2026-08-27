@@ -1,20 +1,16 @@
-import {
-    useMutation,
-    useQueryClient,
-    useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { DeleteJobDialog } from "@/components/jobs/delete-job-dialog";
 import { JobHistorySection } from "@/components/jobs/job-history-section";
 import { JobsPageSkeleton } from "@/components/jobs/jobs-page-skeleton";
 import { UnassignedJobsSection } from "@/components/jobs/unassigned-jobs-section";
-import { toast } from "@/components/ui/toast";
-import { api, unwrapEden } from "@/lib/api-client";
+import { useDeleteJob } from "@/hooks/use-delete-job";
+import { getAssignedJobs, getUnassignedJobs } from "@/lib/jobs";
 import { downloadJobsCsv, type JobCsvLabels } from "@/lib/jobs-csv";
 import { m } from "@/paraglide/messages";
 import { getLocale } from "@/paraglide/runtime";
-import { type Job, jobsQueryKey, jobsQueryOptions } from "@/queries/jobs";
+import { type Job, jobsQueryOptions } from "@/queries/jobs";
 
 export const Route = createFileRoute("/_authenticated/_app/jobs/")({
     loader: ({ context }) =>
@@ -39,49 +35,11 @@ const jobCsvLabels = {
 
 function JobsPage() {
     const { data: jobs } = useSuspenseQuery(jobsQueryOptions());
-    const queryClient = useQueryClient();
     const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
 
-    const assignedJobs = useMemo(
-        () =>
-            [...jobs]
-                .filter((job) => job.assignedDriverId !== null)
-                .sort(
-                    (left, right) =>
-                        right.dueDate.getTime() - left.dueDate.getTime(),
-                ),
-        [jobs],
-    );
-    const unassignedJobs = useMemo(
-        () =>
-            [...jobs]
-                .filter((job) => job.assignedDriverId === null)
-                .sort(
-                    (left, right) =>
-                        left.dueDate.getTime() - right.dueDate.getTime(),
-                ),
-        [jobs],
-    );
-    const deleteMutation = useMutation({
-        mutationFn: (id: string) => unwrapEden(api.jobs({ id }).delete()),
-        onSuccess: async () => {
-            setJobToDelete(null);
-            await queryClient.invalidateQueries({ queryKey: jobsQueryKey });
-            toast.add({
-                id: "job-delete",
-                type: "success",
-                title: m.jobs_delete_success(),
-            });
-        },
-        onError: () => {
-            toast.add({
-                id: "job-delete",
-                type: "error",
-                title: m.jobs_delete_error(),
-                priority: "high",
-            });
-        },
-    });
+    const assignedJobs = useMemo(() => getAssignedJobs(jobs), [jobs]);
+    const unassignedJobs = useMemo(() => getUnassignedJobs(jobs), [jobs]);
+    const deleteJob = useDeleteJob(() => setJobToDelete(null));
 
     return (
         <main className="flex h-full min-h-0 flex-col overflow-hidden lg:flex-row">
@@ -112,9 +70,9 @@ function JobsPage() {
 
             <DeleteJobDialog
                 job={jobToDelete}
-                isPending={deleteMutation.isPending}
+                isPending={deleteJob.isPending}
                 onClose={() => setJobToDelete(null)}
-                onConfirm={(job) => deleteMutation.mutate(job.id)}
+                onConfirm={(job) => deleteJob.mutate(job.id)}
             />
         </main>
     );
