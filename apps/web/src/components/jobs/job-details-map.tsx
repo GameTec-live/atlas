@@ -104,6 +104,7 @@ export function JobDetailsMap({ from, to }: JobDetailsMapProps) {
                 }
                 mapStyle="/map/style/liberty"
                 attributionControl={false}
+                reuseMaps
             >
                 <Source id="job-route" type="geojson" data={routeGeoJson}>
                     <Layer
