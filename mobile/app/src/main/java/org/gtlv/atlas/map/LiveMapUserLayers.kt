@@ -3,6 +3,7 @@ package org.gtlv.atlas.map
 import android.graphics.Color
 import androidx.core.graphics.toColorInt
 import com.google.gson.JsonObject
+import org.gtlv.atlas.ui.truncatedUserName
 import org.gtlv.core.telemetry.LiveMapUser
 import org.gtlv.core.telemetry.TelemetryVehicleState
 import org.maplibre.android.maps.Style
@@ -112,7 +113,7 @@ private fun Collection<LiveMapUser>
         val properties = JsonObject().apply {
             addProperty(
                 USER_NAME_PROPERTY,
-                user.userName
+                user.userName.truncatedUserName()
             )
         }
 

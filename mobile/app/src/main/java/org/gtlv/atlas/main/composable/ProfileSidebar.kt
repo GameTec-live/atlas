@@ -24,10 +24,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
 import org.gtlv.atlas.main.displayNameResource
 import org.gtlv.atlas.main.initial
+import org.gtlv.atlas.ui.MAX_PROFILE_USER_NAME_LENGTH
+import org.gtlv.atlas.ui.truncatedUserName
 import org.gtlv.core.shift.ShiftRole
 
 @Composable
@@ -90,9 +93,13 @@ internal fun ProfileSidebar(
             }
 
             Text(
-                text = userName,
+                text = userName.truncatedUserName(
+                    MAX_PROFILE_USER_NAME_LENGTH
+                ),
                 style = MaterialTheme.typography.titleLarge,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp)
