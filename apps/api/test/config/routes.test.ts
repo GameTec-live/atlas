@@ -92,12 +92,14 @@ describe("config API", () => {
 
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual({
+            setup: { complete: false },
             routing: { defaultLanguage: "en-US-x-pirate" },
             dispatchers: { max: 1 },
             pricing: { pricePerKilometer: 0 },
             storage: { dataLocation: "./data", logoName: "logo" },
         });
         expect(Bun.TOML.parse(readFileSync(config.$path, "utf8"))).toEqual({
+            setup: { complete: false },
             routing: { defaultLanguage: "en-US-x-pirate" },
             dispatchers: { max: 1 },
             pricing: { pricePerKilometer: 0 },

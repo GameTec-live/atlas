@@ -38,6 +38,12 @@ export {
  * ```
  */
 export const configSchema = v.object({
+    setup: v.optional(
+        v.object({
+            complete: v.optional(v.boolean(), false),
+        }),
+        { complete: false },
+    ),
     routing: v.optional(
         v.object({
             defaultLanguage: v.optional(
