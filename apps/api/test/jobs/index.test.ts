@@ -1868,6 +1868,7 @@ describe("assignment notifications", () => {
         expect(publishMock.mock.calls[0]?.[0]).toBe("api:ws:notify:driver-2");
         const notification = JSON.parse(String(publishMock.mock.calls[0]?.[1]));
         expect(notification).toEqual({
+            type: "assigned",
             jobId: assignedJob.id,
             from: `${"A".repeat(NOTIFICATION_ADDRESS_MAX_LENGTH - 1)}…`,
             to: "Schönbrunner Straße 1, Wien",
@@ -1890,6 +1891,7 @@ describe("assignment notifications", () => {
 
         expect(publishMock).toHaveBeenCalledTimes(1);
         expect(JSON.parse(String(publishMock.mock.calls[0]?.[1]))).toEqual({
+            type: "assigned",
             jobId: assignedJob.id,
             from: "Stephansplatz 1, Wien",
             to: "48.1947, 16.3122",
@@ -1912,11 +1914,42 @@ describe("assignment notifications", () => {
 
         expect(publishMock).toHaveBeenCalledTimes(1);
         expect(JSON.parse(String(publishMock.mock.calls[0]?.[1]))).toEqual({
+            type: "assigned",
             jobId: assignedJob.id,
             from: "48.2082, 16.3738",
             to: "Schönbrunner Straße 1, Wien",
             note: assignedJob.note,
         });
+    });
+
+    it("notifies every current dispatcher about an unassigned job", async () => {
+        const unassignedJob = { ...assignedJob, assignedDriverId: null };
+        setDbMockRows("select", [
+            ["dispatcher-1", "dispatcher"],
+            ["driver-1", "driver"],
+            ["dispatcher-2", "dispatcher"],
+        ]);
+        const publishMock = mock((_topic: string, _message: string) => 1);
+        const server = {
+            publish: publishMock,
+        } as unknown as Bun.Server<unknown>;
+
+        await sendAssignmentNotification(server, unassignedJob);
+
+        expect(publishMock).toHaveBeenCalledTimes(2);
+        expect(publishMock.mock.calls.map(([topic]) => topic)).toEqual([
+            "api:ws:notify:dispatcher-1",
+            "api:ws:notify:dispatcher-2",
+        ]);
+        for (const [, message] of publishMock.mock.calls) {
+            expect(JSON.parse(message)).toEqual({
+                type: "unassigned",
+                jobId: unassignedJob.id,
+                from: "Address at 48.2082, 16.3738",
+                to: "Address at 48.1947, 16.3122",
+                note: unassignedJob.note,
+            });
+        }
     });
 
     it.each([

@@ -64,6 +64,9 @@ describe("config API", () => {
             }),
         );
 
+    const getPrice = () =>
+        app.handle(new Request("http://localhost/config/price"));
+
     it("requires an admin session", async () => {
         expect((await request()).status).toBe(401);
 
@@ -118,6 +121,23 @@ describe("config API", () => {
                 ? readFileSync(config.$path, "utf8")
                 : undefined,
         ).toBe(fileBeforeRequest);
+    });
+
+    it("requires an authenticated session to read the price", async () => {
+        expect((await getPrice()).status).toBe(401);
+
+        getSessionMock.mockResolvedValue(session);
+        expect((await getPrice()).status).toBe(200);
+    });
+
+    it("returns the configured price per kilometer", async () => {
+        await config.$set("pricing", { pricePerKilometer: 2.75 });
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await getPrice();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ pricePerKilometer: 2.75 });
     });
 });
 
