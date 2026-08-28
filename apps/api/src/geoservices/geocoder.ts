@@ -1,14 +1,25 @@
+import type { Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { env } from "@/env";
 import { GeoservicesModel } from "./model";
 
 const GEOCODER_URL = env.GEOCODER_URL.replace(/\/+$/, "");
 export const GEOCODER_TIMEOUT_MS = 30_000;
+export const REVERSE_GEOCODER_CACHE_SIZE = 10_000;
 
 interface ReverseGeocodeOptions {
     radius_m?: number;
     limit?: number;
 }
+
+type ReverseGeocodeResult = {
+    status: number;
+    result: Static<typeof GeoservicesModel.reverseGeocoderResponse>;
+};
+
+const reverseGeocodeCache = new Map<string, ReverseGeocodeResult>();
+
+export const clearReverseGeocodeCache = () => reverseGeocodeCache.clear();
 
 export const requestReverseGeocode = async (
     [latitude, longitude]: readonly [number, number],
@@ -23,6 +34,14 @@ export const requestReverseGeocode = async (
     }
     query.set("limit", String(options.limit ?? 1));
 
+    const cacheKey = query.toString();
+    const cachedResult = reverseGeocodeCache.get(cacheKey);
+    if (cachedResult !== undefined) {
+        reverseGeocodeCache.delete(cacheKey);
+        reverseGeocodeCache.set(cacheKey, cachedResult);
+        return cachedResult;
+    }
+
     const response = await fetch(`${GEOCODER_URL}/reverse?${query}`, {
         signal: AbortSignal.timeout(GEOCODER_TIMEOUT_MS),
     });
@@ -31,7 +50,15 @@ export const requestReverseGeocode = async (
         await response.json(),
     );
 
-    return { status: response.status, result };
+    const geocodeResult = { status: response.status, result };
+    reverseGeocodeCache.set(cacheKey, geocodeResult);
+
+    if (reverseGeocodeCache.size > REVERSE_GEOCODER_CACHE_SIZE) {
+        const oldestKey = reverseGeocodeCache.keys().next().value;
+        if (oldestKey !== undefined) reverseGeocodeCache.delete(oldestKey);
+    }
+
+    return geocodeResult;
 };
 
 export const reverseGeocode = async (

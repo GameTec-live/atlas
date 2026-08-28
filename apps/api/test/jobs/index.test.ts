@@ -31,6 +31,7 @@ const {
     sendAssignmentNotification,
     shortenAddress,
 } = await import("@/src/jobs/notifications");
+const { clearReverseGeocodeCache } = await import("@/src/geoservices/geocoder");
 const { trackCache } = await import("@/src/realtime");
 const app = new Elysia().use(jobs);
 
@@ -277,6 +278,7 @@ beforeEach(() => {
     envMock.JOBTOKEN = undefined;
     resetAuthMocks();
     resetDbMocks();
+    clearReverseGeocodeCache();
     trackCache.clear();
     fetchMock.mockReset();
     fetchMock.mockImplementation(async (input) => {
