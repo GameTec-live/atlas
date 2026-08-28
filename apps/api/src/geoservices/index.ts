@@ -20,6 +20,11 @@ interface ResolveCacheEntry {
 const resolveCache = new Map<string, ResolveCacheEntry>();
 const pendingRevalidations = new Map<string, Promise<void>>();
 
+export const clearResolveCache = () => {
+    resolveCache.clear();
+    pendingRevalidations.clear();
+};
+
 const resolveShortname = async (address: string) => {
     const result = await db
         .select()
