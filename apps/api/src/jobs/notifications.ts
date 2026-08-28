@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
-import { job } from "../db/schema";
+import { job, role } from "../db/schema";
 import { reverseGeocode } from "../geoservices/geocoder";
 import { notify } from "../realtime";
 
@@ -33,7 +33,7 @@ export const sendAssignmentNotification = async (
     server: Bun.Server<unknown> | null,
     assignedJob: typeof job.$inferSelect,
 ) => {
-    if (!server || !assignedJob.assignedDriverId) return;
+    if (!server) return;
 
     const [fromResult, toResult] = await Promise.allSettled([
         reverseGeocode(assignedJob.from),
@@ -43,6 +43,33 @@ export const sendAssignmentNotification = async (
     const to = assignedJob.to
         ? addressOrCoordinates(toResult, assignedJob.to)
         : undefined;
+
+    if (!assignedJob.assignedDriverId) {
+        const roles = await db
+            .select({
+                driverId: role.driverId,
+                role: role.role,
+            })
+            .from(role)
+            .where(eq(role.date, sql`current_date`));
+
+        const dispatchers = roles.filter((r) => r.role === "dispatcher");
+
+        for (const dispatcher of dispatchers) {
+            notify(
+                server,
+                {
+                    type: "unassigned",
+                    jobId: assignedJob.id,
+                    from,
+                    ...(to ? { to } : {}),
+                    ...(assignedJob.note ? { note: assignedJob.note } : {}),
+                },
+                dispatcher.driverId,
+            );
+        }
+        return;
+    }
 
     const [currentAssignment] = await db
         .select({ assignedDriverId: job.assignedDriverId })
@@ -56,6 +83,7 @@ export const sendAssignmentNotification = async (
     notify(
         server,
         {
+            type: "assigned",
             jobId: assignedJob.id,
             from,
             ...(to ? { to } : {}),
