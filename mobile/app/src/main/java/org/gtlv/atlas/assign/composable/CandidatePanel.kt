@@ -1,30 +1,23 @@
 package org.gtlv.atlas.assign.composable
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
-import org.gtlv.atlas.ui.truncatedUserName
 import org.gtlv.core.job.JobCandidate
 
 @Composable
@@ -233,100 +226,6 @@ internal fun CandidatePanel(
                         }
                     }
                 }
-        }
-    }
-}
-
-@Composable
-private fun DriverButton(
-    candidate: JobCandidate,
-    recommended: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    if (recommended) {
-        Button(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            DriverButtonContent(
-                candidate = candidate,
-                showRank = true
-            )
-        }
-    } else {
-        FilledTonalButton(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            DriverButtonContent(
-                candidate = candidate,
-                showRank = false
-            )
-        }
-    }
-}
-
-@Composable
-private fun DriverButtonContent(
-    candidate: JobCandidate,
-    showRank: Boolean
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = candidate.driverName.truncatedUserName(),
-            modifier = Modifier.fillMaxWidth(),
-            style = MaterialTheme.typography.titleMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
-
-        if (showRank) {
-            Text(
-                text = stringResource(
-                    R.string.assign_job_recommended_rank,
-                    candidate.rank
-                ),
-                style = MaterialTheme.typography.labelSmall
-            )
-        }
-    }
-}
-
-@Composable
-private fun LoadingDriversIndicator() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(20.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        CircularProgressIndicator()
-    }
-}
-
-@Composable
-private fun DriversError(
-    message: String,
-    onRetry: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(text = message)
-
-        TextButton(onClick = onRetry) {
-            Text(
-                text = stringResource(
-                    R.string.unassigned_jobs_retry
-                )
-            )
         }
     }
 }
