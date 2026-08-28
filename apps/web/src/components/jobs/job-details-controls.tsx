@@ -2,6 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, SaveIcon } from "lucide-react";
 import { AddressSearch } from "@/components/address-search";
 import { DueDatePicker } from "@/components/jobs/due-date-picker";
+import { NoteInput } from "@/components/jobs/note-input";
+import { NoteValue } from "@/components/jobs/note-value";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -13,6 +15,7 @@ type JobDetailsControlsProps = {
     to: string;
     origin?: string;
     destination: string;
+    note: string;
     dueDate: Date;
     locale: string;
     editable: boolean;
@@ -26,6 +29,7 @@ type JobDetailsControlsProps = {
     onOriginSelect?: (address: string, coordinates: Coordinates) => void;
     onDestinationChange: (value: string) => void;
     onDestinationSelect: (address: string, coordinates: Coordinates) => void;
+    onNoteChange: (value: string) => void;
     onDueDateChange: (value: Date) => void;
 };
 
@@ -34,6 +38,7 @@ export function JobDetailsControls({
     to,
     origin = from,
     destination,
+    note,
     dueDate,
     locale,
     editable,
@@ -43,6 +48,7 @@ export function JobDetailsControls({
     onOriginSelect,
     onDestinationChange,
     onDestinationSelect,
+    onNoteChange,
     onDueDateChange,
 }: JobDetailsControlsProps) {
     return (
@@ -114,6 +120,16 @@ export function JobDetailsControls({
                         </Button>
                     )}
                 </div>
+
+                {(editable || note) && (
+                    <div className="flex min-h-12 items-center border-t">
+                        {editable ? (
+                            <NoteInput value={note} onChange={onNoteChange} />
+                        ) : (
+                            <NoteValue value={note} />
+                        )}
+                    </div>
+                )}
             </Card>
         </div>
     );

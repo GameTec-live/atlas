@@ -50,13 +50,16 @@ function JobDetailsPage() {
     });
     const [destinationDirty, setDestinationDirty] = useState(false);
     const [dueDate, setDueDate] = useState(job.dueDate);
+    const [note, setNote] = useState(job.note?.trim() ?? "");
     const [selectedDriverId, setSelectedDriverId] = useState<string>();
     const [mobileCandidatesOpen, setMobileCandidatesOpen] = useState(false);
 
     const destinationIsValid =
         !destinationDirty || destination.coordinates !== null;
     const hasUnsavedChanges =
-        destinationDirty || dueDate.getTime() !== job.dueDate.getTime();
+        destinationDirty ||
+        dueDate.getTime() !== job.dueDate.getTime() ||
+        note.trim() !== (job.note?.trim() ?? "");
 
     const candidatesQuery = useQuery({
         ...jobCandidatesQueryOptions({
@@ -77,6 +80,7 @@ function JobDetailsPage() {
 
     const jobChanges = {
         dueDate,
+        note: note.trim() || null,
         ...(destination.coordinates ? { to: destination.coordinates } : {}),
     };
 
@@ -156,6 +160,7 @@ function JobDetailsPage() {
                         m.jobs_not_available(),
                     )}
                     destination={destination.address}
+                    note={note}
                     dueDate={dueDate}
                     locale={locale}
                     editable={isUnassigned}
@@ -179,6 +184,7 @@ function JobDetailsPage() {
                         setDestination({ address, coordinates });
                         setDestinationDirty(true);
                     }}
+                    onNoteChange={setNote}
                     onDueDateChange={setDueDate}
                 />
             </section>
