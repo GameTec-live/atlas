@@ -15,6 +15,7 @@ import { jobs } from "./jobs";
 import { logbooks } from "./logbooks";
 import { realtime } from "./realtime";
 import { roles } from "./role";
+import { setup } from "./setup";
 import { shortnames } from "./shortnames";
 
 console.log("Applying database migrations...");
@@ -106,6 +107,7 @@ export const app = new Elysia()
         }),
     )
     .use(authHandler)
+    .use(setup)
     .use(configApp)
     .use(realtime)
     .use(geoservices)

@@ -9,6 +9,7 @@
     --animate-logo-happy: logo-happy 500ms cubic-bezier(0.34, 1.56, 0.64, 1)
         both;
     --animate-logo-turn: logo-turn 900ms linear infinite;
+    --animate-logo-orbit: logo-turn 8s linear infinite;
     --animate-logo-fall: logo-fall 700ms cubic-bezier(0.55, 0.06, 0.68, 0.19)
         both;
 

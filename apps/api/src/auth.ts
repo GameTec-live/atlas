@@ -28,6 +28,7 @@ export const auth: Auth<AtlasAuthOptions> = betterAuth<AtlasAuthOptions>({
     plugins: [openAPI(), username(), admin()],
     emailAndPassword: {
         enabled: true,
+        disableSignUp: true,
     },
 });
 
