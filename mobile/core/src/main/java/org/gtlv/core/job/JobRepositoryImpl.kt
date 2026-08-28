@@ -199,6 +199,117 @@ class JobRepositoryImpl(
         }
     }
 
+    override suspend fun getJobCandidates(
+        from: JobCoordinates,
+        to: JobCoordinates?,
+        dueDate: String
+    ): JobCandidatesResult = withContext(Dispatchers.IO) {
+        if (
+            !from.isValid() ||
+            to?.isValid() == false ||
+            dueDate.isBlank()
+        ) {
+            return@withContext JobCandidatesResult.InvalidResponse
+        }
+
+        val serverAddress = serverSettingsRepository
+            .serverAddress
+            .first()
+            .removeSuffix("/")
+        val candidatesUrl = serverAddress
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.addPathSegments("api/jobs/candidates")
+            ?.build()
+            ?: return@withContext JobCandidatesResult.InvalidResponse
+        val requestJson = JSONObject()
+            .put("from", from.toJsonArray())
+            .put("dueDate", dueDate)
+            .apply {
+                to?.let { put("to", it.toJsonArray()) }
+            }
+            .toString()
+
+        when (
+            val result = executeJsonPost(
+                url = candidatesUrl,
+                serverAddress = serverAddress,
+                requestJson = requestJson,
+                parse = ::parseJobCandidates
+            )
+        ) {
+            is EndpointResult.Success -> {
+                JobCandidatesResult.Success(result.value)
+            }
+
+            is EndpointResult.Failure -> {
+                result.toJobCandidatesResult()
+            }
+
+            EndpointResult.NotFound -> {
+                JobCandidatesResult.InvalidResponse
+            }
+        }
+    }
+
+    override suspend fun createJob(
+        request: NewJobRequest
+    ): JobCreationResult = withContext(Dispatchers.IO) {
+        if (
+            !request.from.isValid() ||
+            request.to?.isValid() == false ||
+            request.dueDate.isBlank()
+        ) {
+            return@withContext JobCreationResult.InvalidResponse
+        }
+
+        val serverAddress = serverSettingsRepository
+            .serverAddress
+            .first()
+            .removeSuffix("/")
+        val createUrl = serverAddress
+            .toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.addPathSegments("api/jobs/create")
+            ?.build()
+            ?: return@withContext JobCreationResult.InvalidResponse
+        val requestJson = JSONObject()
+            .put("from", request.from.toJsonArray())
+            .put("dueDate", request.dueDate)
+            .put("assignedDriverId", request.assignedDriverId)
+            .put("note", request.note)
+            .apply {
+                request.to?.let { put("to", it.toJsonArray()) }
+            }
+            .toString()
+
+        when (
+            val result = executeJsonPost(
+                url = createUrl,
+                serverAddress = serverAddress,
+                requestJson = requestJson
+            ) { responseText ->
+                parseJob(JSONObject(responseText))
+                    ?: throw IllegalArgumentException(
+                        "Invalid created job response"
+                    )
+            }
+        ) {
+            is EndpointResult.Success -> {
+                _jobChanges.emit(Unit)
+                JobCreationResult.Success(result.value)
+            }
+
+            is EndpointResult.Failure -> {
+                result.toJobCreationResult()
+            }
+
+            EndpointResult.NotFound -> {
+                JobCreationResult.InvalidResponse
+            }
+        }
+    }
+
     override suspend fun assignJob(
         jobId: String,
         driverId: String
@@ -647,6 +758,39 @@ class JobRepositoryImpl(
         }
     }
 
+    private fun <T> executeJsonPost(
+        url: HttpUrl,
+        serverAddress: String,
+        requestJson: String,
+        parse: (String) -> T
+    ): EndpointResult<T> {
+        val requestBody = requestJson.toRequestBody(
+            "application/json".toMediaType()
+        )
+        val request = Request.Builder()
+            .url(url)
+            .header("Origin", serverAddress)
+            .header("Accept", "application/json")
+            .post(requestBody)
+            .build()
+
+        return try {
+            networkClient.okHttpClient
+                .newCall(request)
+                .execute()
+                .use { response ->
+                    response.toEndpointResult(
+                        allowNotFound = false,
+                        parse = parse
+                    )
+                }
+        } catch (_: IOException) {
+            EndpointResult.Failure.Network
+        } catch (_: Exception) {
+            EndpointResult.Failure.InvalidResponse
+        }
+    }
+
     private fun <T> Response.toEndpointResult(
         allowNotFound: Boolean,
         parse: (String) -> T
@@ -793,6 +937,13 @@ class JobRepositoryImpl(
             .ifBlank { null }
     }
 
+    private fun JobCoordinates.isValid(): Boolean =
+        latitude in -90.0..90.0 &&
+                longitude in -180.0..180.0
+
+    private fun JobCoordinates.toJsonArray(): JSONArray =
+        JSONArray().put(latitude).put(longitude)
+
     private fun readServerMessage(
         responseText: String
     ): String? {
@@ -928,6 +1079,26 @@ class JobRepositoryImpl(
 
             is EndpointResult.Failure.Server ->
                 JobCandidatesResult.ServerError(
+                    statusCode = statusCode,
+                    message = message
+                )
+        }
+    }
+
+    private fun EndpointResult.Failure
+        .toJobCreationResult(): JobCreationResult {
+        return when (this) {
+            EndpointResult.Failure.Unauthorized ->
+                JobCreationResult.Unauthorized
+
+            EndpointResult.Failure.Network ->
+                JobCreationResult.NetworkError
+
+            EndpointResult.Failure.InvalidResponse ->
+                JobCreationResult.InvalidResponse
+
+            is EndpointResult.Failure.Server ->
+                JobCreationResult.ServerError(
                     statusCode = statusCode,
                     message = message
                 )

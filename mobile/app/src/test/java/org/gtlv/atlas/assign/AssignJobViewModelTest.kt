@@ -23,10 +23,12 @@ import org.gtlv.core.job.Job
 import org.gtlv.core.job.JobActionResult
 import org.gtlv.core.job.JobCandidate
 import org.gtlv.core.job.JobCandidatesResult
+import org.gtlv.core.job.JobCreationResult
 import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.JobCoordinates
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
+import org.gtlv.core.job.NewJobRequest
 import org.gtlv.core.job.UnassignedJobsResult
 import org.gtlv.core.role.AssignedRole
 import org.gtlv.core.role.RoleAvailability
@@ -372,6 +374,18 @@ class AssignJobViewModelTest {
             JobCandidatesResult.Success(
                 listOf(candidate)
             )
+
+        override suspend fun getJobCandidates(
+            from: JobCoordinates,
+            to: JobCoordinates?,
+            dueDate: String
+        ): JobCandidatesResult =
+            JobCandidatesResult.Success(listOf(candidate))
+
+        override suspend fun createJob(
+            request: NewJobRequest
+        ): JobCreationResult =
+            JobCreationResult.InvalidResponse
 
         override suspend fun assignJob(
             jobId: String,

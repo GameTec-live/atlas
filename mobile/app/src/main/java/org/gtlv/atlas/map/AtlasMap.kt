@@ -66,6 +66,9 @@ internal fun AtlasMap(
     cameraFocusPoints: List<RoutePoint> = emptyList(),
     cameraFocusRequestId: Int = 0,
     cameraFocusPadding: Dp = 72.dp,
+    cameraFocusHorizontalPadding: Dp = cameraFocusPadding,
+    cameraFocusTopPadding: Dp = cameraFocusPadding,
+    cameraFocusBottomPadding: Dp = cameraFocusPadding,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -508,15 +511,23 @@ internal fun AtlasMap(
         }
     }
 
-    val cameraFocusPaddingPixels = with(density) {
-        cameraFocusPadding.roundToPx()
+    val cameraFocusHorizontalPaddingPixels = with(density) {
+        cameraFocusHorizontalPadding.roundToPx()
+    }
+    val cameraFocusTopPaddingPixels = with(density) {
+        cameraFocusTopPadding.roundToPx()
+    }
+    val cameraFocusBottomPaddingPixels = with(density) {
+        cameraFocusBottomPadding.roundToPx()
     }
 
     LaunchedEffect(
         readyMap,
         cameraFocusRequestId,
         cameraFocusPoints,
-        cameraFocusPaddingPixels
+        cameraFocusHorizontalPaddingPixels,
+        cameraFocusTopPaddingPixels,
+        cameraFocusBottomPaddingPixels
     ) {
         if (cameraFocusRequestId == 0) {
             return@LaunchedEffect
@@ -560,7 +571,10 @@ internal fun AtlasMap(
 
                 CameraUpdateFactory.newLatLngBounds(
                     boundsBuilder.build(),
-                    cameraFocusPaddingPixels
+                    cameraFocusHorizontalPaddingPixels,
+                    cameraFocusTopPaddingPixels,
+                    cameraFocusHorizontalPaddingPixels,
+                    cameraFocusBottomPaddingPixels
                 )
             }
 

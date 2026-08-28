@@ -20,29 +20,43 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
-import org.gtlv.atlas.assign.AssignJobUiState
+import org.gtlv.atlas.ui.truncatedUserName
 import org.gtlv.core.job.JobCandidate
 
 @Composable
 internal fun CandidatePanel(
-    state: AssignJobUiState,
+    candidates: List<JobCandidate>,
+    isLoadingCandidates: Boolean,
+    candidatesFailed: Boolean,
+    allDrivers: List<JobCandidate>,
+    isLoadingDrivers: Boolean,
+    driversFailed: Boolean,
+    isActionInProgress: Boolean,
+    candidateButtonsEnabled: Boolean = true,
+    recommendationsEnabled: Boolean = true,
+    showCreateUnassigned: Boolean = false,
+    canCreateUnassigned: Boolean = false,
+    isCreatingUnassigned: Boolean = false,
+    onCreateUnassigned: () -> Unit = {},
     onRetry: () -> Unit,
     onCandidateClick: (JobCandidate) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
     val otherDrivers = remember(
-        state.candidates,
-        state.allDrivers
+        candidates,
+        allDrivers
     ) {
-        val recommendedIds = state.candidates
+        val recommendedIds = candidates
             .mapTo(mutableSetOf()) { candidate ->
                 candidate.driverId
             }
 
-        state.allDrivers.filterNot { driver ->
+        allDrivers.filterNot { driver ->
             driver.driverId in recommendedIds
         }
     }
@@ -68,15 +82,49 @@ internal fun CandidatePanel(
             state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+                if (showCreateUnassigned) {
+                    item(key = "create-unassigned") {
+                        FilledTonalButton(
+                            onClick = onCreateUnassigned,
+                            enabled = canCreateUnassigned &&
+                                    !isActionInProgress,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (isCreatingUnassigned) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.padding(2.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text(
+                                    text = stringResource(
+                                        R.string.new_job_create_unassigned
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
                 when {
-                    state.isLoadingCandidates &&
-                            state.candidates.isEmpty() -> {
+                    !recommendationsEnabled -> {
+                        item(key = "recommended-disabled") {
+                            Text(
+                                text = stringResource(
+                                    R.string.new_job_pickup_required
+                                ),
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    }
+
+                    isLoadingCandidates && candidates.isEmpty() -> {
                         item(key = "recommended-loading") {
                             LoadingDriversIndicator()
                         }
                     }
 
-                    state.candidatesFailed -> {
+                    candidatesFailed -> {
                         item(key = "recommended-error") {
                             DriversError(
                                 message = stringResource(
@@ -88,7 +136,7 @@ internal fun CandidatePanel(
                         }
                     }
 
-                    state.candidates.isEmpty() -> {
+                    candidates.isEmpty() -> {
                         item(key = "recommended-empty") {
                             Text(
                                 text = stringResource(
@@ -102,7 +150,7 @@ internal fun CandidatePanel(
 
                     else -> {
                         items(
-                            items = state.candidates,
+                            items = candidates,
                             key = { candidate ->
                                 "recommended:${candidate.driverId}"
                             }
@@ -110,7 +158,8 @@ internal fun CandidatePanel(
                             DriverButton(
                                 candidate = candidate,
                                 recommended = true,
-                                enabled = !state.isAssigning,
+                                enabled = candidateButtonsEnabled &&
+                                        !isActionInProgress,
                                 onClick = {
                                     onCandidateClick(candidate)
                                 }
@@ -135,14 +184,13 @@ internal fun CandidatePanel(
                 }
 
                 when {
-                    state.isLoadingDrivers &&
-                            state.allDrivers.isEmpty() -> {
+                    isLoadingDrivers && allDrivers.isEmpty() -> {
                         item(key = "drivers-loading") {
                             LoadingDriversIndicator()
                         }
                     }
 
-                    state.driversFailed -> {
+                    driversFailed -> {
                         item(key = "drivers-error") {
                             DriversError(
                                 message = stringResource(
@@ -176,7 +224,8 @@ internal fun CandidatePanel(
                             DriverButton(
                                 candidate = driver,
                                 recommended = false,
-                                enabled = !state.isAssigning,
+                                enabled = candidateButtonsEnabled &&
+                                        !isActionInProgress,
                                 onClick = {
                                     onCandidateClick(driver)
                                 }
@@ -229,8 +278,12 @@ private fun DriverButtonContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = candidate.driverName,
-            style = MaterialTheme.typography.titleMedium
+            text = candidate.driverName.truncatedUserName(),
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
         )
 
         if (showRank) {

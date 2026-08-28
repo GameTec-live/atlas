@@ -37,6 +37,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -276,10 +277,12 @@ internal fun AddressFields(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DueDateButton(
+internal fun DueDateButton(
     dueDate: String?,
     enabled: Boolean,
     onOpen: () -> Unit,
+    openRequestId: Int = 0,
+    onPickerClosed: () -> Unit = {},
     onDueDateChanged: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -298,6 +301,16 @@ private fun DueDateButton(
         mutableLongStateOf(
             currentDateTime.toLocalDate().toEpochDay()
         )
+    }
+
+    LaunchedEffect(openRequestId) {
+        if (openRequestId > 0) {
+            onOpen()
+            selectedDateEpochDay = currentDateTime
+                .toLocalDate()
+                .toEpochDay()
+            pickerStep = DUE_DATE_PICKER_DATE
+        }
     }
 
     TextButton(
@@ -342,6 +355,7 @@ private fun DueDateButton(
         DatePickerDialog(
             onDismissRequest = {
                 pickerStep = DUE_DATE_PICKER_CLOSED
+                onPickerClosed()
             },
             confirmButton = {
                 TextButton(
@@ -367,6 +381,7 @@ private fun DueDateButton(
                     onClick = {
                         pickerStep =
                             DUE_DATE_PICKER_CLOSED
+                        onPickerClosed()
                     }
                 ) {
                     Text(
@@ -394,6 +409,7 @@ private fun DueDateButton(
         BasicAlertDialog(
             onDismissRequest = {
                 pickerStep = DUE_DATE_PICKER_CLOSED
+                onPickerClosed()
             }
         ) {
             Surface(
@@ -478,6 +494,7 @@ private fun DueDateButton(
                             onClick = {
                                 pickerStep =
                                     DUE_DATE_PICKER_CLOSED
+                                onPickerClosed()
                             }
                         ) {
                             Text(
@@ -507,6 +524,7 @@ private fun DueDateButton(
                                 )
                                 pickerStep =
                                     DUE_DATE_PICKER_CLOSED
+                                onPickerClosed()
                             }
                         ) {
                             Text(

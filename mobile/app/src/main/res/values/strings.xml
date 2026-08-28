@@ -91,6 +91,22 @@
     <string name="dispatcher_action_unassigned_jobs">Unassigned jobs</string>
     <string name="dispatcher_action_new_job">Create new job</string>
 
+    <string name="new_job_title">New job</string>
+    <string name="new_job_back">Back to dispatcher map</string>
+    <string name="new_job_pickup_placeholder">Enter pickup address</string>
+    <string name="new_job_destination_placeholder">Enter destination (optional)</string>
+    <string name="new_job_pickup_required">Select a pickup address to load recommendations</string>
+    <string name="new_job_note">Note</string>
+    <string name="new_job_note_placeholder">Optional note</string>
+    <string name="new_job_note_count">%1$d/%2$d</string>
+    <string name="new_job_create_unassigned">Create unassigned</string>
+    <string name="new_job_confirm_title">Create job?</string>
+    <string name="new_job_confirm_unassigned">Create this job without assigning a driver?</string>
+    <string name="new_job_confirm_driver">Create and assign this job to %1$s?</string>
+    <string name="new_job_create">Create</string>
+    <string name="new_job_creating">Creating…</string>
+    <string name="new_job_create_failed">Could not create the job. Please try again.</string>
+
     <plurals name="dispatcher_action_unassigned_jobs_count">
         <item quantity="one">%1$d unassigned job</item>
         <item quantity="other">%1$d unassigned jobs</item>
