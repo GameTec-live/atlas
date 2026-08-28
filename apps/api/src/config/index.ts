@@ -174,4 +174,13 @@ export const configApp = new Elysia({
             return;
         },
         { admin: true },
+    )
+    .get(
+        "/price",
+        async () => {
+            return { pricePerKilometer: config.pricing.pricePerKilometer };
+        },
+        {
+            auth: true,
+        },
     );
