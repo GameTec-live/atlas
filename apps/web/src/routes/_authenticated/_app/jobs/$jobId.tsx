@@ -25,6 +25,7 @@ import {
 } from "@/queries/jobs";
 
 export const Route = createFileRoute("/_authenticated/_app/jobs/$jobId")({
+    remountDeps: ({ params }) => params.jobId,
     loader: ({ context, params }) =>
         context.queryClient.ensureQueryData(jobQueryOptions(params.jobId)),
     pendingComponent: JobDetailsSkeleton,
