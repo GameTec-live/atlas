@@ -64,6 +64,9 @@ describe("config API", () => {
             }),
         );
 
+    const getPrice = () =>
+        app.handle(new Request("http://localhost/config/price"));
+
     it("requires an admin session", async () => {
         expect((await request()).status).toBe(401);
 
@@ -84,18 +87,20 @@ describe("config API", () => {
         getSessionMock.mockResolvedValue(adminSession);
 
         const response = await request("PUT", {
-            routing: { defaultLanguage: "de-AT" },
+            routing: { defaultLanguage: "en-US-x-pirate" },
         });
 
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual({
-            routing: { defaultLanguage: "de-AT" },
+            routing: { defaultLanguage: "en-US-x-pirate" },
             dispatchers: { max: 1 },
+            pricing: { pricePerKilometer: 0 },
             storage: { dataLocation: "./data", logoName: "logo" },
         });
         expect(Bun.TOML.parse(readFileSync(config.$path, "utf8"))).toEqual({
-            routing: { defaultLanguage: "de-AT" },
+            routing: { defaultLanguage: "en-US-x-pirate" },
             dispatchers: { max: 1 },
+            pricing: { pricePerKilometer: 0 },
             storage: { dataLocation: "./data", logoName: "logo" },
         });
     });
@@ -106,7 +111,7 @@ describe("config API", () => {
         const fileBeforeRequest = originalConfig;
 
         const response = await request("PUT", {
-            routing: { defaultLanguage: "english" },
+            routing: { defaultLanguage: "de-AT" },
         });
 
         expect(response.status).toBe(422);
@@ -116,6 +121,23 @@ describe("config API", () => {
                 ? readFileSync(config.$path, "utf8")
                 : undefined,
         ).toBe(fileBeforeRequest);
+    });
+
+    it("requires an authenticated session to read the price", async () => {
+        expect((await getPrice()).status).toBe(401);
+
+        getSessionMock.mockResolvedValue(session);
+        expect((await getPrice()).status).toBe(200);
+    });
+
+    it("returns the configured price per kilometer", async () => {
+        await config.$set("pricing", { pricePerKilometer: 2.75 });
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await getPrice();
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ pricePerKilometer: 2.75 });
     });
 });
 
@@ -138,6 +160,11 @@ describe("logo API", () => {
 
     const getLogo = () =>
         app.handle(new Request("http://localhost/config/logo"));
+
+    const deleteLogo = () =>
+        app.handle(
+            new Request("http://localhost/config/logo", { method: "DELETE" }),
+        );
 
     const putLogo = (body?: Uint8Array<ArrayBuffer>, contentType?: string) => {
         const headers = new Headers();
@@ -200,6 +227,42 @@ describe("logo API", () => {
             "image/png",
         );
         expect(nonAdminResponse.status).toBe(403);
+        expect(readdirSync(storageDirectory)).toEqual([]);
+    });
+
+    it("requires an admin session to delete a logo", async () => {
+        writeFileSync(join(storageDirectory, "logo.png"), "existing logo");
+
+        expect((await deleteLogo()).status).toBe(401);
+
+        getSessionMock.mockResolvedValue(session);
+        expect((await deleteLogo()).status).toBe(403);
+        expect(readdirSync(storageDirectory)).toEqual(["logo.png"]);
+    });
+
+    it("deletes every stored logo format without deleting unrelated files", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+        writeFileSync(join(storageDirectory, "logo.png"), "png logo");
+        writeFileSync(join(storageDirectory, "logo.svg"), "svg logo");
+        writeFileSync(join(storageDirectory, "logo.png.bak"), "backup");
+        writeFileSync(join(storageDirectory, "not-logo.png"), "unrelated");
+
+        const response = await deleteLogo();
+
+        expect(response.status).toBe(200);
+        expect(readdirSync(storageDirectory).sort()).toEqual([
+            "logo.png.bak",
+            "not-logo.png",
+        ]);
+        expect((await getLogo()).status).toBe(404);
+    });
+
+    it("allows deleting a logo when none is installed", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await deleteLogo();
+
+        expect(response.status).toBe(200);
         expect(readdirSync(storageDirectory)).toEqual([]);
     });
 

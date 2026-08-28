@@ -665,6 +665,7 @@ describe("notify", () => {
             notify(
                 null,
                 {
+                    type: "assigned",
                     jobId: "0303a3f7-6ed5-4a89-84f0-bb2f33b892b7",
                     from: "Vienna",
                 },
@@ -679,6 +680,7 @@ describe("notify", () => {
             Parameters<typeof notify>[0]
         >;
         const notification = {
+            type: "assigned" as const,
             jobId: "9e36962f-b60c-4870-bd39-a8dad8a4025e",
             from: "Vienna Airport",
             to: "Wien Hauptbahnhof",
@@ -723,10 +725,12 @@ describe("WS /realtime/notify", () => {
         const secondClient = await WebSocketClient.connect("/notify");
         const notifications = [
             {
+                type: "assigned" as const,
                 jobId: "fc719807-1ab6-4441-8bd6-1f5f480175aa",
                 from: "Vienna Airport",
             },
             {
+                type: "unassigned" as const,
                 jobId: "f9fbd240-5625-4fc7-a552-755672ecdb5b",
                 from: "Wien Hauptbahnhof",
                 to: "Schwechat",
@@ -753,6 +757,7 @@ describe("WS /realtime/notify", () => {
         const targetClient = await WebSocketClient.connect("/notify");
         const otherClient = await WebSocketClient.connect("/notify");
         const notification = {
+            type: "unassigned" as const,
             jobId: "ec51bff0-6c6d-47f7-a767-3f7ba49571dc",
             from: "Vienna Airport",
         };
@@ -767,6 +772,7 @@ describe("WS /realtime/notify", () => {
         const trackingClient = await WebSocketClient.connect("/track");
         const notifyClient = await WebSocketClient.connect("/notify");
         const notification = {
+            type: "assigned" as const,
             jobId: "da420672-0497-434c-9e39-219de58a0bed",
             from: "Dispatch center",
             note: "New assignment",
@@ -783,6 +789,7 @@ describe("WS /realtime/notify", () => {
         const receiver = await WebSocketClient.connect("/notify");
 
         sender.send({
+            type: "assigned",
             jobId: "08fc1da8-28a5-4388-a116-4bc7e90b2dd1",
             from: "Untrusted client",
         });
@@ -797,6 +804,7 @@ describe("WS /realtime/notify", () => {
         const disconnectedClient = await WebSocketClient.connect("/notify");
         const activeClient = await WebSocketClient.connect("/notify");
         const notification = {
+            type: "assigned" as const,
             jobId: "084600b9-9f5b-49a6-a1da-e00ca900291f",
             from: "Vienna",
             to: "Graz",

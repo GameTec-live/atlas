@@ -7,6 +7,7 @@ data class AddressSearchUiState(
     val suggestions: List<AddressSuggestion> =
         emptyList(),
     val isLoading: Boolean = false,
+    val hasSearched: Boolean = false,
     val hasError: Boolean = false,
     val isSaving: Boolean = false,
     val saveFailed: Boolean = false

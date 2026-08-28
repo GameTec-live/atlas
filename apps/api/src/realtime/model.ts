@@ -44,6 +44,7 @@ export const RealtimeModel = {
     realtimeResponse,
     trackInputMessage,
     notifyResponse: t.Object({
+        type: t.Union([t.Literal("assigned"), t.Literal("unassigned")]),
         jobId: t.String({ format: "uuid" }),
         from: t.String(),
         to: t.Optional(t.String()),

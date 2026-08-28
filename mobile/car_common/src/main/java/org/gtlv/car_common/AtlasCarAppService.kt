@@ -9,8 +9,7 @@ import androidx.car.app.SessionInfo
 import androidx.car.app.validation.HostValidator
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import org.gtlv.car_common.screen.DispatcherMainScreen
-import org.gtlv.car_common.screen.DriverMainScreen
+import org.gtlv.car_common.screen.MainScreen
 import org.gtlv.car_common.screen.TelemetryPermissionScreen
 import org.gtlv.car_common.screen.WaitingScreen
 import org.gtlv.car_common.screen.missingVehicleTelemetryPermissions
@@ -27,6 +26,7 @@ import org.gtlv.core.session.SessionManagerProvider
 import org.gtlv.core.session.SessionState
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryProviderRegistry
+import org.gtlv.core.telemetry.LiveMapUsersProvider
 
 class AtlasCarAppService : CarAppService() {
 
@@ -77,6 +77,9 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
             (sessionManager?.state?.value as? SessionState.SignedIn)
                 ?.userId
         }
+        val liveMapUsers =
+            (carContext.applicationContext as? LiveMapUsersProvider)
+                ?.liveMapUsers
 
         return WaitingScreen(
             carContext = carContext,
@@ -86,20 +89,19 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                 val onRoleLost: () -> Unit = {
                     carContext.getCarService(ScreenManager::class.java).pop()
                 }
-                val roleScreen = when (role) {
-                    ShiftRole.DRIVER -> DriverMainScreen(
-                        carContext = carContext,
-                        getRole = getRole,
-                        onRoleLost = onRoleLost,
-                        jobRepository = jobRepository,
-                        locationProvider = locationProvider,
-                        serverSettingsRepository = serverSettingsRepository,
-                        collectedJobStore = collectedJobStore,
-                        getUserId = getUserId,
-                        telemetryProvider = telemetryProvider,
-                    )
-                    ShiftRole.DISPATCHER -> DispatcherMainScreen(carContext, getRole, onRoleLost)
-                }
+                val roleScreen = MainScreen(
+                    carContext = carContext,
+                    role = role,
+                    getRole = getRole,
+                    onRoleLost = onRoleLost,
+                    jobRepository = jobRepository,
+                    locationProvider = locationProvider,
+                    serverSettingsRepository = serverSettingsRepository,
+                    collectedJobStore = collectedJobStore,
+                    getUserId = getUserId,
+                    telemetryProvider = telemetryProvider,
+                    liveMapUsers = liveMapUsers,
+                )
 
                 carContext.getCarService(ScreenManager::class.java).push(roleScreen)
             },

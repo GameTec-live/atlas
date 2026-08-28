@@ -31,6 +31,7 @@ const {
     sendAssignmentNotification,
     shortenAddress,
 } = await import("@/src/jobs/notifications");
+const { clearReverseGeocodeCache } = await import("@/src/geoservices/geocoder");
 const { trackCache } = await import("@/src/realtime");
 const app = new Elysia().use(jobs);
 
@@ -277,6 +278,7 @@ beforeEach(() => {
     envMock.JOBTOKEN = undefined;
     resetAuthMocks();
     resetDbMocks();
+    clearReverseGeocodeCache();
     trackCache.clear();
     fetchMock.mockReset();
     fetchMock.mockImplementation(async (input) => {
@@ -1661,12 +1663,14 @@ describe("POST /jobs/:id/assign", () => {
             assignedDriverId: "driver-2",
             dueDate: "2026-08-15T14:30:00.000Z",
             to: [48.2101, 16.3645],
+            note: "Leave at reception",
         };
         const [updatedJobRow] = getDbMockTableRows("job");
         if (!updatedJobRow) throw new Error("Expected job fixture data");
         updatedJobRow[1] = assignment.assignedDriverId;
         updatedJobRow[4] = `(${assignment.to.join(",")})`;
         updatedJobRow[5] = assignment.dueDate.slice(0, -1);
+        updatedJobRow[6] = assignment.note;
         setDbMockRows("update", [updatedJobRow]);
 
         const response = await assignRequest(assignment);
@@ -1677,14 +1681,17 @@ describe("POST /jobs/:id/assign", () => {
             assignedDriverId: assignment.assignedDriverId,
             dueDate: assignment.dueDate,
             to: assignment.to,
+            note: assignment.note,
         });
         const { sql, values } = getFirstQuery();
         expect(sql).toContain('"assigned_driver_id" = $1');
         expect(sql).toContain('"to" = $2');
         expect(sql).toContain('"due_date" = $3');
+        expect(sql).toContain('"note" = $4');
         expect(values[0]).toBe(assignment.assignedDriverId);
         expect(values[1]).toBe("(48.2101,16.3645)");
         expect(values[2]).toBe(assignment.dueDate);
+        expect(values[3]).toBe(assignment.note);
         expect(values.at(-1)).toBe(jobId);
     });
 
@@ -1712,6 +1719,19 @@ describe("POST /jobs/:id/assign", () => {
         expect(sql).toContain('"to" = $2');
         expect(values[0]).toBe(session.user.id);
         expect(values[1]).toBe("(-90,180)");
+        expect(values.at(-1)).toBe(jobId);
+    });
+
+    it("clears a note while assigning", async () => {
+        getSessionMock.mockResolvedValue(session);
+
+        const response = await assignRequest({ note: null });
+
+        expect(response.status).toBe(200);
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain('"note" = $2');
+        expect(values[0]).toBe(session.user.id);
+        expect(values[1]).toBeNull();
         expect(values.at(-1)).toBe(jobId);
     });
 
@@ -1756,6 +1776,7 @@ describe("POST /jobs/:id/assign", () => {
         ["a destination longitude below -180", { to: [0, -180.01] }],
         ["a destination longitude above 180", { to: [0, 180.01] }],
         ["a null destination", { to: null }],
+        ["a non-string note", { note: 123 }],
     ])("returns 422 for %s", async (_description, body) => {
         getSessionMock.mockResolvedValue(session);
 
@@ -1779,7 +1800,6 @@ describe("POST /jobs/:id/assign", () => {
 
         const response = await assignRequest({
             vehicleId: "d6503952-72f5-4b73-a826-e1ab44e0ba72",
-            note: "must not be changed",
             startedAt: "2026-08-15T14:30:00.000Z",
         });
 
@@ -1787,7 +1807,6 @@ describe("POST /jobs/:id/assign", () => {
         const { sql, values } = getFirstQuery();
         const setClause = sql.split(" returning ")[0];
         expect(setClause).not.toContain('"vehicle_id"');
-        expect(setClause).not.toContain('"note"');
         expect(setClause).not.toContain('"started_at"');
         expect(values[0]).toBe(session.user.id);
     });
@@ -1868,6 +1887,7 @@ describe("assignment notifications", () => {
         expect(publishMock.mock.calls[0]?.[0]).toBe("api:ws:notify:driver-2");
         const notification = JSON.parse(String(publishMock.mock.calls[0]?.[1]));
         expect(notification).toEqual({
+            type: "assigned",
             jobId: assignedJob.id,
             from: `${"A".repeat(NOTIFICATION_ADDRESS_MAX_LENGTH - 1)}…`,
             to: "Schönbrunner Straße 1, Wien",
@@ -1890,6 +1910,7 @@ describe("assignment notifications", () => {
 
         expect(publishMock).toHaveBeenCalledTimes(1);
         expect(JSON.parse(String(publishMock.mock.calls[0]?.[1]))).toEqual({
+            type: "assigned",
             jobId: assignedJob.id,
             from: "Stephansplatz 1, Wien",
             to: "48.1947, 16.3122",
@@ -1912,11 +1933,42 @@ describe("assignment notifications", () => {
 
         expect(publishMock).toHaveBeenCalledTimes(1);
         expect(JSON.parse(String(publishMock.mock.calls[0]?.[1]))).toEqual({
+            type: "assigned",
             jobId: assignedJob.id,
             from: "48.2082, 16.3738",
             to: "Schönbrunner Straße 1, Wien",
             note: assignedJob.note,
         });
+    });
+
+    it("notifies every current dispatcher about an unassigned job", async () => {
+        const unassignedJob = { ...assignedJob, assignedDriverId: null };
+        setDbMockRows("select", [
+            ["dispatcher-1", "dispatcher"],
+            ["driver-1", "driver"],
+            ["dispatcher-2", "dispatcher"],
+        ]);
+        const publishMock = mock((_topic: string, _message: string) => 1);
+        const server = {
+            publish: publishMock,
+        } as unknown as Bun.Server<unknown>;
+
+        await sendAssignmentNotification(server, unassignedJob);
+
+        expect(publishMock).toHaveBeenCalledTimes(2);
+        expect(publishMock.mock.calls.map(([topic]) => topic)).toEqual([
+            "api:ws:notify:dispatcher-1",
+            "api:ws:notify:dispatcher-2",
+        ]);
+        for (const [, message] of publishMock.mock.calls) {
+            expect(JSON.parse(message)).toEqual({
+                type: "unassigned",
+                jobId: unassignedJob.id,
+                from: "Address at 48.2082, 16.3738",
+                to: "Address at 48.1947, 16.3122",
+                note: unassignedJob.note,
+            });
+        }
     });
 
     it.each([

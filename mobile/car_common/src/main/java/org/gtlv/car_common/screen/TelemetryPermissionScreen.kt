@@ -55,6 +55,7 @@ class TelemetryPermissionScreen(
                         )
                     )
                     .setOnClickListener(
+                        // maybe remove ParkedOnlyOnClickListener
                         ParkedOnlyOnClickListener.create {
                             requestTelemetryPermissions()
                         }

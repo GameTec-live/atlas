@@ -33,6 +33,8 @@ import kotlinx.coroutines.launch
 import org.gtlv.atlas.auth.LoginScreen
 import org.gtlv.atlas.auth.LoginViewModel
 import org.gtlv.atlas.auth.LoginViewModelFactory
+import org.gtlv.atlas.assign.AssignJobViewModel
+import org.gtlv.atlas.assign.AssignJobViewModelFactory
 import org.gtlv.atlas.location.RequiredLocationPermissionGate
 import org.gtlv.atlas.main.MainScreenViewModel
 import org.gtlv.atlas.main.MainScreenViewModelFactory
@@ -45,7 +47,10 @@ import org.gtlv.atlas.role.RoleSelectionViewModel
 import org.gtlv.atlas.role.RoleSelectionViewModelFactory
 import org.gtlv.atlas.service.ActiveShiftService
 import org.gtlv.atlas.ui.theme.AtlasTheme
+import org.gtlv.atlas.unassigned.UnassignedJobsViewModel
+import org.gtlv.atlas.unassigned.UnassignedJobsViewModelFactory
 import org.gtlv.core.session.SessionState
+import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.shift.ShiftSessionState
 
 class MainActivity : ComponentActivity() {
@@ -69,6 +74,23 @@ class MainActivity : ComponentActivity() {
         JobNotificationViewModelFactory(
             jobRepository = atlasApplication.jobRepository,
             webSocket = atlasApplication.jobNotificationWebSocket
+        )
+    }
+
+    private val unassignedJobsViewModel:
+            UnassignedJobsViewModel by viewModels {
+        UnassignedJobsViewModelFactory(
+            jobRepository = atlasApplication.jobRepository
+        )
+    }
+
+    private val assignJobViewModel:
+            AssignJobViewModel by viewModels {
+        AssignJobViewModelFactory(
+            jobRepository = atlasApplication.jobRepository,
+            geoServiceRepository =
+                atlasApplication.geoServiceRepository,
+            roleRepository = atlasApplication.roleRepository
         )
     }
 
@@ -142,6 +164,11 @@ class MainActivity : ComponentActivity() {
                         SessionState.SignedOut -> {
                             mainScreenViewModel
                                 .clearJobs()
+
+                            unassignedJobsViewModel
+                                .clear()
+
+                            assignJobViewModel.clear()
 
                             jobNotificationViewModel
                                 .clear()
@@ -260,8 +287,34 @@ class MainActivity : ComponentActivity() {
                                         )
                                 }
 
+                                LaunchedEffect(
+                                    currentSession.userId,
+                                    currentShift.session.role
+                                ) {
+                                    if (
+                                        currentShift.session.role ==
+                                        ShiftRole.DISPATCHER
+                                    ) {
+                                        unassignedJobsViewModel
+                                            .refresh()
+                                    } else {
+                                        unassignedJobsViewModel
+                                            .clear()
+                                    }
+                                }
+
                                 val mainScreenState by
                                 mainScreenViewModel
+                                    .uiState
+                                    .collectAsStateWithLifecycle()
+
+                                val unassignedJobsState by
+                                unassignedJobsViewModel
+                                    .uiState
+                                    .collectAsStateWithLifecycle()
+
+                                val assignJobState by
+                                assignJobViewModel
                                     .uiState
                                     .collectAsStateWithLifecycle()
 
@@ -308,12 +361,32 @@ class MainActivity : ComponentActivity() {
                                         locationState = locationState,
                                         liveMapUsers = otherMapUsers,
                                         mainScreenState = mainScreenState,
+                                        unassignedJobsState = unassignedJobsState,
+                                        assignJobState = assignJobState,
                                         onToggleJobList = mainScreenViewModel::toggleJobList,
                                         onRetryJobs = mainScreenViewModel::refresh,
                                         onStartNextJob = mainScreenViewModel::startNextJob,
                                         onCancelCurrentJob = mainScreenViewModel::cancelCurrentJob,
                                         onPersonCollected = mainScreenViewModel::personCollected,
                                         onJobFinished = mainScreenViewModel::finishCurrentJob,
+                                        onNewJobClick = {},
+                                        onRefreshUnassignedJobs = unassignedJobsViewModel::refresh,
+                                        onRequestUnassignedJobDeletion = unassignedJobsViewModel::requestDeletion,
+                                        onDismissUnassignedJobDeletion = unassignedJobsViewModel::dismissDeletion,
+                                        onConfirmUnassignedJobDeletion = unassignedJobsViewModel::confirmDeletion,
+                                        onRemoveUnassignedJob = unassignedJobsViewModel::removeJob,
+                                        onLoadAssignJob = assignJobViewModel::load,
+                                        onClearAssignJob = assignJobViewModel::clear,
+                                        onEditAssignJobAddress = assignJobViewModel::openAddressEditor,
+                                        onAssignJobAddressQueryChanged = assignJobViewModel::onAddressQueryChanged,
+                                        onAssignJobAddressSelected = assignJobViewModel::selectAddressSuggestion,
+                                        onCloseAssignJobAddressEditor = assignJobViewModel::closeAddressEditor,
+                                        onAssignJobDueDateChanged = assignJobViewModel::updateDueDate,
+                                        onSaveAssignJobChanges = assignJobViewModel::saveChanges,
+                                        onRetryAssignJobCandidates = assignJobViewModel::retryCandidates,
+                                        onRequestJobAssignment = assignJobViewModel::requestAssignment,
+                                        onDismissJobAssignment = assignJobViewModel::dismissAssignment,
+                                        onConfirmJobAssignment = assignJobViewModel::confirmAssignment,
                                         onEditDestination = mainScreenViewModel::openDestinationEditor,
                                         onAddressQueryChanged = mainScreenViewModel::onAddressQueryChanged,
                                         onAddressSuggestionSelected = mainScreenViewModel::selectAddressSuggestion,

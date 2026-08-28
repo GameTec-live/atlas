@@ -22,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -37,12 +38,14 @@ import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryVehicleState
+import org.gtlv.core.telemetry.LiveMapUser
 import kotlin.time.Duration.Companion.milliseconds
 import org.gtlv.core.job.Job as AtlasJob
 import androidx.core.graphics.createBitmap
 
-class DriverMainScreen(
+class MainScreen(
     carContext: CarContext,
+    private val role: ShiftRole,
     getRole: () -> ShiftRole?,
     onRoleLost: () -> Unit,
     private val jobRepository: JobRepository?,
@@ -51,18 +54,23 @@ class DriverMainScreen(
     private val collectedJobStore: CollectedJobStore?,
     private val getUserId: () -> String?,
     private val telemetryProvider: TelemetryProvider?,
-) : RoleAwareScreen(carContext, ShiftRole.DRIVER, getRole, onRoleLost) {
+    private val liveMapUsers: StateFlow<Map<String, LiveMapUser>>?,
+) : RoleAwareScreen(carContext, role, getRole, onRoleLost) {
     private val screenScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate,
     )
     private val jobRequestMutex = Mutex()
-    private val mapRenderer = MapLibreSurfaceRenderer(carContext)
+    private val mapRenderer = MapLibreSurfaceRenderer(
+        carContext = carContext,
+        showDispatcherDriverList = role == ShiftRole.DISPATCHER,
+    )
 
     private var pollingJob: Job? = null
     private var locationJob: Job? = null
     private var styleJob: Job? = null
     private var collectedStateJob: Job? = null
     private var jobLifecycleJob: Job? = null
+    private var liveMapUsersJob: Job? = null
     private var observedCollectedUserId: String? = null
     private var currentJob: AtlasJob? = null
     private var queuedJobs: List<AtlasJob> = emptyList()
@@ -85,6 +93,7 @@ class DriverMainScreen(
         observeLocation()
         observeCollectedJobState()
         observeJobLifecycle()
+        observeLiveMapUsers()
         startJobPolling()
     }
 
@@ -99,6 +108,8 @@ class DriverMainScreen(
         collectedStateJob = null
         jobLifecycleJob?.cancel()
         jobLifecycleJob = null
+        liveMapUsersJob?.cancel()
+        liveMapUsersJob = null
         observedCollectedUserId = null
         super.onStop(owner)
     }
@@ -173,6 +184,28 @@ class DriverMainScreen(
                 cancelActionBuilder.build()
             )
         }
+
+        if (role == ShiftRole.DISPATCHER) {
+            val newJobActionBuilder = Action.Builder()
+                .setIcon(carIcon(R.drawable.ic_add))
+                .setOnClickListener(::onNewJobClick)
+
+            if (carContext.carAppApiLevel >= 5) {
+                newJobActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
+            }
+
+            actionStripBuilder.addAction(newJobActionBuilder.build())
+        }
+
+        val recenterActionBuilder = Action.Builder()
+            .setIcon(carIcon(R.drawable.ic_recenter))
+            .setOnClickListener(mapRenderer::recenter)
+
+        if (carContext.carAppApiLevel >= 5) {
+            recenterActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
+        }
+
+        actionStripBuilder.addAction(recenterActionBuilder.build())
         actionStripBuilder.addAction(jobAction)
 
         val builder = NavigationTemplate.Builder()
@@ -189,39 +222,44 @@ class DriverMainScreen(
     private fun addInteractiveMapControls(
         builder: NavigationTemplate.Builder,
     ) {
+        builder
+            .setMapActionStrip(buildMapActionStrip())
+            .setPanModeListener(::onPanModeChanged)
+    }
+
+    @RequiresCarApi(2)
+    private fun buildMapActionStrip(): ActionStrip {
         val panAction = Action.Builder(Action.PAN)
             .setIcon(carIcon(R.drawable.ic_pan))
             .build()
+        val tiltActionBuilder = Action.Builder()
+            .setIcon(carIcon(R.drawable.ic_tilt))
+            .setOnClickListener(mapRenderer::cycleTilt)
         val zoomInActionBuilder = Action.Builder()
             .setIcon(carIcon(R.drawable.ic_zoom_in))
             .setOnClickListener(mapRenderer::zoomIn)
         val zoomOutActionBuilder = Action.Builder()
             .setIcon(carIcon(R.drawable.ic_zoom_out))
             .setOnClickListener(mapRenderer::zoomOut)
-        val recenterActionBuilder = Action.Builder()
-            .setIcon(carIcon(R.drawable.ic_recenter))
-            .setOnClickListener(mapRenderer::recenter)
 
         if (carContext.carAppApiLevel >= 5) {
+            tiltActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
             zoomInActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
             zoomOutActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
-            recenterActionBuilder.setFlags(Action.FLAG_IS_PERSISTENT)
         }
 
-        builder
-            .setMapActionStrip(
-                ActionStrip.Builder()
-                    .addAction(panAction)
-                    .addAction(zoomInActionBuilder.build())
-                    .addAction(zoomOutActionBuilder.build())
-                    .addAction(recenterActionBuilder.build())
-                    .build(),
-            )
-            .setPanModeListener { isInPanMode ->
-                if (isInPanMode) {
-                    mapRenderer.stopFollowingLocation()
-                }
-            }
+        return ActionStrip.Builder()
+            .addAction(panAction)
+            .addAction(zoomInActionBuilder.build())
+            .addAction(zoomOutActionBuilder.build())
+            .addAction(tiltActionBuilder.build())
+            .build()
+    }
+
+    private fun onPanModeChanged(isInPanMode: Boolean) {
+        if (isInPanMode) {
+            mapRenderer.stopFollowingLocation()
+        }
     }
 
     private fun carIcon(resourceId: Int): CarIcon {
@@ -527,6 +565,32 @@ class DriverMainScreen(
             carContext.getString(messageResource),
             CarToast.LENGTH_SHORT,
         ).show()
+    }
+
+    private fun observeLiveMapUsers() {
+        if (
+            role != ShiftRole.DISPATCHER ||
+            liveMapUsersJob != null
+        ) {
+            return
+        }
+        val users = liveMapUsers ?: return
+
+        liveMapUsersJob = screenScope.launch {
+            users.collectLatest { liveUsersById ->
+                val currentUserId = getUserId()
+                val visibleUsers = liveUsersById.values
+                    .asSequence()
+                    .filter { user -> user.userId != currentUserId }
+                    .toList()
+
+                mapRenderer.updateLiveUsers(visibleUsers)
+            }
+        }
+    }
+
+    private fun onNewJobClick() {
+        showToast(R.string.dispatcher_new_job_unavailable)
     }
 
     private fun invalidateSafely() {

@@ -346,3 +346,17 @@ export const replaceLogo = async (
         }
     }
 };
+
+export const deleteLogo = async (storage: LogoStorage) => {
+    await mkdir(storage.dataLocation, { recursive: true });
+    const lock = await acquireLogoLock(storage);
+
+    try {
+        for (const logoFilePath of await listLogoFiles(storage)) {
+            await lock.assertOwned();
+            await unlinkIfExists(logoFilePath);
+        }
+    } finally {
+        await lock.release();
+    }
+};

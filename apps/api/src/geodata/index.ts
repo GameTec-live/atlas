@@ -3,6 +3,8 @@ import { Value } from "@sinclair/typebox/value";
 import { Elysia } from "elysia";
 import { env } from "@/env";
 import { authHandler } from "../authHandler";
+import { clearResolveCache } from "../geoservices";
+import { clearReverseGeocodeCache } from "../geoservices/geocoder";
 import {
     GeodataModel,
     type InstallBody,
@@ -192,6 +194,8 @@ export const geodata = new Elysia({
                 installRequest(body),
             );
             set.status = status;
+            clearReverseGeocodeCache();
+            clearResolveCache();
             return simplifyJobResponse(result);
         },
         {
@@ -303,6 +307,8 @@ export const geodata = new Elysia({
                 { method: "DELETE" },
             );
             set.status = status;
+            clearReverseGeocodeCache();
+            clearResolveCache();
             return simplifyJobResponse(result);
         },
         {
@@ -319,6 +325,8 @@ export const geodata = new Elysia({
                 { method: "POST" },
             );
             set.status = status;
+            clearReverseGeocodeCache();
+            clearResolveCache();
             return simplifyJobResponse(result);
         },
         {

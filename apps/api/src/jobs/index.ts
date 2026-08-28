@@ -267,6 +267,7 @@ export const jobs = new Elysia({
                             : {}
                         : {}),
                     ...(body ? (body.to ? { to: body.to } : {}) : {}),
+                    ...(body && "note" in body ? { note: body.note } : {}),
                 })
                 .where(eq(job.id, params.id))
                 .returning();

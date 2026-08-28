@@ -4,3 +4,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data object MainDestination
+
+@Serializable
+data object UnassignedJobsDestination
+
+@Serializable
+data class AssignJobDestination(
+    val jobId: String
+)
