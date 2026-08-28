@@ -33,6 +33,7 @@ export function UnassignedJobsSection({
                         <Button
                             variant="ghost"
                             size="icon"
+                            nativeButton={false}
                             render={
                                 <Link
                                     to="/jobs/public"

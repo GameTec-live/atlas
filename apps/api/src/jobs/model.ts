@@ -39,6 +39,7 @@ export const JobModel = {
             "assignedDriverId",
             "dueDate",
             "to",
+            "note",
         ]),
     ),
     jobStartModel: t.Optional(

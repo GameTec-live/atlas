@@ -33,6 +33,7 @@ function NewJobPage() {
         coordinates: null,
     });
     const [dueDate, setDueDate] = useState(() => new Date());
+    const [note, setNote] = useState("");
     const [selectedDriverId, setSelectedDriverId] = useState<string>();
     const [mobileCandidatesOpen, setMobileCandidatesOpen] = useState(false);
 
@@ -48,12 +49,7 @@ function NewJobPage() {
         enabled: originIsValid && destinationIsValid,
     });
     const candidates = candidatesQuery.data ?? [];
-    const selectedCandidate = candidates.some(
-        (candidate) => candidate.driverId === selectedDriverId,
-    )
-        ? selectedDriverId
-        : undefined;
-    const activeDriverId = selectedCandidate ?? candidates[0]?.driverId;
+    const activeDriverId = selectedDriverId ?? candidates[0]?.driverId;
 
     const createMutation = useMutation({
         mutationFn: (assignedDriverId: string | null) => {
@@ -64,6 +60,7 @@ function NewJobPage() {
                     from: origin.coordinates,
                     dueDate,
                     assignedDriverId,
+                    note: note.trim() || null,
                     ...(destination.coordinates
                         ? { to: destination.coordinates }
                         : {}),
@@ -112,6 +109,7 @@ function NewJobPage() {
                     to=""
                     origin={origin.address}
                     destination={destination.address}
+                    note={note}
                     dueDate={dueDate}
                     locale={locale}
                     editable
@@ -128,6 +126,7 @@ function NewJobPage() {
                     onDestinationSelect={(address, coordinates) =>
                         setDestination({ address, coordinates })
                     }
+                    onNoteChange={setNote}
                     onDueDateChange={setDueDate}
                 />
             </section>
