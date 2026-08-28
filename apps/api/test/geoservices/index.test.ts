@@ -22,7 +22,13 @@ mock.module("@/env", () => ({
 
 const { config } = await import("@/src/config");
 const { geoservices } = await import("@/src/geoservices");
-const { GEOCODER_TIMEOUT_MS } = await import("@/src/geoservices/geocoder");
+const {
+    clearReverseGeocodeCache,
+    GEOCODER_TIMEOUT_MS,
+    requestReverseGeocode,
+    REVERSE_GEOCODER_CACHE_SIZE,
+    reverseGeocode,
+} = await import("@/src/geoservices/geocoder");
 const app = new Elysia().use(geoservices);
 
 const originalFetch = globalThis.fetch;
@@ -454,6 +460,7 @@ describe("GET /geoservices/reverse", () => {
     beforeEach(() => {
         resetAuthMocks();
         resetDbMocks();
+        clearReverseGeocodeCache();
         fetchMock.mockReset();
         globalThis.fetch = fetchMock as unknown as typeof fetch;
     });
@@ -508,6 +515,58 @@ describe("GET /geoservices/reverse", () => {
             {
                 signal: expect.any(AbortSignal),
             },
+        );
+    });
+
+    it("serves repeated requests from the function-level cache", async () => {
+        getSessionMock.mockResolvedValue(session);
+        respondWith(reverseSuccessResponse);
+
+        const response = await reverseRequest({
+            lat: 48.2082,
+            lon: 16.3738,
+        });
+        const address = await reverseGeocode([48.2082, 16.3738]);
+
+        expect(response.status).toBe(200);
+        expect(address).toBe(successResponse.results[0]?.display_name);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("includes reverse search controls in the cache key", async () => {
+        getSessionMock.mockResolvedValue(session);
+        respondWith(reverseSuccessResponse);
+        respondWith(reverseSuccessResponse);
+
+        await reverseRequest({ lat: 48.2082, lon: 16.3738, radius_m: 100 });
+        await reverseRequest({ lat: 48.2082, lon: 16.3738, radius_m: 200 });
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("refreshes cache recency and evicts the least recently used entry", async () => {
+        fetchMock.mockImplementation(async () =>
+            Response.json(reverseSuccessResponse),
+        );
+        const refreshedCoordinates = [48, 16] as const;
+        const oldestCoordinates = [40, 15] as const;
+
+        await requestReverseGeocode(refreshedCoordinates);
+        for (
+            let index = 0;
+            index < REVERSE_GEOCODER_CACHE_SIZE - 1;
+            index += 1
+        ) {
+            await requestReverseGeocode([40 + index / 100_000, 15]);
+        }
+
+        await requestReverseGeocode(refreshedCoordinates);
+        await requestReverseGeocode([49, 16]);
+        await requestReverseGeocode(refreshedCoordinates);
+        await requestReverseGeocode(oldestCoordinates);
+
+        expect(fetchMock).toHaveBeenCalledTimes(
+            REVERSE_GEOCODER_CACHE_SIZE + 2,
         );
     });
 
