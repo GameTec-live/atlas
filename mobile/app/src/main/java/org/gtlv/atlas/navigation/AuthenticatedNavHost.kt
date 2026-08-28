@@ -14,6 +14,8 @@ import org.gtlv.atlas.assign.AssignJobScreen
 import org.gtlv.atlas.assign.AssignJobUiState
 import org.gtlv.atlas.assign.composable.AssignJobRouteState
 import org.gtlv.atlas.notification.JobNotificationUiState
+import org.gtlv.atlas.newjob.NewJobScreen
+import org.gtlv.atlas.newjob.NewJobUiState
 import org.gtlv.atlas.unassigned.UnassignedJobsScreen
 import org.gtlv.atlas.unassigned.UnassignedJobsUiState
 import org.gtlv.core.geoservice.AddressSuggestion
@@ -33,6 +35,7 @@ internal fun AuthenticatedNavHost(
     mainScreenState: MainScreenUiState,
     unassignedJobsState: UnassignedJobsUiState,
     assignJobState: AssignJobUiState,
+    newJobState: NewJobUiState,
     jobNotificationState: JobNotificationUiState,
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
@@ -40,7 +43,21 @@ internal fun AuthenticatedNavHost(
     onCancelCurrentJob: () -> Unit,
     onPersonCollected: () -> Unit,
     onJobFinished: () -> Unit,
-    onNewJobClick: () -> Unit,
+    onLoadNewJob: () -> Unit,
+    onClearNewJob: () -> Unit,
+    onEditNewJobAddress: (org.gtlv.core.job.JobLocationField) -> Unit,
+    onNewJobAddressQueryChanged: (String) -> Unit,
+    onNewJobAddressSelected: (AddressSuggestion) -> Unit,
+    onCloseNewJobAddressEditor: () -> Unit,
+    onNewJobDueDateChanged: (String) -> Unit,
+    onUnassignedJobDueDateSelected: (String) -> Unit,
+    onCloseUnassignedJobDueDatePicker: () -> Unit,
+    onNewJobNoteChanged: (String) -> Unit,
+    onRetryNewJobCandidates: () -> Unit,
+    onRequestNewJobDriver: (org.gtlv.core.job.JobCandidate) -> Unit,
+    onRequestUnassignedJobCreation: () -> Unit,
+    onDismissNewJobCreation: () -> Unit,
+    onConfirmNewJobCreation: () -> Unit,
     onRefreshUnassignedJobs: () -> Unit,
     onRequestUnassignedJobDeletion: (Job) -> Unit,
     onDismissUnassignedJobDeletion: () -> Unit,
@@ -100,7 +117,11 @@ internal fun AuthenticatedNavHost(
                         launchSingleTop = true
                     }
                 },
-                onNewJobClick = onNewJobClick,
+                onNewJobClick = {
+                    navController.navigate(NewJobDestination) {
+                        launchSingleTop = true
+                    }
+                },
                 onEditDestination = onEditDestination,
                 onAddressQueryChanged = onAddressQueryChanged,
                 onAddressSuggestionSelected = onAddressSuggestionSelected,
@@ -133,6 +154,45 @@ internal fun AuthenticatedNavHost(
                     onDismissUnassignedJobDeletion,
                 onConfirmDeletion =
                     onConfirmUnassignedJobDeletion
+            )
+        }
+
+        composable<NewJobDestination> {
+            LaunchedEffect(Unit) {
+                onLoadNewJob()
+            }
+
+            NewJobScreen(
+                state = newJobState,
+                serverAddress = serverAddress,
+                locationState = locationState,
+                liveMapUsers = liveMapUsers,
+                onBack = {
+                    onClearNewJob()
+                    navController.popBackStack()
+                },
+                onEditAddress = onEditNewJobAddress,
+                onAddressQueryChanged = onNewJobAddressQueryChanged,
+                onAddressSuggestionSelected = onNewJobAddressSelected,
+                onCloseAddressEditor = onCloseNewJobAddressEditor,
+                onDueDateChanged = onNewJobDueDateChanged,
+                onUnassignedDueDateSelected =
+                    onUnassignedJobDueDateSelected,
+                onDueDatePickerClosed =
+                    onCloseUnassignedJobDueDatePicker,
+                onNoteChanged = onNewJobNoteChanged,
+                onRetryCandidates = onRetryNewJobCandidates,
+                onRequestDriverCreation = onRequestNewJobDriver,
+                onRequestUnassignedCreation =
+                    onRequestUnassignedJobCreation,
+                onDismissCreation = onDismissNewJobCreation,
+                onConfirmCreation = onConfirmNewJobCreation,
+                onCreationCompleted = {
+                    onClearNewJob()
+                    onRefreshUnassignedJobs()
+                    onRetryJobs()
+                    navController.popBackStack()
+                }
             )
         }
 

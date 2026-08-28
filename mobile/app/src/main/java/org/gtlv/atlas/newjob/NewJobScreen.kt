@@ -1,4 +1,4 @@
-package org.gtlv.atlas.assign
+package org.gtlv.atlas.newjob
 
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,9 +34,9 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
-import org.gtlv.atlas.assign.composable.AssignJobMapContent
-import org.gtlv.atlas.assign.composable.AssignmentConfirmationDialog
 import org.gtlv.atlas.assign.composable.CandidatePanel
+import org.gtlv.atlas.newjob.composable.CreateJobConfirmationDialog
+import org.gtlv.atlas.newjob.composable.NewJobMapContent
 import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.job.JobCandidate
 import org.gtlv.core.job.JobLocationField
@@ -45,8 +45,8 @@ import org.gtlv.core.telemetry.LiveMapUser
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun AssignJobScreen(
-    state: AssignJobUiState,
+internal fun NewJobScreen(
+    state: NewJobUiState,
     serverAddress: String,
     locationState: LocationState,
     liveMapUsers: Collection<LiveMapUser>,
@@ -56,25 +56,26 @@ internal fun AssignJobScreen(
     onAddressSuggestionSelected: (AddressSuggestion) -> Unit,
     onCloseAddressEditor: () -> Unit,
     onDueDateChanged: (String) -> Unit,
-    onSaveChanges: () -> Unit,
+    onUnassignedDueDateSelected: (String) -> Unit,
+    onDueDatePickerClosed: () -> Unit,
+    onNoteChanged: (String) -> Unit,
     onRetryCandidates: () -> Unit,
-    onRequestAssignment: (JobCandidate) -> Unit,
-    onDismissAssignment: () -> Unit,
-    onConfirmAssignment: () -> Unit,
-    onAssignmentCompleted: () -> Unit,
+    onRequestDriverCreation: (JobCandidate) -> Unit,
+    onRequestUnassignedCreation: () -> Unit,
+    onDismissCreation: () -> Unit,
+    onConfirmCreation: () -> Unit,
+    onCreationCompleted: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
-    val isLandscape =
-        configuration.orientation ==
-                Configuration.ORIENTATION_LANDSCAPE
+    val isLandscape = configuration.orientation ==
+            Configuration.ORIENTATION_LANDSCAPE
     val landscapeDriverPanelWidth =
         (configuration.screenWidthDp * 0.36f)
             .coerceIn(320f, 420f)
             .dp
     val focusManager = LocalFocusManager.current
-    val keyboardController =
-        LocalSoftwareKeyboardController.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val dismissAddressEditor = remember(
         focusManager,
         keyboardController,
@@ -92,35 +93,41 @@ internal fun AssignJobScreen(
         onRetryCandidates
     ) {
         {
-            if (state.isAddressEditorOpen) {
-                dismissAddressEditor()
-            }
+            dismissAddressEditor()
             onRetryCandidates()
         }
     }
-    val requestAssignment = remember(
+    val requestDriverCreation = remember(
         state.isAddressEditorOpen,
         dismissAddressEditor,
-        onRequestAssignment
+        onRequestDriverCreation
     ) {
         { candidate: JobCandidate ->
-            if (state.isAddressEditorOpen) {
-                dismissAddressEditor()
-            }
-            onRequestAssignment(candidate)
+            dismissAddressEditor()
+            onRequestDriverCreation(candidate)
         }
     }
-
-    LaunchedEffect(state.assignmentCompleted) {
-        if (state.assignmentCompleted) {
-            onAssignmentCompleted()
-        }
-    }
-
-    BackHandler(
-        enabled = state.isAddressEditorOpen
+    val requestUnassignedCreation = remember(
+        state.isAddressEditorOpen,
+        dismissAddressEditor,
+        onRequestUnassignedCreation
     ) {
-        dismissAddressEditor()
+        {
+            dismissAddressEditor()
+            onRequestUnassignedCreation()
+        }
+    }
+
+    LaunchedEffect(state.creationCompleted) {
+        if (state.creationCompleted) onCreationCompleted()
+    }
+
+    BackHandler {
+        if (state.isAddressEditorOpen) {
+            dismissAddressEditor()
+        } else {
+            onBack()
+        }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -129,13 +136,7 @@ internal fun AssignJobScreen(
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
-                    title = {
-                        Text(
-                            text = stringResource(
-                                R.string.assign_job_title
-                            )
-                        )
-                    },
+                    title = { Text(stringResource(R.string.new_job_title)) },
                     navigationIcon = {
                         IconButton(
                             onClick = {
@@ -149,10 +150,9 @@ internal fun AssignJobScreen(
                             Icon(
                                 imageVector =
                                     Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription =
-                                    stringResource(
-                                        R.string.assign_job_back
-                                    )
+                                contentDescription = stringResource(
+                                    R.string.new_job_back
+                                )
                             )
                         }
                     }
@@ -165,20 +165,21 @@ internal fun AssignJobScreen(
                         .fillMaxSize()
                         .padding(contentPadding)
                 ) {
-                    AssignJobMapContent(
+                    NewJobMapContent(
                         state = state,
                         serverAddress = serverAddress,
                         locationState = locationState,
                         liveMapUsers = liveMapUsers,
                         onEditAddress = onEditAddress,
-                        onAddressQueryChanged =
-                            onAddressQueryChanged,
+                        onAddressQueryChanged = onAddressQueryChanged,
                         onAddressSuggestionSelected =
                             onAddressSuggestionSelected,
-                        onCloseAddressEditor =
-                            dismissAddressEditor,
+                        onCloseAddressEditor = dismissAddressEditor,
                         onDueDateChanged = onDueDateChanged,
-                        onSaveChanges = onSaveChanges,
+                        onUnassignedDueDateSelected =
+                            onUnassignedDueDateSelected,
+                        onDueDatePickerClosed = onDueDatePickerClosed,
+                        onNoteChanged = onNoteChanged,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
@@ -195,17 +196,11 @@ internal fun AssignJobScreen(
                         color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 8.dp
                     ) {
-                        CandidatePanel(
-                            candidates = state.candidates,
-                            isLoadingCandidates = state.isLoadingCandidates,
-                            candidatesFailed = state.candidatesFailed,
-                            allDrivers = state.allDrivers,
-                            isLoadingDrivers = state.isLoadingDrivers,
-                            driversFailed = state.driversFailed,
-                            isActionInProgress = state.isAssigning,
+                        NewJobCandidatePanel(
+                            state = state,
                             onRetry = retryCandidates,
-                            onCandidateClick =
-                                requestAssignment,
+                            onCandidateClick = requestDriverCreation,
+                            onCreateUnassigned = requestUnassignedCreation,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -217,60 +212,84 @@ internal fun AssignJobScreen(
                         .padding(contentPadding),
                     containerColor = Color.Transparent,
                     sheetPeekHeight = 184.dp,
-                    sheetShape =
-                        MaterialTheme.shapes.extraLarge,
-                    sheetContainerColor =
-                        MaterialTheme.colorScheme.surface,
+                    sheetShape = MaterialTheme.shapes.extraLarge,
+                    sheetContainerColor = MaterialTheme.colorScheme.surface,
                     sheetShadowElevation = 6.dp,
-                    sheetDragHandle = {
-                        BottomSheetDefaults.DragHandle()
-                    },
+                    sheetDragHandle = { BottomSheetDefaults.DragHandle() },
                     sheetContent = {
-                        CandidatePanel(
-                            candidates = state.candidates,
-                            isLoadingCandidates = state.isLoadingCandidates,
-                            candidatesFailed = state.candidatesFailed,
-                            allDrivers = state.allDrivers,
-                            isLoadingDrivers = state.isLoadingDrivers,
-                            driversFailed = state.driversFailed,
-                            isActionInProgress = state.isAssigning,
+                        NewJobCandidatePanel(
+                            state = state,
                             onRetry = retryCandidates,
-                            onCandidateClick =
-                                requestAssignment,
+                            onCandidateClick = requestDriverCreation,
+                            onCreateUnassigned = requestUnassignedCreation,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(420.dp)
                         )
                     }
                 ) {
-                    AssignJobMapContent(
+                    NewJobMapContent(
                         state = state,
                         serverAddress = serverAddress,
                         locationState = locationState,
                         liveMapUsers = liveMapUsers,
                         onEditAddress = onEditAddress,
-                        onAddressQueryChanged =
-                            onAddressQueryChanged,
+                        onAddressQueryChanged = onAddressQueryChanged,
                         onAddressSuggestionSelected =
                             onAddressSuggestionSelected,
-                        onCloseAddressEditor =
-                            dismissAddressEditor,
+                        onCloseAddressEditor = dismissAddressEditor,
                         onDueDateChanged = onDueDateChanged,
-                        onSaveChanges = onSaveChanges,
+                        onUnassignedDueDateSelected =
+                            onUnassignedDueDateSelected,
+                        onDueDatePickerClosed = onDueDatePickerClosed,
+                        onNoteChanged = onNoteChanged,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
             }
         }
 
-        state.pendingCandidate?.let { candidate ->
-            AssignmentConfirmationDialog(
-                candidate = candidate,
-                isAssigning = state.isAssigning,
-                assignmentFailed = state.assignmentFailed,
-                onConfirm = onConfirmAssignment,
-                onDismiss = onDismissAssignment
+        if (
+            state.pendingCandidate != null ||
+            state.isConfirmingUnassigned
+        ) {
+            CreateJobConfirmationDialog(
+                candidate = state.pendingCandidate,
+                isCreating = state.isCreating,
+                creationFailed = state.creationFailed,
+                onConfirm = onConfirmCreation,
+                onDismiss = onDismissCreation
             )
         }
     }
+}
+
+@Composable
+private fun NewJobCandidatePanel(
+    state: NewJobUiState,
+    onRetry: () -> Unit,
+    onCandidateClick: (JobCandidate) -> Unit,
+    onCreateUnassigned: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    CandidatePanel(
+        candidates = state.candidates,
+        isLoadingCandidates = state.isLoadingCandidates,
+        candidatesFailed = state.candidatesFailed,
+        allDrivers = state.allDrivers,
+        isLoadingDrivers = state.isLoadingDrivers,
+        driversFailed = state.driversFailed,
+        isActionInProgress = state.isCreating,
+        candidateButtonsEnabled =
+            state.canCreate && !state.isLoadingCandidates,
+        recommendationsEnabled = state.from != null,
+        showCreateUnassigned = true,
+        canCreateUnassigned = state.canCreate,
+        isCreatingUnassigned =
+            state.isCreating && state.isConfirmingUnassigned,
+        onCreateUnassigned = onCreateUnassigned,
+        onRetry = onRetry,
+        onCandidateClick = onCandidateClick,
+        modifier = modifier
+    )
 }

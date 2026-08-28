@@ -9,6 +9,9 @@ data object MainDestination
 data object UnassignedJobsDestination
 
 @Serializable
+data object NewJobDestination
+
+@Serializable
 data class AssignJobDestination(
     val jobId: String
 )
