@@ -140,6 +140,36 @@ class NewJobViewModelTest {
             )
         }
 
+    @Test
+    fun changingCandidateInputs_invalidatesPreviousRecommendation() =
+        runTest(dispatcher) {
+            val viewModel = createViewModel(FakeJobRepository())
+            viewModel.load()
+            viewModel.openAddressEditor(JobLocationField.FROM)
+            viewModel.selectAddressSuggestion(
+                suggestion("from", 48.2, 14.3)
+            )
+            advanceUntilIdle()
+
+            val staleCandidate = viewModel.uiState.value
+                .candidates
+                .single()
+            viewModel.requestDriverCreation(staleCandidate)
+            assertEquals(
+                staleCandidate,
+                viewModel.uiState.value.pendingCandidate
+            )
+
+            viewModel.updateDueDate("2026-08-30T12:00:00Z")
+
+            assertTrue(viewModel.uiState.value.candidates.isEmpty())
+            assertTrue(viewModel.uiState.value.isLoadingCandidates)
+            assertEquals(null, viewModel.uiState.value.pendingCandidate)
+
+            viewModel.requestDriverCreation(staleCandidate)
+            assertEquals(null, viewModel.uiState.value.pendingCandidate)
+        }
+
     private fun createViewModel(
         repository: FakeJobRepository
     ) = NewJobViewModel(

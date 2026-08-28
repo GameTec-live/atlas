@@ -199,7 +199,18 @@ class NewJobViewModel(
     }
 
     fun requestDriverCreation(candidate: JobCandidate) {
-        if (!_uiState.value.canCreate) return
+        val state = _uiState.value
+        if (
+            !state.canCreate ||
+            state.isLoadingCandidates ||
+            (
+                candidate !in state.candidates &&
+                    candidate !in state.allDrivers
+                )
+        ) {
+            return
+        }
+
         _uiState.update {
             it.copy(
                 pendingCandidate = candidate,
@@ -315,16 +326,23 @@ class NewJobViewModel(
                 it.copy(
                     candidates = emptyList(),
                     isLoadingCandidates = false,
-                    candidatesFailed = false
+                    candidatesFailed = false,
+                    pendingCandidate = null
                 )
             }
             return
         }
 
+        _uiState.update {
+            it.copy(
+                candidates = emptyList(),
+                isLoadingCandidates = true,
+                candidatesFailed = false,
+                pendingCandidate = null
+            )
+        }
+
         candidatesTask = viewModelScope.launch {
-            _uiState.update {
-                it.copy(isLoadingCandidates = true, candidatesFailed = false)
-            }
             val result = jobRepository.getJobCandidates(
                 from = from,
                 to = state.to,

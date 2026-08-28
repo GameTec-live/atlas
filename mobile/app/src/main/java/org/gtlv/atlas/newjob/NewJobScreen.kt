@@ -280,7 +280,8 @@ private fun NewJobCandidatePanel(
         isLoadingDrivers = state.isLoadingDrivers,
         driversFailed = state.driversFailed,
         isActionInProgress = state.isCreating,
-        candidateButtonsEnabled = state.canCreate,
+        candidateButtonsEnabled =
+            state.canCreate && !state.isLoadingCandidates,
         recommendationsEnabled = state.from != null,
         showCreateUnassigned = true,
         canCreateUnassigned = state.canCreate,

@@ -182,6 +182,8 @@ class MainActivity : ComponentActivity() {
 
                             assignJobViewModel.clear()
 
+                            newJobViewModel.clear()
+
                             jobNotificationViewModel
                                 .clear()
 
