@@ -235,35 +235,13 @@ class JobNotificationViewModel(
     private fun enqueue(
         notification: JobNotification
     ) {
-        val state = _uiState.value
-
-        val alreadyQueued =
-            state.foregroundNotifications
-                .any { queued ->
-                    queued.jobId ==
-                            notification.jobId
-                }
-
-        if (alreadyQueued) {
-            return
+        _uiState.update { state ->
+            state.withEnqueuedNotification(
+                notification = notification,
+                newExpirationTime =
+                    ::newExpirationTime
+            )
         }
-
-        val wasEmpty =
-            state.foregroundNotifications
-                .isEmpty()
-
-        _uiState.value = state.copy(
-            foregroundNotifications =
-                state.foregroundNotifications +
-                        notification,
-            currentNotificationExpiresAtElapsedRealtime =
-                if (wasEmpty) {
-                    newExpirationTime()
-                } else {
-                    state
-                        .currentNotificationExpiresAtElapsedRealtime
-                }
-        )
     }
 
     private fun decline(
@@ -358,4 +336,35 @@ class JobNotificationViewModel(
         return SystemClock.elapsedRealtime() +
                 JOB_NOTIFICATION_DURATION_MILLIS
     }
+}
+
+internal fun JobNotification.hasSameQueueIdentity(
+    other: JobNotification
+): Boolean =
+    jobId == other.jobId &&
+            this::class == other::class
+
+internal fun JobNotificationUiState.withEnqueuedNotification(
+    notification: JobNotification,
+    newExpirationTime: () -> Long
+): JobNotificationUiState {
+    val alreadyQueued =
+        foregroundNotifications.any { queued ->
+            queued.hasSameQueueIdentity(notification)
+        }
+
+    if (alreadyQueued) {
+        return this
+    }
+
+    return copy(
+        foregroundNotifications =
+            foregroundNotifications + notification,
+        currentNotificationExpiresAtElapsedRealtime =
+            if (foregroundNotifications.isEmpty()) {
+                newExpirationTime()
+            } else {
+                currentNotificationExpiresAtElapsedRealtime
+            }
+    )
 }
