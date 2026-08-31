@@ -196,7 +196,13 @@ internal fun AssignJobScreen(
                         shadowElevation = 8.dp
                     ) {
                         CandidatePanel(
-                            state = state,
+                            candidates = state.candidates,
+                            isLoadingCandidates = state.isLoadingCandidates,
+                            candidatesFailed = state.candidatesFailed,
+                            allDrivers = state.allDrivers,
+                            isLoadingDrivers = state.isLoadingDrivers,
+                            driversFailed = state.driversFailed,
+                            isActionInProgress = state.isAssigning,
                             onRetry = retryCandidates,
                             onCandidateClick =
                                 requestAssignment,
@@ -221,7 +227,13 @@ internal fun AssignJobScreen(
                     },
                     sheetContent = {
                         CandidatePanel(
-                            state = state,
+                            candidates = state.candidates,
+                            isLoadingCandidates = state.isLoadingCandidates,
+                            candidatesFailed = state.candidatesFailed,
+                            allDrivers = state.allDrivers,
+                            isLoadingDrivers = state.isLoadingDrivers,
+                            driversFailed = state.driversFailed,
+                            isActionInProgress = state.isAssigning,
                             onRetry = retryCandidates,
                             onCandidateClick =
                                 requestAssignment,

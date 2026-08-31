@@ -19,6 +19,16 @@ interface JobRepository {
         jobId: String
     ): JobCandidatesResult
 
+    suspend fun getJobCandidates(
+        from: JobCoordinates,
+        to: JobCoordinates?,
+        dueDate: String
+    ): JobCandidatesResult
+
+    suspend fun createJob(
+        request: NewJobRequest
+    ): JobCreationResult
+
     suspend fun assignJob(
         jobId: String,
         driverId: String
@@ -49,6 +59,14 @@ interface JobRepository {
         dueDate: String
     ): JobActionResult
 }
+
+data class NewJobRequest(
+    val from: JobCoordinates,
+    val to: JobCoordinates?,
+    val dueDate: String,
+    val note: String?,
+    val assignedDriverId: String?
+)
 
 enum class JobLocationField(
     val apiName: String
@@ -113,6 +131,24 @@ sealed interface JobCandidatesResult {
         val statusCode: Int,
         val message: String?
     ) : JobCandidatesResult
+}
+
+sealed interface JobCreationResult {
+
+    data class Success(
+        val job: Job
+    ) : JobCreationResult
+
+    data object Unauthorized : JobCreationResult
+
+    data object NetworkError : JobCreationResult
+
+    data object InvalidResponse : JobCreationResult
+
+    data class ServerError(
+        val statusCode: Int,
+        val message: String?
+    ) : JobCreationResult
 }
 
 sealed interface JobActionResult {

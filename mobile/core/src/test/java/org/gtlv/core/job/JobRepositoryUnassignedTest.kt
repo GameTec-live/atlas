@@ -261,6 +261,93 @@ class JobRepositoryUnassignedTest {
         )
     }
 
+    @Test
+    fun getDraftJobCandidates_postsLocationsAndDueDate() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """
+                    [
+                      {
+                        "driverId": "driver-1",
+                        "driverName": "Hermann",
+                        "rankingTrace": { "rank": 1 }
+                      }
+                    ]
+                    """.trimIndent()
+                )
+        )
+
+        val result = repository.getJobCandidates(
+            from = JobCoordinates(48.2, 14.3),
+            to = JobCoordinates(48.4, 14.5),
+            dueDate = "2026-08-28T14:00:00Z"
+        )
+
+        assertTrue(result is JobCandidatesResult.Success)
+        val request = server.takeRequest()
+        assertEquals("/api/jobs/candidates", request.path)
+        assertEquals("POST", request.method)
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals(48.2, body.getJSONArray("from").getDouble(0), 0.0)
+        assertEquals(14.5, body.getJSONArray("to").getDouble(1), 0.0)
+        assertEquals(
+            "2026-08-28T14:00:00Z",
+            body.getString("dueDate")
+        )
+    }
+
+    @Test
+    fun createJob_postsDraftAndParsesCreatedJob() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """
+                    {
+                      "id": "job-new",
+                      "assignedDriverId": "driver-1",
+                      "vehicleId": null,
+                      "from": [48.2, 14.3],
+                      "to": null,
+                      "dueDate": "2026-08-28T14:00:00Z",
+                      "note": "Call first",
+                      "startedAt": null,
+                      "completedAt": null,
+                      "createdAt": "2026-08-28T13:00:00Z",
+                      "updatedAt": "2026-08-28T13:00:00Z"
+                    }
+                    """.trimIndent()
+                )
+        )
+
+        val result = repository.createJob(
+            NewJobRequest(
+                from = JobCoordinates(48.2, 14.3),
+                to = null,
+                dueDate = "2026-08-28T14:00:00Z",
+                note = "Call first",
+                assignedDriverId = "driver-1"
+            )
+        )
+
+        assertTrue(result is JobCreationResult.Success)
+        assertEquals(
+            "job-new",
+            (result as JobCreationResult.Success).job.id
+        )
+        val request = server.takeRequest()
+        assertEquals("/api/jobs/create", request.path)
+        assertEquals("POST", request.method)
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals("driver-1", body.getString("assignedDriverId"))
+        assertEquals("Call first", body.getString("note"))
+        assertTrue(!body.has("to"))
+    }
+
     private class FakeServerSettingsRepository(
         initialAddress: String
     ) : ServerSettingsRepository {

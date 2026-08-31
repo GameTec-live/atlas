@@ -205,6 +205,7 @@ export const job = pgTable(
     (table) => [
         index("job_assignedDriverId_idx").on(table.assignedDriverId),
         index("job_dueDate_idx").on(table.dueDate),
+        index("job_createdAt_idx").on(table.createdAt),
     ],
 );
 

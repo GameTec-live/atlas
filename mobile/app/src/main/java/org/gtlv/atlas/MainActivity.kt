@@ -42,6 +42,8 @@ import org.gtlv.atlas.navigation.AuthenticatedNavHost
 import org.gtlv.atlas.notification.JobNotificationViewModel
 import org.gtlv.atlas.notification.JobNotificationViewModelFactory
 import org.gtlv.atlas.notification.JobSystemNotificationManager
+import org.gtlv.atlas.newjob.NewJobViewModel
+import org.gtlv.atlas.newjob.NewJobViewModelFactory
 import org.gtlv.atlas.role.RoleSelectionScreen
 import org.gtlv.atlas.role.RoleSelectionViewModel
 import org.gtlv.atlas.role.RoleSelectionViewModelFactory
@@ -87,6 +89,16 @@ class MainActivity : ComponentActivity() {
     private val assignJobViewModel:
             AssignJobViewModel by viewModels {
         AssignJobViewModelFactory(
+            jobRepository = atlasApplication.jobRepository,
+            geoServiceRepository =
+                atlasApplication.geoServiceRepository,
+            roleRepository = atlasApplication.roleRepository
+        )
+    }
+
+    private val newJobViewModel:
+            NewJobViewModel by viewModels {
+        NewJobViewModelFactory(
             jobRepository = atlasApplication.jobRepository,
             geoServiceRepository =
                 atlasApplication.geoServiceRepository,
@@ -169,6 +181,8 @@ class MainActivity : ComponentActivity() {
                                 .clear()
 
                             assignJobViewModel.clear()
+
+                            newJobViewModel.clear()
 
                             jobNotificationViewModel
                                 .clear()
@@ -318,6 +332,11 @@ class MainActivity : ComponentActivity() {
                                     .uiState
                                     .collectAsStateWithLifecycle()
 
+                                val newJobState by
+                                newJobViewModel
+                                    .uiState
+                                    .collectAsStateWithLifecycle()
+
                                 val liveMapUsers by
                                 atlasApplication
                                     .telemetryWebSocketSender
@@ -363,13 +382,28 @@ class MainActivity : ComponentActivity() {
                                         mainScreenState = mainScreenState,
                                         unassignedJobsState = unassignedJobsState,
                                         assignJobState = assignJobState,
+                                        newJobState = newJobState,
                                         onToggleJobList = mainScreenViewModel::toggleJobList,
                                         onRetryJobs = mainScreenViewModel::refresh,
                                         onStartNextJob = mainScreenViewModel::startNextJob,
                                         onCancelCurrentJob = mainScreenViewModel::cancelCurrentJob,
                                         onPersonCollected = mainScreenViewModel::personCollected,
                                         onJobFinished = mainScreenViewModel::finishCurrentJob,
-                                        onNewJobClick = {},
+                                        onLoadNewJob = newJobViewModel::load,
+                                        onClearNewJob = newJobViewModel::clear,
+                                        onEditNewJobAddress = newJobViewModel::openAddressEditor,
+                                        onNewJobAddressQueryChanged = newJobViewModel::onAddressQueryChanged,
+                                        onNewJobAddressSelected = newJobViewModel::selectAddressSuggestion,
+                                        onCloseNewJobAddressEditor = newJobViewModel::closeAddressEditor,
+                                        onNewJobDueDateChanged = newJobViewModel::updateDueDate,
+                                        onUnassignedJobDueDateSelected = newJobViewModel::confirmUnassignedDueDate,
+                                        onCloseUnassignedJobDueDatePicker = newJobViewModel::dismissUnassignedDueDatePicker,
+                                        onNewJobNoteChanged = newJobViewModel::updateNote,
+                                        onRetryNewJobCandidates = newJobViewModel::retryCandidates,
+                                        onRequestNewJobDriver = newJobViewModel::requestDriverCreation,
+                                        onRequestUnassignedJobCreation = newJobViewModel::requestUnassignedCreation,
+                                        onDismissNewJobCreation = newJobViewModel::dismissCreation,
+                                        onConfirmNewJobCreation = newJobViewModel::confirmCreation,
                                         onRefreshUnassignedJobs = unassignedJobsViewModel::refresh,
                                         onRequestUnassignedJobDeletion = unassignedJobsViewModel::requestDeletion,
                                         onDismissUnassignedJobDeletion = unassignedJobsViewModel::dismissDeletion,

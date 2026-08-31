@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AuthenticatedAppRouteRouteImport } from './routes/_authenticated/_app/route'
 import { Route as JobsPublicRouteImport } from './routes/jobs/public'
 import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/_app/index'
@@ -30,6 +31,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAppRouteRoute = AuthenticatedAppRouteRouteImport.update({
@@ -97,6 +103,7 @@ const AuthenticatedAppSettingsShortnamesRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedAppIndexRoute
   '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
   '/jobs/public': typeof JobsPublicRoute
   '/realtime': typeof AuthenticatedAppRealtimeRouteRoute
   '/jobs/$jobId': typeof AuthenticatedAppJobsJobIdRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedAppIndexRoute
   '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
   '/jobs/public': typeof JobsPublicRoute
   '/realtime': typeof AuthenticatedAppRealtimeRouteRoute
   '/jobs/$jobId': typeof AuthenticatedAppJobsJobIdRoute
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
   '/_authenticated/_app': typeof AuthenticatedAppRouteRouteWithChildren
   '/jobs/public': typeof JobsPublicRoute
   '/_authenticated/_app/realtime': typeof AuthenticatedAppRealtimeRouteRoute
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/setup'
     | '/jobs/public'
     | '/realtime'
     | '/jobs/$jobId'
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/setup'
     | '/jobs/public'
     | '/realtime'
     | '/jobs/$jobId'
@@ -167,6 +178,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/login'
+    | '/setup'
     | '/_authenticated/_app'
     | '/jobs/public'
     | '/_authenticated/_app/realtime'
@@ -183,6 +195,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
+  SetupRoute: typeof SetupRoute
   JobsPublicRoute: typeof JobsPublicRoute
 }
 
@@ -200,6 +213,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/_app': {
@@ -326,6 +346,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   LoginRoute: LoginRoute,
+  SetupRoute: SetupRoute,
   JobsPublicRoute: JobsPublicRoute,
 }
 export const routeTree = rootRouteImport

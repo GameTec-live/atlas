@@ -104,6 +104,7 @@ export function JobDetailsMap({ from, to }: JobDetailsMapProps) {
                 }
                 mapStyle="/map/style/liberty"
                 attributionControl={false}
+                reuseMaps
             >
                 <Source id="job-route" type="geojson" data={routeGeoJson}>
                     <Layer
@@ -146,13 +147,13 @@ export function JobDetailsMap({ from, to }: JobDetailsMapProps) {
 
             <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
                 {routeQuery.isFetching && to && (
-                    <Badge className="gap-2 bg-background/50 px-3 py-1.5 shadow-md backdrop-blur">
+                    <Badge className="gap-2 bg-background/50 px-3 py-1.5 shadow-md backdrop-blur text-foreground">
                         <Spinner />
                         {m.job_details_route_loading()}
                     </Badge>
                 )}
                 {routeFailed && (
-                    <Badge className="gap-2 bg-background/50 px-3 py-1.5 shadow-md backdrop-blur">
+                    <Badge className="gap-2 bg-background/50 px-3 py-1.5 shadow-md backdrop-blur text-foreground">
                         <RouteIcon />
                         {m.job_details_route_unavailable()}
                     </Badge>
