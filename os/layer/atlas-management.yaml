@@ -3,7 +3,7 @@
 # X-Env-Layer-Category: atlas
 # X-Env-Layer-Desc: Privileged Atlas system-management API over a Unix socket.
 # X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: systemd-min
+# X-Env-Layer-Requires: systemd-min,atlas-ssh
 #
 # X-Env-VarPrefix: atlasmanagement
 #

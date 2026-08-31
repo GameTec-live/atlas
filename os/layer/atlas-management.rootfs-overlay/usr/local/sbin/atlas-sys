@@ -20,6 +20,9 @@ Commands:
   update rollback                Roll back or clear the pending update
   reboot                         Reboot the device
   poweroff                       Power off the device
+  ssh status                     Show persistent SSH policy
+  ssh enable                     Persistently enable SSH
+  ssh disable                    Persistently disable SSH
   factory-reset [--yes]          Erase mutable data and configuration
 EOF
     exit 2
@@ -96,6 +99,23 @@ case "${1:-}" in
     poweroff)
         [ "$#" -eq 1 ] || usage
         request POST /api/v1/power/poweroff
+        ;;
+    ssh)
+        case "${2:-}" in
+            status)
+                [ "$#" -eq 2 ] || usage
+                request GET /api/v1/ssh
+                ;;
+            enable)
+                [ "$#" -eq 2 ] || usage
+                request POST /api/v1/ssh/enable
+                ;;
+            disable)
+                [ "$#" -eq 2 ] || usage
+                request POST /api/v1/ssh/disable
+                ;;
+            *) usage ;;
+        esac
         ;;
     factory-reset)
         shift

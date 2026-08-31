@@ -74,6 +74,9 @@ rg -q -F 'request GET /api/v1/update' "$management_cli"
 rg -q -F 'request POST /api/v1/update --form "bundle=@$bundle"' "$management_cli"
 rg -q -F 'request POST /api/v1/update/rollback' "$management_cli"
 rg -q -F 'request POST /api/v1/factory-reset' "$management_cli"
+rg -q -F 'request GET /api/v1/ssh' "$management_cli"
+rg -q -F 'request POST /api/v1/ssh/enable' "$management_cli"
+rg -q -F 'request POST /api/v1/ssh/disable' "$management_cli"
 rg -q -F 'Path=/etc/NetworkManager/system-connections' \
     "$source_root/layer/atlas-networking.rootfs-overlay/etc/rpi-image-gen/slot-shared.d/atlas-networkmanager.conf"
 rg -q -F 'Path=/var/lib/NetworkManager' \

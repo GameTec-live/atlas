@@ -126,6 +126,8 @@ When adding a layer or changing ordering:
   removes application data, credentials, host policy and network profiles.
 - `atlas-sys` remains a narrow Unix-socket client and keeps destructive reset
   confirmation in front of the API call.
+- Management API SSH changes delegate to `atlas-ssh`; they do not introduce a
+  second persistent SSH policy.
 
 ### Security and persistence
 

@@ -22,6 +22,7 @@ import (
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/origins"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/power"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/reset"
+	sshmanager "github.com/GameTec-live/atlas/apps/osManagementAPI/internal/ssh"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/update"
 )
 
@@ -87,6 +88,7 @@ func main() {
 		Monitor:        trialMonitor,
 		Power:          powerManager,
 		Reset:          reset.NewRequester(cfg.StateDir),
+		SSH:            sshmanager.New(runner),
 		Network:        networkmanager.New(runner),
 		Origins:        origins.New(cfg.TrustedOriginsPath, cfg.ContainerUID, runner),
 		Scheduler:      realScheduler{},

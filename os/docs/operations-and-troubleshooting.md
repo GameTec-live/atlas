@@ -146,6 +146,16 @@ sudo atlas-ssh disable
 sudo atlas-ssh status
 ```
 
+The equivalent management API client commands are:
+
+```sh
+sudo atlas-sys ssh enable
+sudo atlas-sys ssh disable
+sudo atlas-sys ssh status
+```
+
+Both command families use `atlas-ssh` as the persistent policy controller.
+
 The command writes `/persistent/atlas/system/ssh.state`; the boot-time
 `atlas-ssh-state.service` applies it. Enabling/disabling a systemd unit directly
 does not update that persistent policy and can be undone on reboot.
@@ -188,6 +198,9 @@ sudo atlas-sys update apply /path/to/atlas-rpi5-update.tar.zst
 sudo atlas-sys update rollback
 sudo atlas-sys reboot
 sudo atlas-sys poweroff
+sudo atlas-sys ssh status
+sudo atlas-sys ssh enable
+sudo atlas-sys ssh disable
 sudo atlas-sys factory-reset
 ```
 

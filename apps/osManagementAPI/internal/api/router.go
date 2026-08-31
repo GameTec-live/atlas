@@ -42,6 +42,12 @@ type ResetRequester interface {
 	Request() error
 }
 
+type SSHManager interface {
+	Status(context.Context) (bool, error)
+	Enable(context.Context) error
+	Disable(context.Context) error
+}
+
 type NetworkManager interface {
 	Connections(context.Context) ([]networkmanager.Connection, error)
 	Devices(context.Context) ([]networkmanager.Device, error)
@@ -73,6 +79,7 @@ type Dependencies struct {
 	Monitor        Monitor
 	Power          PowerManager
 	Reset          ResetRequester
+	SSH            SSHManager
 	Network        NetworkManager
 	Origins        OriginsManager
 	Scheduler      Scheduler
@@ -94,6 +101,9 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	router.HandleFunc("POST /api/v1/power/reboot", h.reboot)
 	router.HandleFunc("POST /api/v1/power/poweroff", h.poweroff)
 	router.HandleFunc("POST /api/v1/factory-reset", h.factoryReset)
+	router.HandleFunc("GET /api/v1/ssh", h.sshStatus)
+	router.HandleFunc("POST /api/v1/ssh/enable", h.enableSSH)
+	router.HandleFunc("POST /api/v1/ssh/disable", h.disableSSH)
 	router.HandleFunc("GET /api/v1/connections/adapters", h.adapters)
 	router.HandleFunc("GET /api/v1/connections/network-manager", h.connections)
 	router.HandleFunc("GET /api/v1/connections/network-manager/devices", h.devices)
@@ -263,6 +273,23 @@ func (h *handler) factoryReset(writer http.ResponseWriter, request *http.Request
 	h.terminating.Store(true)
 	writeJSON(writer, http.StatusAccepted, map[string]string{"status": "factory_reset_scheduled"})
 	h.schedule("factory-reset reboot", h.dependencies.Power.Reboot)
+}
+
+func (h *handler) sshStatus(writer http.ResponseWriter, request *http.Request) {
+	enabled, err := h.dependencies.SSH.Status(request.Context())
+	if err != nil {
+		fail(writer, http.StatusInternalServerError, "ssh_status_failed", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]bool{"enabled": enabled})
+}
+
+func (h *handler) enableSSH(writer http.ResponseWriter, request *http.Request) {
+	h.mutate(writer, request, "ssh_enable_failed", h.dependencies.SSH.Enable)
+}
+
+func (h *handler) disableSSH(writer http.ResponseWriter, request *http.Request) {
+	h.mutate(writer, request, "ssh_disable_failed", h.dependencies.SSH.Disable)
 }
 
 func (h *handler) adapters(writer http.ResponseWriter, _ *http.Request) {

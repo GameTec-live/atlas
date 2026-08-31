@@ -47,6 +47,14 @@ type fakeReset struct{}
 
 func (fakeReset) Request() error { return nil }
 
+type fakeSSH struct {
+	enabled bool
+}
+
+func (s *fakeSSH) Status(context.Context) (bool, error) { return s.enabled, nil }
+func (s *fakeSSH) Enable(context.Context) error         { s.enabled = true; return nil }
+func (s *fakeSSH) Disable(context.Context) error        { s.enabled = false; return nil }
+
 type fakeNetwork struct{}
 
 func (fakeNetwork) Connections(context.Context) ([]networkmanager.Connection, error) { return nil, nil }
@@ -84,10 +92,55 @@ func testRouter(stateDir string, updateManager *fakeUpdate, powerManager *fakePo
 		Monitor:        fakeMonitor{},
 		Power:          powerManager,
 		Reset:          fakeReset{},
+		SSH:            &fakeSSH{},
 		Network:        fakeNetwork{},
 		Origins:        fakeOrigins{},
 		Scheduler:      immediateScheduler{},
 	})
+}
+
+func TestSSHStatusEnableAndDisable(t *testing.T) {
+	sshManager := &fakeSSH{}
+	router := NewRouter(Dependencies{
+		Token:          "secret-token",
+		StateDir:       t.TempDir(),
+		MaxUpdateBytes: 1024,
+		Update:         &fakeUpdate{},
+		Monitor:        fakeMonitor{},
+		Power:          &fakePower{},
+		Reset:          fakeReset{},
+		SSH:            sshManager,
+		Network:        fakeNetwork{},
+		Origins:        fakeOrigins{},
+		Scheduler:      immediateScheduler{},
+	})
+
+	request := authenticatedRequest(http.MethodPost, "/api/v1/ssh/enable")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !sshManager.enabled {
+		t.Fatalf("enable failed: code=%d body=%s enabled=%v", response.Code, response.Body.String(), sshManager.enabled)
+	}
+
+	request = authenticatedRequest(http.MethodGet, "/api/v1/ssh")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != "{\"enabled\":true}\n" {
+		t.Fatalf("unexpected status: code=%d body=%s", response.Code, response.Body.String())
+	}
+
+	request = authenticatedRequest(http.MethodPost, "/api/v1/ssh/disable")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || sshManager.enabled {
+		t.Fatalf("disable failed: code=%d body=%s enabled=%v", response.Code, response.Body.String(), sshManager.enabled)
+	}
+}
+
+func authenticatedRequest(method, path string) *http.Request {
+	request := httptest.NewRequest(method, path, nil)
+	request.Header.Set("Authorization", "Bearer secret-token")
+	return request
 }
 
 func TestEveryRouteRequiresBearerToken(t *testing.T) {

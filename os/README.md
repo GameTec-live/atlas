@@ -86,6 +86,9 @@ sudo atlas-ssh disable
 sudo atlas-ssh status
 ```
 
+The authenticated management API and `atlas-sys ssh` commands delegate to the
+same controller, so local and API-driven changes share one persistent policy.
+
 Only `atlas` may log in. Its initial password is `atlas`, and both password and
 public-key authentication are supported. Replace that password after deployment.
 

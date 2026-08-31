@@ -22,6 +22,9 @@ All routes are below `/api/v1`:
 | `POST /power/reboot` | Reboot |
 | `POST /power/poweroff` | Power off |
 | `POST /factory-reset` | Schedule a data/configuration reset and reboot |
+| `GET /ssh` | Read the persistent SSH policy |
+| `POST /ssh/enable` | Persistently enable and start SSH |
+| `POST /ssh/disable` | Persistently disable and stop SSH |
 | `GET /connections/adapters` | Available and placeholder connection adapters |
 | `GET /connections/network-manager` | List NetworkManager connections |
 | `GET /connections/network-manager/devices` | List connected and disconnected network devices |
@@ -55,6 +58,9 @@ sudo atlas-sys update apply /path/to/atlas-rpi5-update.tar.zst
 sudo atlas-sys update rollback
 sudo atlas-sys reboot
 sudo atlas-sys poweroff
+sudo atlas-sys ssh status
+sudo atlas-sys ssh enable
+sudo atlas-sys ssh disable
 sudo atlas-sys factory-reset
 ```
 
@@ -62,6 +68,10 @@ The reset command requires typing `RESET` on an interactive terminal. The
 explicit `factory-reset --yes` form is available for automation. The client is
 root-only, reads the same per-device token, and communicates exclusively over
 the Unix socket.
+
+SSH changes delegate to the host's `atlas-ssh` controller. This keeps the
+persistent policy used during boot as the single source of truth rather than
+directly toggling `ssh.service` only for the current boot.
 
 The upload is staged under `/persistent/atlas/system`, verified and installed
 by `atlas-ab-update`, then the device enters the one-shot candidate slot. On
