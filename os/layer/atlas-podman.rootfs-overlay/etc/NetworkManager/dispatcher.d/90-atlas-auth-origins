@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+case "${2:-}" in
+    up|down|dhcp4-change|dhcp6-change|vpn-up|vpn-down) ;;
+    *) exit 0 ;;
+esac
+
+runtime_dir=/run/user/2000
+[ -S "$runtime_dir/bus" ] || exit 0
+
+runuser -u atlas-containers -- env \
+    HOME=/home/atlas-containers \
+    XDG_RUNTIME_DIR="$runtime_dir" \
+    /usr/local/libexec/atlas-auth-origins
+runuser -u atlas-containers -- env \
+    XDG_RUNTIME_DIR="$runtime_dir" \
+    systemctl --user try-restart atlas-api.service

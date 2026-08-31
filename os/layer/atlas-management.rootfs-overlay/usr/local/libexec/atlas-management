@@ -2,10 +2,17 @@
 set -eu
 
 install -d -m 0700 /persistent/atlas/system
+origins_dir=/home/atlas-containers/.config/atlas
+install -d -m 0700 -o 2000 -g 2000 "$origins_dir"
+if [ ! -e "$origins_dir/trusted-origins" ]; then
+    install -m 0600 -o 2000 -g 2000 /dev/null "$origins_dir/trusted-origins"
+fi
 echo "Atlas management placeholder started; no external API is implemented yet."
 
 # Replace this loop with the authenticated Unix-socket management API. Keep
 # privileged operations small and delegate SSH state to /usr/local/sbin/atlas-ssh.
+# Additional HTTPS origins are stored one per line in trusted-origins. After a
+# change, run atlas-auth-origins as atlas-containers and restart atlas-api.
 trap 'exit 0' INT TERM
 while :; do
     sleep 3600 &

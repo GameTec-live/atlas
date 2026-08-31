@@ -1,0 +1,54 @@
+#!/bin/sh
+set -eu
+
+config_dir=${ATLAS_CONFIG_DIR:-${HOME}/.config/atlas}
+managed_file="$config_dir/trusted-origins"
+env_file="$config_dir/trusted-origins.env"
+
+install -d -m 0700 "$config_dir"
+origins=$(mktemp "$config_dir/trusted-origins.XXXXXX")
+output=$(mktemp "$config_dir/trusted-origins.env.XXXXXX")
+trap 'rm -f "$origins" "$output"' EXIT INT TERM
+
+{
+    echo 'https://atlas.local'
+    echo 'https://127.0.0.1'
+    echo 'https://[::1]'
+    echo 'https://localhost'
+    ip -o addr show up scope global | awk '
+        $2 !~ /^(br-|cni|docker|lo|podman|veth|virbr)/ {
+            split($4, address, "/")
+            if (address[1] ~ /:/) {
+                printf "https://[%s]\n", address[1]
+            } else {
+                printf "https://%s\n", address[1]
+            }
+        }
+    '
+
+    if [ -r "$managed_file" ]; then
+        sed 's/^[[:space:]]*//; s/[[:space:]]*$//' "$managed_file" |
+        while IFS= read -r origin || [ -n "$origin" ]; do
+            case "$origin" in
+                ''|'#'*) ;;
+                https://* )
+                    authority=${origin#https://}
+                    case "$authority" in
+                        ''|*','*|*'/'*|*'?'*|*'#'*|*[[:space:]]*)
+                            echo "Ignoring invalid trusted origin: $origin" >&2
+                            ;;
+                        *) printf '%s\n' "$origin" ;;
+                    esac
+                    ;;
+                *) echo "Ignoring non-HTTPS trusted origin: $origin" >&2 ;;
+            esac
+        done
+    fi
+} | sort -u > "$origins"
+
+{
+    printf 'BETTER_AUTH_TRUSTED_ORIGINS='
+    paste -sd, "$origins"
+} > "$output"
+chmod 0600 "$output"
+mv -f "$output" "$env_file"

@@ -50,6 +50,8 @@ socket_mounts=$(rg -l 'podman\.sock:/var/run/docker\.sock' "$quadlet_dir" | wc -
 [[ "$socket_mounts" -eq 1 ]]
 rg -q 'geodata-consumer=router' "$quadlet_dir/atlas-router.container"
 rg -q 'geodata-consumer=geocoder' "$quadlet_dir/atlas-geocoder.container"
+rg -q -F 'EnvironmentFile=%h/.config/atlas/trusted-origins.env' \
+    "$quadlet_dir/atlas-api.container"
 
 while IFS= read -r image; do
     rg -q -F "Image=$image" "$quadlet_dir"

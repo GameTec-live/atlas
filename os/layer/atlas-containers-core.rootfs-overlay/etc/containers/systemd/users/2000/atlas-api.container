@@ -13,6 +13,7 @@ NetworkAlias=api
 User=65532
 Group=65532
 EnvironmentFile=%h/.config/atlas/api.env
+EnvironmentFile=%h/.config/atlas/trusted-origins.env
 Volume=atlas-api-data.volume:/data
 NoNewPrivileges=true
 DropCapability=all

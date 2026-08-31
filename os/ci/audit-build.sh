@@ -10,6 +10,8 @@ rootfs=$(find "$work_root" -mindepth 2 -maxdepth 2 -type d \
 [[ -n "$rootfs" && -d "$image_dir" && -f "$archive" ]]
 [[ -x "$rootfs/usr/lib/systemd/systemd-resolved" ]]
 [[ -x "$rootfs/usr/sbin/nft" ]]
+[[ -x "$rootfs/usr/local/libexec/atlas-auth-origins" ]]
+[[ -x "$rootfs/etc/NetworkManager/dispatcher.d/90-atlas-auth-origins" ]]
 [[ "$(readlink "$rootfs/etc/resolv.conf")" = /run/systemd/resolve/stub-resolv.conf ]]
 [[ "$(readlink "$rootfs/etc/os-release")" = ../usr/lib/os-release ]]
 grep -qx 'NAME="Atlas OS"' "$rootfs/usr/lib/os-release"
@@ -18,6 +20,10 @@ grep -qx 'VARIANT_ID=atlas' "$rootfs/usr/lib/os-release"
 grep -qx 'IMAGE_ID=atlas' "$rootfs/usr/lib/os-release"
 grep -q '^IMAGE_VERSION=' "$rootfs/usr/lib/os-release"
 [[ ! -e "$rootfs/etc/atlas-release" ]]
+grep -q -F 'https://atlas.local' "$rootfs/usr/local/libexec/atlas-auth-origins"
+grep -q -F 'https://127.0.0.1' "$rootfs/usr/local/libexec/atlas-auth-origins"
+grep -q -F 'https://[::1]' "$rootfs/usr/local/libexec/atlas-auth-origins"
+grep -q -F 'https://localhost' "$rootfs/usr/local/libexec/atlas-auth-origins"
 [[ -L "$rootfs/etc/systemd/system/multi-user.target.wants/network-online.target" ]]
 [[ "$(stat -c %u:%g "$rootfs/persistent/home/atlas-containers/.config")" = 2000:2000 ]]
 [[ "$(stat -c %u:%g "$rootfs/persistent/home/atlas-containers/.cache")" = 2000:2000 ]]

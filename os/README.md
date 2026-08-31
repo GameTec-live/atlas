@@ -102,6 +102,24 @@ to the previous slot. `rollback` requests that fallback explicitly.
 Container auto-updates are intentionally independent from OS A/B updates and
 are not rolled back by changing the root slot.
 
+## Authentication origins
+
+`https://atlas.local` remains Better Auth's canonical URL. Before the API
+starts, Atlas generates `BETTER_AUTH_TRUSTED_ORIGINS` from that name, HTTPS
+loopback origins (`127.0.0.1`, `[::1]`, and `localhost`), the device's current
+physical and VPN interface addresses, and this persistent management allowlist:
+
+```text
+/home/atlas-containers/.config/atlas/trusted-origins
+```
+
+The allowlist accepts one HTTPS origin (scheme and authority, without a path)
+per line; blank lines and lines starting with `#` are ignored. NetworkManager
+regenerates the environment and restarts the API after DHCP address changes.
+The management service may update the same file for externally configured
+domains, then run `atlas-auth-origins` as the `atlas-containers` user and
+restart `atlas-api.service`.
+
 ## Device policy
 
 - Serial console and `serial-getty@serial0` are enabled.
