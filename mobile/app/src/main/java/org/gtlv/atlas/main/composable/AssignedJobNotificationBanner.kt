@@ -28,13 +28,16 @@ import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
 import org.gtlv.atlas.notification.JOB_NOTIFICATION_DURATION_MILLIS
 import org.gtlv.core.job.AssignedJobNotification
+import org.gtlv.core.job.JobNotification
+import org.gtlv.core.job.UnassignedJobNotification
 
 @Composable
 internal fun AssignedJobNotificationBanner(
-    notification: AssignedJobNotification,
+    notification: JobNotification,
     expiresAtElapsedRealtime: Long,
     isDeclining: Boolean,
     onDecline: () -> Unit,
+    onAssign: () -> Unit,
     onExpired: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -60,6 +63,18 @@ internal fun AssignedJobNotificationBanner(
             remainingProgress()
         )
     }
+
+    val titleResource = when (notification) {
+        is AssignedJobNotification ->
+            R.string.job_notification_title
+
+        is UnassignedJobNotification ->
+            R.string.unassigned_job_notification_title
+    }
+
+    val destination = notification.to ?: stringResource(
+        R.string.unassigned_jobs_no_destination
+    )
 
     LaunchedEffect(
         notification.jobId,
@@ -124,8 +139,7 @@ internal fun AssignedJobNotificationBanner(
                 ) {
                     Text(
                         text = stringResource(
-                            R.string
-                                .job_notification_title
+                            titleResource
                         ),
                         style =
                             MaterialTheme.typography
@@ -147,7 +161,7 @@ internal fun AssignedJobNotificationBanner(
                         text = stringResource(
                             R.string
                                 .job_notification_to,
-                            notification.to
+                            destination
                         ),
                         style =
                             MaterialTheme.typography
@@ -173,10 +187,22 @@ internal fun AssignedJobNotificationBanner(
                 )
 
                 TextButton(
-                    onClick = onDecline,
+                    onClick = {
+                        when (notification) {
+                            is AssignedJobNotification ->
+                                onDecline()
+
+                            is UnassignedJobNotification ->
+                                onAssign()
+                        }
+                    },
                     enabled = !isDeclining
                 ) {
-                    if (isDeclining) {
+                    if (
+                        notification
+                            is AssignedJobNotification &&
+                        isDeclining
+                    ) {
                         CircularProgressIndicator(
                             modifier =
                                 Modifier.size(18.dp),
@@ -185,8 +211,15 @@ internal fun AssignedJobNotificationBanner(
                     } else {
                         Text(
                             text = stringResource(
-                                R.string
-                                    .job_notification_decline
+                                when (notification) {
+                                    is AssignedJobNotification ->
+                                        R.string
+                                            .job_notification_decline
+
+                                    is UnassignedJobNotification ->
+                                        R.string
+                                            .unassigned_job_notification_assign
+                                }
                             )
                         )
                     }
@@ -231,7 +264,9 @@ internal fun AssignedJobDeclineDialog(
                     R.string
                         .job_notification_decline_dialog_message,
                     notification.from,
-                    notification.to
+                    notification.to ?: stringResource(
+                        R.string.unassigned_jobs_no_destination
+                    )
                 )
             )
         },

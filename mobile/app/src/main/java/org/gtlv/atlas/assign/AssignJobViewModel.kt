@@ -25,7 +25,6 @@ import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.role.RoleAvailabilityResult
 import org.gtlv.core.role.RoleRepository
-import org.gtlv.core.shift.ShiftRole
 
 class AssignJobViewModel(
     private val jobRepository: JobRepository,
@@ -440,10 +439,6 @@ class AssignJobViewModel(
                         val drivers = result.availability
                             .assignedRoles
                             .asSequence()
-                            .filter { assignedRole ->
-                                assignedRole.role ==
-                                        ShiftRole.DRIVER
-                            }
                             .distinctBy { assignedRole ->
                                 assignedRole.driverId
                             }

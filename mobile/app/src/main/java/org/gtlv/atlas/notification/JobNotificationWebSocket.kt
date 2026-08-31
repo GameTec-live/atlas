@@ -23,6 +23,8 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.gtlv.core.job.AssignedJobNotification
+import org.gtlv.core.job.JobNotification
+import org.gtlv.core.job.UnassignedJobNotification
 import org.gtlv.core.network.NetworkClient
 import org.gtlv.core.session.SessionManager
 import org.gtlv.core.session.SessionState
@@ -36,8 +38,11 @@ sealed interface JobNotificationEvent {
     data object Connected :
         JobNotificationEvent
 
-    data class Assigned(
-        val notification: AssignedJobNotification,
+    data object JobsChanged :
+        JobNotificationEvent
+
+    data class Received(
+        val notification: JobNotification,
         val showInApp: Boolean
     ) : JobNotificationEvent
 }
@@ -273,8 +278,8 @@ class JobNotificationWebSocket(
     private fun handleMessage(
         text: String
     ) {
-        val json = runCatching {
-            JSONObject(text)
+        val message = runCatching {
+            parseNotifyMessage(text)
         }.getOrElse { exception ->
             Log.w(
                 TAG,
@@ -285,40 +290,26 @@ class JobNotificationWebSocket(
             return
         }
 
-        val jobId =
-            json.optString("jobId").trim()
-
-        val from =
-            json.optString("from").trim()
-
-        val to =
-            json.optString("to").trim()
-
-        val note =
-            json.optString("note")
-                .trim()
-                .takeIf(String::isNotEmpty)
-
-        if (
-            jobId.isBlank() ||
-            from.isBlank() ||
-            to.isBlank()
-        ) {
+        if (message == null) {
             Log.w(
                 TAG,
-                "Ignoring incomplete job notification"
+                "Ignoring unsupported or incomplete " +
+                        "job notification"
             )
 
             return
         }
 
-        val notification =
-            AssignedJobNotification(
-                jobId = jobId,
-                from = from,
-                to = to,
-                note = note
+        if (message is ParsedNotifyMessage.JobsChanged) {
+            _events.tryEmit(
+                JobNotificationEvent.JobsChanged
             )
+            return
+        }
+
+        val notification =
+            (message as ParsedNotifyMessage.Job)
+                .notification
 
         val showInApp =
             visibilityTracker.isForeground
@@ -330,7 +321,7 @@ class JobNotificationWebSocket(
         }
 
         _events.tryEmit(
-            JobNotificationEvent.Assigned(
+            JobNotificationEvent.Received(
                 notification = notification,
                 showInApp = showInApp
             )
@@ -393,4 +384,68 @@ class JobNotificationWebSocket(
 
         const val NORMAL_CLOSURE_CODE = 1000
     }
+}
+
+internal fun parseJobNotification(
+    text: String
+): JobNotification? =
+    (parseNotifyMessage(text) as? ParsedNotifyMessage.Job)
+        ?.notification
+
+internal sealed interface ParsedNotifyMessage {
+    data class Job(
+        val notification: JobNotification
+    ) : ParsedNotifyMessage
+
+    data object JobsChanged : ParsedNotifyMessage
+}
+
+internal fun parseNotifyMessage(
+    text: String
+): ParsedNotifyMessage? {
+    val json = JSONObject(text)
+
+    val type = json.optString("type").trim()
+
+    if (type == "jobs_changed") {
+        return ParsedNotifyMessage.JobsChanged
+    }
+
+    val jobId = json.optString("jobId").trim()
+    val from = json.optString("from").trim()
+    val to = json.optString("to")
+        .trim()
+        .takeIf(String::isNotEmpty)
+    val note = json.optString("note")
+        .trim()
+        .takeIf(String::isNotEmpty)
+
+    if (
+        jobId.isBlank() ||
+        from.isBlank()
+    ) {
+        return null
+    }
+
+    val notification = when (type) {
+        "assigned" ->
+            AssignedJobNotification(
+                jobId = jobId,
+                from = from,
+                to = to,
+                note = note
+            )
+
+        "unassigned" ->
+            UnassignedJobNotification(
+                jobId = jobId,
+                from = from,
+                to = to,
+                note = note
+            )
+
+        else -> null
+    } ?: return null
+
+    return ParsedNotifyMessage.Job(notification)
 }

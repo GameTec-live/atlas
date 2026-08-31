@@ -159,8 +159,8 @@
     <string name="assign_job_confirm">Assign</string>
     <string name="assign_job_failed">Could not assign the job. Please try again.</string>
 
-    <string name="job_notification_channel">Assigned jobs</string>
-    <string name="job_notification_channel_description">Notifications about newly assigned jobs</string>
+    <string name="job_notification_channel">Jobs</string>
+    <string name="job_notification_channel_description">Notifications about assigned and unassigned jobs</string>
     <string name="job_notification_title">New Job</string>
     <string name="job_notification_from">From: %1$s</string>
     <string name="job_notification_to">To: %1$s</string>
@@ -170,6 +170,8 @@
     <string name="job_notification_decline_dialog_title">Decline job?</string>
     <string name="job_notification_decline_dialog_message">Do you really want to decline the job from %1$s to %2$s?</string>
     <string name="job_notification_confirm_decline">Decline</string>
+    <string name="unassigned_job_notification_title">New unassigned job!</string>
+    <string name="unassigned_job_notification_assign">Assign now</string>
 
     <string name="address_search_hint">Enter address</string>
     <string name="address_search_close">Close address search</string>
