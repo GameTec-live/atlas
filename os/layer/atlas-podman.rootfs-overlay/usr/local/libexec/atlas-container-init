@@ -38,7 +38,6 @@ if [ ! -s "$config_dir/api.env" ]; then
     job_token=$(openssl rand -hex 32)
     cat > "$config_dir/api.env" <<EOF
 BETTER_AUTH_SECRET=$auth_secret
-BETTER_AUTH_URL=https://atlas.local
 DATABASE_URL=postgres://atlas:$db_password@db:5432/atlas
 GEODATA_URL=http://geodata-api:8080
 GEOCODER_URL=http://geocoder:8080

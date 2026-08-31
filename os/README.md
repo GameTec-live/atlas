@@ -4,11 +4,16 @@ This directory is an independent, out-of-tree `rpi-image-gen` source tree. It
 builds a minimal Raspberry Pi 5 appliance with an immutable A/B root, persistent
 data, rootless Podman Quadlets, NetworkManager, optional SSH and text branding.
 
+Detailed design, build, provisioning, operation and troubleshooting guidance is
+in [the documentation index](docs/README.md). Start there before flashing,
+provisioning or updating a device.
+
 ## Build and releases
 
 `.github/workflows/os.yml` is the canonical build. Pull requests validate the
-configuration and Quadlets. Manual runs and `v*` tags build on a native ARM64
-GitHub runner using an immutable `rpi-image-gen` revision. Full builds publish:
+configuration and Quadlets. Pushes to `main`, manual runs and `v*` tags build on
+a native ARM64 GitHub runner using an immutable `rpi-image-gen` revision. Full
+builds publish:
 
 - `atlas-rpi5-<version>-provisioning.tar.zst` - encrypted IDP provisioning
   archive for `rpi-sb-provisioner`.
@@ -104,10 +109,12 @@ are not rolled back by changing the root slot.
 
 ## Authentication origins
 
-`https://atlas.local` remains Better Auth's canonical URL. Before the API
-starts, Atlas generates `BETTER_AUTH_TRUSTED_ORIGINS` from that name, HTTPS
-loopback origins (`127.0.0.1`, `[::1]`, and `localhost`), the device's current
-physical and VPN interface addresses, and this persistent management allowlist:
+Before the API starts, Atlas generates `BETTER_AUTH_URL` from the device's first
+current physical or VPN interface address, falling back to
+`https://atlas.local` when no such address exists. It also generates
+`BETTER_AUTH_TRUSTED_ORIGINS` from `https://atlas.local`, HTTPS loopback origins
+(`127.0.0.1`, `[::1]`, and `localhost`), all current physical and VPN interface
+addresses, and this persistent management allowlist:
 
 ```text
 /home/atlas-containers/.config/atlas/trusted-origins

@@ -5,16 +5,7 @@ config_dir=${ATLAS_CONFIG_DIR:-${HOME}/.config/atlas}
 managed_file="$config_dir/trusted-origins"
 env_file="$config_dir/trusted-origins.env"
 
-install -d -m 0700 "$config_dir"
-origins=$(mktemp "$config_dir/trusted-origins.XXXXXX")
-output=$(mktemp "$config_dir/trusted-origins.env.XXXXXX")
-trap 'rm -f "$origins" "$output"' EXIT INT TERM
-
-{
-    echo 'https://atlas.local'
-    echo 'https://127.0.0.1'
-    echo 'https://[::1]'
-    echo 'https://localhost'
+interface_origins() {
     ip -o addr show up scope global | awk '
         $2 !~ /^(br-|cni|docker|lo|podman|veth|virbr)/ {
             split($4, address, "/")
@@ -25,6 +16,19 @@ trap 'rm -f "$origins" "$output"' EXIT INT TERM
             }
         }
     '
+}
+
+install -d -m 0700 "$config_dir"
+origins=$(mktemp "$config_dir/trusted-origins.XXXXXX")
+output=$(mktemp "$config_dir/trusted-origins.env.XXXXXX")
+trap 'rm -f "$origins" "$output"' EXIT INT TERM
+
+{
+    echo 'https://atlas.local'
+    echo 'https://127.0.0.1'
+    echo 'https://[::1]'
+    echo 'https://localhost'
+    interface_origins
 
     if [ -r "$managed_file" ]; then
         sed 's/^[[:space:]]*//; s/[[:space:]]*$//' "$managed_file" |
@@ -46,7 +50,10 @@ trap 'rm -f "$origins" "$output"' EXIT INT TERM
     fi
 } | sort -u > "$origins"
 
+base_url=$(interface_origins | head -n 1)
+[ -n "$base_url" ] || base_url=https://atlas.local
 {
+    printf 'BETTER_AUTH_URL=%s\n' "$base_url"
     printf 'BETTER_AUTH_TRUSTED_ORIGINS='
     paste -sd, "$origins"
 } > "$output"
