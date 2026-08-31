@@ -20,7 +20,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
@@ -29,11 +31,19 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.gtlv.car_common.R
 import org.gtlv.core.job.CollectedJobStore
+import org.gtlv.core.geoservice.GeoServiceRepository
+import org.gtlv.core.geoservice.Route
+import org.gtlv.core.geoservice.RoutePoint
+import org.gtlv.core.geoservice.RouteProgress
+import org.gtlv.core.geoservice.RouteProgressCalculator
+import org.gtlv.core.geoservice.RouteResult
 import org.gtlv.core.job.JobActionResult
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
 import org.gtlv.core.location.LocationProvider
 import org.gtlv.core.location.LocationState
+import org.gtlv.core.location.AtlasLocation
+import org.gtlv.core.location.VehicleHeadingEstimator
 import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.telemetry.TelemetryProvider
@@ -52,6 +62,7 @@ class MainScreen(
     private val locationProvider: LocationProvider?,
     private val serverSettingsRepository: ServerSettingsRepository?,
     private val collectedJobStore: CollectedJobStore?,
+    private val geoServiceRepository: GeoServiceRepository?,
     private val getUserId: () -> String?,
     private val telemetryProvider: TelemetryProvider?,
     private val liveMapUsers: StateFlow<Map<String, LiveMapUser>>?,
@@ -71,6 +82,7 @@ class MainScreen(
     private var collectedStateJob: Job? = null
     private var jobLifecycleJob: Job? = null
     private var liveMapUsersJob: Job? = null
+    private var routeRequestJob: Job? = null
     private var observedCollectedUserId: String? = null
     private var currentJob: AtlasJob? = null
     private var queuedJobs: List<AtlasJob> = emptyList()
@@ -80,6 +92,18 @@ class MainScreen(
     private var isCancellingCurrentJob = false
     private var isFinishingCurrentJob = false
     private var isPersonCollected = false
+    private var latestLocation: AtlasLocation? = null
+    private var latestHeadingDegrees: Int? = null
+    private val vehicleHeadingEstimator = VehicleHeadingEstimator()
+    private var routeTarget: AutomotiveRouteTarget? = null
+    private var currentRoute: Route? = null
+    private var routeProgress: RouteProgress? = null
+    private var routeRequestGeneration = 0L
+    private var offRouteSampleCount = 0
+    private var wrongWaySampleCount = 0
+    private var lastAutomaticRerouteAtMillis = 0L
+    private var failedRouteTarget: AutomotiveRouteTarget? = null
+    private var lastRouteFailureAtMillis = 0L
 
     init {
         carContext
@@ -110,6 +134,8 @@ class MainScreen(
         jobLifecycleJob = null
         liveMapUsersJob?.cancel()
         liveMapUsersJob = null
+        routeRequestJob?.cancel()
+        routeRequestJob = null
         observedCollectedUserId = null
         super.onStop(owner)
     }
@@ -301,7 +327,10 @@ class MainScreen(
             provider.state.collectLatest { state ->
                 val location = (state as? LocationState.Available)?.location
                     ?: return@collectLatest
+                latestLocation = location
+                latestHeadingDegrees = vehicleHeadingEstimator.update(location)
                 mapRenderer.updateLocation(location)
+                updateRouteProgress(location)
             }
         }
     }
@@ -345,6 +374,7 @@ class MainScreen(
                     queuedJobs = result.queuedJobs
                     mapRenderer.updateQueuedJobCount(queuedJobs.size)
                     updateCollectedState()
+                    reconcileRoute()
                     hasLoadError = false
                 }
 
@@ -405,6 +435,7 @@ class MainScreen(
         store.setCollectedJobId(userId, job.id)
         isPersonCollected = true
         telemetryProvider?.setVehicleState(TelemetryVehicleState.OCCUPIED)
+        reconcileRoute()
         invalidateSafely()
     }
 
@@ -465,6 +496,7 @@ class MainScreen(
                 }
                 currentJob = null
                 isPersonCollected = false
+                clearRoute()
                 telemetryProvider?.setVehicleState(
                     TelemetryVehicleState.FREE
                 )
@@ -507,6 +539,7 @@ class MainScreen(
 
                 isPersonCollected = personCollected
                 updateVehicleTelemetry()
+                reconcileRoute()
                 invalidateSafely()
             }
         }
@@ -523,7 +556,199 @@ class MainScreen(
         }
 
         updateVehicleTelemetry()
+        reconcileRoute()
     }
+
+    private fun reconcileRoute() {
+        val target = AutomotiveRoutePlanner.target(
+            job = currentJob,
+            isPersonCollected = isPersonCollected,
+        )
+        if (target == null) {
+            clearRoute()
+            return
+        }
+
+        if (routeTarget != target) {
+            routeRequestGeneration += 1
+            routeRequestJob?.cancel()
+            routeRequestJob = null
+            routeTarget = target
+            currentRoute = null
+            routeProgress = null
+            failedRouteTarget = null
+            offRouteSampleCount = 0
+            wrongWaySampleCount = 0
+            lastAutomaticRerouteAtMillis = 0L
+            mapRenderer.updateRoute(emptyList())
+        }
+
+        if (currentRoute != null || routeRequestJob?.isActive == true) return
+        if (
+            failedRouteTarget == target &&
+            System.currentTimeMillis() - lastRouteFailureAtMillis <
+            ROUTE_RETRY_INTERVAL_MILLIS
+        ) {
+            return
+        }
+
+        val request = AutomotiveRoutePlanner.request(
+            target = target,
+            location = latestLocation,
+            headingDegrees = latestHeadingDegrees,
+        ) ?: return
+        requestRoute(request, keepCurrentRoute = false)
+    }
+
+    private fun requestRoute(
+        request: AutomotiveRouteRequest,
+        keepCurrentRoute: Boolean,
+    ) {
+        val repository = geoServiceRepository ?: return
+        routeRequestGeneration += 1
+        val generation = routeRequestGeneration
+        routeRequestJob?.cancel()
+
+        routeRequestJob = screenScope.launch {
+            val result = repository.requestRoute(
+                origin = request.origin,
+                destination = request.target.destination,
+                headingDegrees = request.headingDegrees,
+                language = DEFAULT_ROUTE_LANGUAGE,
+            )
+            currentCoroutineContext().ensureActive()
+            if (
+                generation != routeRequestGeneration ||
+                routeTarget != request.target
+            ) {
+                return@launch
+            }
+
+            when (result) {
+                is RouteResult.Success -> {
+                    currentRoute = result.route
+                    failedRouteTarget = null
+                    offRouteSampleCount = 0
+                    wrongWaySampleCount = 0
+                    val location = latestLocation
+                    routeProgress = location?.let {
+                        RouteProgressCalculator.calculate(
+                            route = result.route,
+                            location = it.toRoutePoint(),
+                        )
+                    } ?: RouteProgressCalculator.initial(result.route)
+                    renderRemainingRoute()
+                }
+
+                else -> {
+                    failedRouteTarget = request.target
+                    lastRouteFailureAtMillis = System.currentTimeMillis()
+                    if (!keepCurrentRoute) {
+                        currentRoute = null
+                        routeProgress = null
+                        mapRenderer.updateRoute(emptyList())
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateRouteProgress(location: AtlasLocation) {
+        val route = currentRoute
+        if (route == null) {
+            reconcileRoute()
+            return
+        }
+
+        val progress = RouteProgressCalculator.calculate(
+            route = route,
+            location = location.toRoutePoint(),
+            previousShapeIndex = routeProgress?.routeShapeIndex ?: 0,
+            previousProgress = routeProgress,
+        )
+        routeProgress = progress
+        renderRemainingRoute()
+        evaluateAutomaticReroute(location, progress)
+    }
+
+    private fun renderRemainingRoute() {
+        val route = currentRoute ?: return
+        mapRenderer.updateRoute(
+            RouteProgressCalculator.remainingRoutePoints(
+                route = route,
+                progress = routeProgress,
+            ),
+        )
+    }
+
+    private fun evaluateAutomaticReroute(
+        location: AtlasLocation,
+        progress: RouteProgress,
+    ) {
+        if (routeRequestJob?.isActive == true) return
+
+        val accuracyThresholdKilometers =
+            (location.accuracyMeters ?: 0f) *
+                GPS_ACCURACY_MULTIPLIER / 1_000.0
+        val isOffRoute = progress.distanceFromRouteKilometers
+            ?.let {
+                it > maxOf(
+                    MINIMUM_OFF_ROUTE_DISTANCE_KILOMETERS,
+                    accuracyThresholdKilometers,
+                )
+            } ?: false
+        offRouteSampleCount = if (isOffRoute) offRouteSampleCount + 1 else 0
+        wrongWaySampleCount = if (progress.isMovingAgainstRoute) {
+            wrongWaySampleCount + 1
+        } else {
+            0
+        }
+        if (
+            offRouteSampleCount < DEVIATION_SAMPLES_FOR_REROUTE &&
+            wrongWaySampleCount < DEVIATION_SAMPLES_FOR_REROUTE
+        ) {
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        if (
+            lastAutomaticRerouteAtMillis != 0L &&
+            now - lastAutomaticRerouteAtMillis <
+            AUTOMATIC_REROUTE_COOLDOWN_MILLIS
+        ) {
+            return
+        }
+        val target = routeTarget ?: return
+        val request = AutomotiveRoutePlanner.request(
+            target = target,
+            location = location,
+            headingDegrees = latestHeadingDegrees,
+        ) ?: return
+
+        offRouteSampleCount = 0
+        wrongWaySampleCount = 0
+        lastAutomaticRerouteAtMillis = now
+        requestRoute(request, keepCurrentRoute = true)
+    }
+
+    private fun clearRoute() {
+        routeRequestGeneration += 1
+        routeRequestJob?.cancel()
+        routeRequestJob = null
+        routeTarget = null
+        currentRoute = null
+        routeProgress = null
+        failedRouteTarget = null
+        offRouteSampleCount = 0
+        wrongWaySampleCount = 0
+        lastAutomaticRerouteAtMillis = 0L
+        mapRenderer.updateRoute(emptyList())
+    }
+
+    private fun AtlasLocation.toRoutePoint(): RoutePoint = RoutePoint(
+        latitude = latitude,
+        longitude = longitude,
+    )
 
     private fun updateVehicleTelemetry() {
         telemetryProvider?.setVehicleState(
@@ -599,6 +824,12 @@ class MainScreen(
 
     private companion object {
         const val JOB_REFRESH_INTERVAL_MILLIS = 15_000L
+        const val ROUTE_RETRY_INTERVAL_MILLIS = 15_000L
+        const val AUTOMATIC_REROUTE_COOLDOWN_MILLIS = 15_000L
+        const val MINIMUM_OFF_ROUTE_DISTANCE_KILOMETERS = 0.03
+        const val GPS_ACCURACY_MULTIPLIER = 2.5
+        const val DEVIATION_SAMPLES_FOR_REROUTE = 2
+        const val DEFAULT_ROUTE_LANGUAGE = "en"
         const val CAR_ICON_SIZE_DP = 48
     }
 }

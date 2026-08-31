@@ -26,6 +26,7 @@ import org.gtlv.core.telemetry.Telemetry
 import org.gtlv.core.job.JobRepositoryImpl
 import org.gtlv.core.job.JobRepositoryProvider
 import org.gtlv.core.geoservice.GeoServiceRepositoryImpl
+import org.gtlv.core.geoservice.GeoServiceRepositoryProvider
 import org.gtlv.core.telemetry.TelemetryWebSocketSender
 import org.gtlv.core.telemetry.LiveMapUsersProvider
 import org.gtlv.core.job.CollectedJobStore
@@ -39,7 +40,8 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     ServerSettingsProvider, CarLocationProviderRegistry,
     TelemetryProviderRegistry, LocationProviderProvider,
     JobRepositoryProvider, CollectedJobStoreProvider,
-    SessionManagerProvider, LiveMapUsersProvider {
+    SessionManagerProvider, LiveMapUsersProvider,
+    GeoServiceRepositoryProvider {
 
     private val applicationScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate
@@ -174,7 +176,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         )
     }
 
-    val geoServiceRepository by lazy {
+    override val geoServiceRepository by lazy {
         GeoServiceRepositoryImpl(
             networkClient = networkClient,
             serverSettingsRepository =

@@ -81,7 +81,7 @@ android {
         versionCode =
             providers.environmentVariable(
                 "ANDROID_VERSION_CODE"
-            ).orNull?.toInt() ?: 1
+            ).orNull?.toInt() ?: 126
         versionName =
             providers.environmentVariable(
                 "ANDROID_VERSION_NAME"

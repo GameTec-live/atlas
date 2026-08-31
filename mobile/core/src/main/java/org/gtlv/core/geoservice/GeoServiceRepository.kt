@@ -14,6 +14,11 @@ interface GeoServiceRepository {
     ): RouteResult
 }
 
+/** Exposes the process-wide routing service to app surfaces such as Android Auto. */
+interface GeoServiceRepositoryProvider {
+    val geoServiceRepository: GeoServiceRepository
+}
+
 sealed interface ResolveAddressResult {
 
     data class Success(
