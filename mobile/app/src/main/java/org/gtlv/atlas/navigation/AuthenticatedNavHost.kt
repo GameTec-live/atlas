@@ -82,11 +82,31 @@ internal fun AuthenticatedNavHost(
     onCloseAddressEditor: () -> Unit,
     onDismissJobNotification: () -> Unit,
     onDeclineJobNotification: () -> Unit,
+    onAssignUnassignedNotification: () -> Unit,
+    onAssignmentNavigationHandled: () -> Unit,
     onDismissDeclineConfirmation: () -> Unit,
     onConfirmDecline: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
+
+    LaunchedEffect(
+        jobNotificationState.assignmentJobId
+    ) {
+        val jobId =
+            jobNotificationState.assignmentJobId
+                ?: return@LaunchedEffect
+
+        onRefreshUnassignedJobs()
+
+        navController.navigate(
+            AssignJobDestination(jobId)
+        ) {
+            launchSingleTop = true
+        }
+
+        onAssignmentNavigationHandled()
+    }
 
     NavHost(
         navController = navController,
@@ -128,6 +148,8 @@ internal fun AuthenticatedNavHost(
                 onCloseAddressEditor = onCloseAddressEditor,
                 onDismissJobNotification = onDismissJobNotification,
                 onDeclineJobNotification = onDeclineJobNotification,
+                onAssignUnassignedNotification =
+                    onAssignUnassignedNotification,
                 onDismissDeclineConfirmation = onDismissDeclineConfirmation,
                 onConfirmDecline = onConfirmDecline,
                 onLogout = onLogout

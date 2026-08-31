@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.gtlv.core.job.AssignedJobNotification
 import org.gtlv.core.job.JobActionResult
+import org.gtlv.core.job.JobNotification
 import org.gtlv.core.job.JobRepository
+import org.gtlv.core.job.UnassignedJobNotification
 
 class JobNotificationViewModel(
     private val jobRepository: JobRepository,
@@ -40,6 +42,14 @@ class JobNotificationViewModel(
     val refreshRequests: SharedFlow<Unit> =
         _refreshRequests.asSharedFlow()
 
+    private val _unassignedRefreshRequests =
+        MutableSharedFlow<Unit>(
+            extraBufferCapacity = 1
+        )
+
+    val unassignedRefreshRequests: SharedFlow<Unit> =
+        _unassignedRefreshRequests.asSharedFlow()
+
     private var declineTask: Job? = null
 
     init {
@@ -50,7 +60,12 @@ class JobNotificationViewModel(
                         _refreshRequests.tryEmit(Unit)
                     }
 
-                    is JobNotificationEvent.Assigned -> {
+                    JobNotificationEvent.JobsChanged -> {
+                        _unassignedRefreshRequests
+                            .tryEmit(Unit)
+                    }
+
+                    is JobNotificationEvent.Received -> {
                         if (event.showInApp) {
                             enqueue(
                                 event.notification
@@ -58,6 +73,14 @@ class JobNotificationViewModel(
                         }
 
                         _refreshRequests.tryEmit(Unit)
+
+                        if (
+                            event.notification
+                                is UnassignedJobNotification
+                        ) {
+                            _unassignedRefreshRequests
+                                .tryEmit(Unit)
+                        }
                     }
                 }
             }
@@ -101,9 +124,65 @@ class JobNotificationViewModel(
         val notification =
             _uiState.value
                 .currentNotification
-                ?: return
+                as? AssignedJobNotification
+                    ?: return
 
         decline(notification)
+    }
+
+    fun assignCurrentNotification() {
+        val notification =
+            _uiState.value
+                .currentNotification
+                as? UnassignedJobNotification
+                    ?: return
+
+        requestAssignment(notification.jobId)
+    }
+
+    fun requestAssignment(jobId: String) {
+        if (jobId.isBlank()) {
+            return
+        }
+
+        webSocket.dismissSystemNotification(jobId)
+
+        _uiState.update { state ->
+            val removedCurrentNotification =
+                state.currentNotification
+                    ?.jobId == jobId
+
+            val remainingNotifications =
+                state.foregroundNotifications
+                    .filterNot { notification ->
+                        notification.jobId == jobId
+                    }
+
+            state.copy(
+                foregroundNotifications =
+                    remainingNotifications,
+                currentNotificationExpiresAtElapsedRealtime =
+                    when {
+                        !removedCurrentNotification ->
+                            state
+                                .currentNotificationExpiresAtElapsedRealtime
+
+                        remainingNotifications.isNotEmpty() ->
+                            newExpirationTime()
+
+                        else -> null
+                    },
+                assignmentJobId = jobId
+            )
+        }
+
+        _unassignedRefreshRequests.tryEmit(Unit)
+    }
+
+    fun assignmentNavigationHandled() {
+        _uiState.update {
+            it.copy(assignmentJobId = null)
+        }
     }
 
     fun requestDeclineConfirmation(
@@ -154,7 +233,7 @@ class JobNotificationViewModel(
     }
 
     private fun enqueue(
-        notification: AssignedJobNotification
+        notification: JobNotification
     ) {
         val state = _uiState.value
 

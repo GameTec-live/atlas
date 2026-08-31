@@ -211,6 +211,15 @@ class MainActivity : ComponentActivity() {
                         }
                 }
 
+                LaunchedEffect(Unit) {
+                    jobNotificationViewModel
+                        .unassignedRefreshRequests
+                        .collect {
+                            unassignedJobsViewModel
+                                .refresh()
+                        }
+                }
+
                 when (
                     val currentSession =
                         sessionState
@@ -428,6 +437,8 @@ class MainActivity : ComponentActivity() {
                                         jobNotificationState = jobNotificationState,
                                         onDismissJobNotification = jobNotificationViewModel::dismissCurrentNotification,
                                         onDeclineJobNotification = jobNotificationViewModel::declineCurrentNotification,
+                                        onAssignUnassignedNotification = jobNotificationViewModel::assignCurrentNotification,
+                                        onAssignmentNavigationHandled = jobNotificationViewModel::assignmentNavigationHandled,
                                         onDismissDeclineConfirmation = jobNotificationViewModel::dismissDeclineConfirmation,
                                         onConfirmDecline = jobNotificationViewModel::confirmDecline,
                                         onLogout = loginViewModel::logout
@@ -453,6 +464,20 @@ class MainActivity : ComponentActivity() {
     private fun handleJobNotificationIntent(
         intent: Intent?
     ) {
+        val assignmentJobId =
+            JobSystemNotificationManager
+                .assignmentJobIdFromIntent(intent)
+
+        if (assignmentJobId != null) {
+            jobNotificationViewModel
+                .requestAssignment(
+                    assignmentJobId
+                )
+
+            intent?.action = null
+            return
+        }
+
         val notification =
             JobSystemNotificationManager
                 .notificationFromIntent(

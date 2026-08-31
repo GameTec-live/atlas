@@ -28,6 +28,7 @@ import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
 import org.gtlv.core.job.NewJobRequest
 import org.gtlv.core.job.UnassignedJobsResult
+import org.gtlv.core.role.AssignedRole
 import org.gtlv.core.role.RoleAvailability
 import org.gtlv.core.role.RoleAvailabilityResult
 import org.gtlv.core.role.RoleRepository
@@ -170,12 +171,46 @@ class NewJobViewModelTest {
             assertEquals(null, viewModel.uiState.value.pendingCandidate)
         }
 
+    @Test
+    fun loadingDrivers_includesDriversAndDispatchers() =
+        runTest(dispatcher) {
+            val roleRepository = FakeRoleRepository(
+                assignedRoles = listOf(
+                    AssignedRole(
+                        driverId = "driver-1",
+                        role = ShiftRole.DRIVER,
+                        name = "Driver"
+                    ),
+                    AssignedRole(
+                        driverId = "dispatcher-1",
+                        role = ShiftRole.DISPATCHER,
+                        name = "Dispatcher"
+                    )
+                )
+            )
+            val viewModel = createViewModel(
+                repository = FakeJobRepository(),
+                roleRepository = roleRepository
+            )
+
+            viewModel.load()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("dispatcher-1", "driver-1"),
+                viewModel.uiState.value.allDrivers.map(
+                    JobCandidate::driverId
+                )
+            )
+        }
+
     private fun createViewModel(
-        repository: FakeJobRepository
+        repository: FakeJobRepository,
+        roleRepository: RoleRepository = FakeRoleRepository()
     ) = NewJobViewModel(
         jobRepository = repository,
         geoServiceRepository = FakeGeoServiceRepository(),
-        roleRepository = FakeRoleRepository(),
+        roleRepository = roleRepository,
         now = { Instant.parse("2026-08-28T14:00:00Z") }
     )
 
@@ -287,12 +322,15 @@ class NewJobViewModelTest {
         )
     }
 
-    private class FakeRoleRepository : RoleRepository {
+    private class FakeRoleRepository(
+        private val assignedRoles: List<AssignedRole> = emptyList()
+    ) : RoleRepository {
         override suspend fun getAvailability() =
             RoleAvailabilityResult.Success(
                 RoleAvailability(
                     dispatcherSpotsFree = 1,
-                    dispatcherAvailable = true
+                    dispatcherAvailable = true,
+                    assignedRoles = assignedRoles
                 )
             )
 

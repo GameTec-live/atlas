@@ -26,7 +26,6 @@ import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.NewJobRequest
 import org.gtlv.core.role.RoleAvailabilityResult
 import org.gtlv.core.role.RoleRepository
-import org.gtlv.core.shift.ShiftRole
 
 class NewJobViewModel(
     private val jobRepository: JobRepository,
@@ -382,7 +381,6 @@ class NewJobViewModel(
                     is RoleAvailabilityResult.Success -> it.copy(
                         allDrivers = result.availability.assignedRoles
                             .asSequence()
-                            .filter { role -> role.role == ShiftRole.DRIVER }
                             .distinctBy { role -> role.driverId }
                             .map { role ->
                                 JobCandidate(

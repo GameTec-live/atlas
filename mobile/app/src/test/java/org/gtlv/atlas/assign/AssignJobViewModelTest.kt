@@ -291,7 +291,7 @@ class AssignJobViewModelTest {
         }
 
     @Test
-    fun loadingDrivers_excludesRecommendedFromOtherDrivers() =
+    fun loadingDrivers_includesDispatchersAndExcludesRecommended() =
         runTest(dispatcher) {
             val viewModel = AssignJobViewModel(
                 jobRepository = FakeJobRepository(),
@@ -304,7 +304,7 @@ class AssignJobViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                listOf("driver-2"),
+                listOf("driver-2", "dispatcher-1"),
                 viewModel.uiState.value.otherDrivers
                     .map(JobCandidate::driverId)
             )

@@ -1,23 +1,25 @@
 package org.gtlv.atlas.notification
 
 import org.gtlv.core.job.AssignedJobNotification
+import org.gtlv.core.job.JobNotification
 
 internal const val JOB_NOTIFICATION_DURATION_MILLIS =
     10_000L
 
 data class JobNotificationUiState(
     val foregroundNotifications:
-    List<AssignedJobNotification> =
+    List<JobNotification> =
         emptyList(),
     val currentNotificationExpiresAtElapsedRealtime:
     Long? = null,
     val declineConfirmation:
     AssignedJobNotification? = null,
     val decliningJobId: String? = null,
-    val declineFailed: Boolean = false
+    val declineFailed: Boolean = false,
+    val assignmentJobId: String? = null
 ) {
     val currentNotification:
-            AssignedJobNotification?
+            JobNotification?
         get() = foregroundNotifications
             .firstOrNull()
 

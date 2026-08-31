@@ -16,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap
 import org.gtlv.atlas.MainActivity
 import org.gtlv.atlas.R
 import org.gtlv.core.job.AssignedJobNotification
+import org.gtlv.core.job.JobNotification
+import org.gtlv.core.job.UnassignedJobNotification
 
 class JobSystemNotificationManager(
     private val context: Context
@@ -44,7 +46,7 @@ class JobSystemNotificationManager(
     }
 
     fun show(
-        notification: AssignedJobNotification
+        notification: JobNotification
     ) {
         if (
             ContextCompat.checkSelfPermission(
@@ -58,14 +60,61 @@ class JobSystemNotificationManager(
         val notificationId =
             notificationId(notification.jobId)
 
-        val openIntent = Intent(
+        val actionIntent = Intent(
             context,
             MainActivity::class.java
         ).apply {
+            action = when (notification) {
+                is AssignedJobNotification ->
+                    ACTION_CONFIRM_JOB_DECLINE
+
+                is UnassignedJobNotification ->
+                    ACTION_ASSIGN_UNASSIGNED_JOB
+            }
+
+            data = (
+                "atlas://job-notification/" +
+                        Uri.encode(notification.jobId) +
+                        when (notification) {
+                            is AssignedJobNotification ->
+                                "/decline"
+
+                            is UnassignedJobNotification ->
+                                "/assign"
+                        }
+                ).toUri()
+
             flags =
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
                         Intent.FLAG_ACTIVITY_SINGLE_TOP
+
+            putExtra(EXTRA_JOB_ID, notification.jobId)
+            putExtra(EXTRA_FROM, notification.from)
+            notification.to?.let { destination ->
+                putExtra(EXTRA_TO, destination)
+            }
+
+            notification.note?.let { note ->
+                putExtra(EXTRA_NOTE, note)
+            }
         }
+
+        val openIntent =
+            if (
+                notification
+                    is UnassignedJobNotification
+            ) {
+                Intent(actionIntent)
+            } else {
+                Intent(
+                    context,
+                    MainActivity::class.java
+                ).apply {
+                    flags =
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP
+                }
+            }
 
         val openPendingIntent =
             PendingIntent.getActivity(
@@ -75,53 +124,29 @@ class JobSystemNotificationManager(
                 pendingIntentFlags()
             )
 
-        val declineIntent = Intent(
-            context,
-            MainActivity::class.java
-        ).apply {
-            action = ACTION_CONFIRM_JOB_DECLINE
-
-            data =
-                (
-                    "atlas://job-notification/" +
-                            Uri.encode(notification.jobId) +
-                            "/decline"
-                ).toUri()
-
-            flags =
-                Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP
-
-            putExtra(
-                EXTRA_JOB_ID,
-                notification.jobId
-            )
-
-            putExtra(
-                EXTRA_FROM,
-                notification.from
-            )
-
-            putExtra(
-                EXTRA_TO,
-                notification.to
-            )
-
-            notification.note?.let { note ->
-                putExtra(
-                    EXTRA_NOTE,
-                    note
-                )
-            }
-        }
-
-        val declinePendingIntent =
+        val actionPendingIntent =
             PendingIntent.getActivity(
                 context,
                 notificationId,
-                declineIntent,
+                actionIntent,
                 pendingIntentFlags()
             )
+
+        val titleResource = when (notification) {
+            is AssignedJobNotification ->
+                R.string.job_notification_title
+
+            is UnassignedJobNotification ->
+                R.string.unassigned_job_notification_title
+        }
+
+        val actionResource = when (notification) {
+            is AssignedJobNotification ->
+                R.string.job_notification_decline
+
+            is UnassignedJobNotification ->
+                R.string.unassigned_job_notification_assign
+        }
 
         val fromText = context.getString(
             R.string.job_notification_from,
@@ -130,7 +155,9 @@ class JobSystemNotificationManager(
 
         val toText = context.getString(
             R.string.job_notification_to,
-            notification.to
+            notification.to ?: context.getString(
+                R.string.unassigned_jobs_no_destination
+            )
         )
 
         val noteText = notification.note?.let { note ->
@@ -156,7 +183,7 @@ class JobSystemNotificationManager(
                 )
                 .setContentTitle(
                     context.getString(
-                        R.string.job_notification_title
+                        titleResource
                     )
                 )
                 .setContentText(fromText)
@@ -164,8 +191,7 @@ class JobSystemNotificationManager(
                     NotificationCompat.BigTextStyle()
                         .setBigContentTitle(
                             context.getString(
-                                R.string
-                                    .job_notification_title
+                                titleResource
                             )
                         )
                         .bigText(detailsText)
@@ -196,9 +222,9 @@ class JobSystemNotificationManager(
                 .addAction(
                     0,
                     context.getString(
-                        R.string.job_notification_decline
+                        actionResource
                     ),
-                    declinePendingIntent
+                    actionPendingIntent
                 )
                 .build()
 
@@ -251,6 +277,9 @@ class JobSystemNotificationManager(
         const val ACTION_CONFIRM_JOB_DECLINE =
             "org.gtlv.atlas.CONFIRM_JOB_DECLINE"
 
+        const val ACTION_ASSIGN_UNASSIGNED_JOB =
+            "org.gtlv.atlas.ASSIGN_UNASSIGNED_JOB"
+
         private const val EXTRA_JOB_ID =
             "assigned_job_id"
 
@@ -297,8 +326,7 @@ class JobSystemNotificationManager(
 
             if (
                 jobId.isBlank() ||
-                from.isBlank() ||
-                to.isBlank()
+                from.isBlank()
             ) {
                 return null
             }
@@ -306,9 +334,24 @@ class JobSystemNotificationManager(
             return AssignedJobNotification(
                 jobId = jobId,
                 from = from,
-                to = to,
+                to = to.takeIf(String::isNotEmpty),
                 note = note
             )
+        }
+
+        fun assignmentJobIdFromIntent(
+            intent: Intent?
+        ): String? {
+            if (
+                intent?.action !=
+                ACTION_ASSIGN_UNASSIGNED_JOB
+            ) {
+                return null
+            }
+
+            return intent.getStringExtra(
+                EXTRA_JOB_ID
+            )?.trim()?.takeIf(String::isNotEmpty)
         }
     }
 }

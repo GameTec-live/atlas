@@ -66,6 +66,7 @@ internal fun MainScreen(
     jobNotificationState: JobNotificationUiState,
     onDismissJobNotification: () -> Unit,
     onDeclineJobNotification: () -> Unit,
+    onAssignUnassignedNotification: () -> Unit,
     onDismissDeclineConfirmation: () -> Unit,
     onConfirmDecline: () -> Unit,
     onToggleJobList: () -> Unit,
@@ -352,6 +353,8 @@ internal fun MainScreen(
                                         notification.jobId,
                             onDecline =
                                 onDeclineJobNotification,
+                            onAssign =
+                                onAssignUnassignedNotification,
                             onExpired =
                                 onDismissJobNotification,
                             modifier = Modifier
