@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -29,6 +31,22 @@ type containerState struct {
 			Status string `json:"Status"`
 		} `json:"Health"`
 	} `json:"State"`
+}
+
+type Container struct {
+	Name    string `json:"name"`
+	Image   string `json:"image"`
+	ImageID string `json:"imageId"`
+	Version string `json:"version"`
+}
+
+type listedContainer struct {
+	ID      string            `json:"Id"`
+	Names   []string          `json:"Names"`
+	Image   string            `json:"Image"`
+	ImageID string            `json:"ImageID"`
+	State   string            `json:"State"`
+	Labels  map[string]string `json:"Labels"`
 }
 
 type Checker struct {
@@ -53,6 +71,46 @@ func New(podmanSocket, healthURL string) *Checker {
 		healthClient: &http.Client{Transport: healthTransport, Timeout: 10 * time.Second},
 		healthURL:    healthURL,
 	}
+}
+
+// RunningContainers returns the exact image identity for every running
+// container. OCI version labels are preferred for display, while ImageID stays
+// available as the immutable identity and as a fallback for unlabeled images.
+func (c *Checker) RunningContainers(ctx context.Context) ([]Container, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://podman/v1.41/containers/json?all=false", nil)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.podmanClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("list running containers: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("list running containers returned HTTP %d", response.StatusCode)
+	}
+
+	var listed []listedContainer
+	if err := json.NewDecoder(response.Body).Decode(&listed); err != nil {
+		return nil, fmt.Errorf("decode running containers: %w", err)
+	}
+	result := make([]Container, 0, len(listed))
+	for _, item := range listed {
+		if item.State != "running" {
+			continue
+		}
+		name := item.ID
+		if len(item.Names) > 0 {
+			name = strings.TrimPrefix(item.Names[0], "/")
+		}
+		version := item.Labels["org.opencontainers.image.version"]
+		if version == "" {
+			version = item.ImageID
+		}
+		result = append(result, Container{Name: name, Image: item.Image, ImageID: item.ImageID, Version: version})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result, nil
 }
 
 func (c *Checker) Healthy(ctx context.Context) (bool, string) {

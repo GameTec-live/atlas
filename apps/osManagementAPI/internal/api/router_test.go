@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/health"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/networkmanager"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/update"
 )
@@ -34,6 +36,14 @@ func (*fakeUpdate) Rollback(context.Context) error { return nil }
 type fakeMonitor struct{}
 
 func (fakeMonitor) Status() update.MonitorStatus { return update.MonitorStatus{Phase: "idle"} }
+
+type fakeContainers struct {
+	items []health.Container
+}
+
+func (c fakeContainers) RunningContainers(context.Context) ([]health.Container, error) {
+	return c.items, nil
+}
 
 type fakePower struct {
 	tryboot bool
@@ -90,6 +100,7 @@ func testRouter(stateDir string, updateManager *fakeUpdate, powerManager *fakePo
 		MaxUpdateBytes: 1024,
 		Update:         updateManager,
 		Monitor:        fakeMonitor{},
+		Containers:     fakeContainers{},
 		Power:          powerManager,
 		Reset:          fakeReset{},
 		SSH:            &fakeSSH{},
@@ -107,6 +118,7 @@ func TestSSHStatusEnableAndDisable(t *testing.T) {
 		MaxUpdateBytes: 1024,
 		Update:         &fakeUpdate{},
 		Monitor:        fakeMonitor{},
+		Containers:     fakeContainers{},
 		Power:          &fakePower{},
 		Reset:          fakeReset{},
 		SSH:            sshManager,
@@ -134,6 +146,34 @@ func TestSSHStatusEnableAndDisable(t *testing.T) {
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || sshManager.enabled {
 		t.Fatalf("disable failed: code=%d body=%s enabled=%v", response.Code, response.Body.String(), sshManager.enabled)
+	}
+}
+
+func TestRunningContainersReturnsCurrentVersions(t *testing.T) {
+	router := NewRouter(Dependencies{
+		Token:   "secret-token",
+		Update:  &fakeUpdate{},
+		Monitor: fakeMonitor{},
+		Containers: fakeContainers{items: []health.Container{
+			{Name: "atlas-api", Image: "ghcr.io/gametec-live/atlas-api:latest", ImageID: "sha256:api", Version: "2.4.1"},
+		}},
+	})
+	request := authenticatedRequest(http.MethodGet, "/api/v1/containers")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Items []health.Container `json:"items"`
+		Count int                `json:"count"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Count != 1 || len(body.Items) != 1 || body.Items[0].Version != "2.4.1" || body.Items[0].ImageID != "sha256:api" {
+		t.Fatalf("unexpected container response: %#v", body)
 	}
 }
 

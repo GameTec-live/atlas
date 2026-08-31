@@ -55,3 +55,30 @@ func TestUnhealthyContainerFailsCheck(t *testing.T) {
 		t.Fatalf("expected map health failure, got healthy=%v detail=%q", healthy, detail)
 	}
 }
+
+func TestRunningContainersReturnsVersionLabelsAndImageIDFallback(t *testing.T) {
+	checker := &Checker{podmanClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path != "/v1.41/containers/json" || request.URL.Query().Get("all") != "false" {
+			t.Fatalf("unexpected Podman request: %s", request.URL.String())
+		}
+		return response(http.StatusOK, `[
+			{"Id":"web-id","Names":["/atlas-web"],"Image":"atlas-web:latest","ImageID":"sha256:web","State":"running","Labels":{"org.opencontainers.image.version":"3.2.0"}},
+			{"Id":"db-id","Names":["atlas-db"],"Image":"postgres:18-alpine","ImageID":"sha256:db","State":"running","Labels":{}},
+			{"Id":"old-id","Names":["old"],"Image":"old:latest","ImageID":"sha256:old","State":"exited","Labels":{}}
+		]`), nil
+	})}}
+
+	items, err := checker.RunningContainers(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected two running containers, got %#v", items)
+	}
+	if items[0].Name != "atlas-db" || items[0].Version != "sha256:db" {
+		t.Fatalf("expected image ID fallback, got %#v", items[0])
+	}
+	if items[1].Name != "atlas-web" || items[1].Version != "3.2.0" || items[1].ImageID != "sha256:web" {
+		t.Fatalf("expected OCI version label, got %#v", items[1])
+	}
+}

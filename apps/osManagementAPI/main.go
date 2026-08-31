@@ -77,7 +77,8 @@ func main() {
 	}()
 
 	updateManager := update.New(runner)
-	trialMonitor := update.NewMonitor(updateManager, health.New(cfg.PodmanSocket, cfg.HealthURL), cfg.HealthWindow, cfg.HealthPollInterval)
+	healthChecker := health.New(cfg.PodmanSocket, cfg.HealthURL)
+	trialMonitor := update.NewMonitor(updateManager, healthChecker, cfg.HealthWindow, cfg.HealthPollInterval)
 	powerManager := power.New(runner)
 	router := api.NewRouter(api.Dependencies{
 		Token:          token,
@@ -86,6 +87,7 @@ func main() {
 		ShutdownDelay:  cfg.ShutdownDelay,
 		Update:         updateManager,
 		Monitor:        trialMonitor,
+		Containers:     healthChecker,
 		Power:          powerManager,
 		Reset:          reset.NewRequester(cfg.StateDir),
 		SSH:            sshmanager.New(runner),

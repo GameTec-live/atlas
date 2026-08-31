@@ -17,6 +17,7 @@ All routes are below `/api/v1`:
 | Method and path | Operation |
 | --- | --- |
 | `GET /update` | Active, inactive and pending A/B slot plus trial-monitor state |
+| `GET /containers` | Running containers with image reference, immutable image ID and current OCI version |
 | `POST /update` | Stream one `bundle` file in a multipart request, install it to the inactive slot and tryboot it |
 | `POST /update/rollback` | Roll back or clear a failed pending candidate |
 | `POST /power/reboot` | Reboot |

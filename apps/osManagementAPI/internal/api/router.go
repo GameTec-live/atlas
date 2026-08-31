@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/health"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/networkmanager"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/update"
 )
@@ -30,6 +31,10 @@ type UpdateManager interface {
 
 type Monitor interface {
 	Status() update.MonitorStatus
+}
+
+type ContainerReader interface {
+	RunningContainers(context.Context) ([]health.Container, error)
 }
 
 type PowerManager interface {
@@ -77,6 +82,7 @@ type Dependencies struct {
 	ShutdownDelay  time.Duration
 	Update         UpdateManager
 	Monitor        Monitor
+	Containers     ContainerReader
 	Power          PowerManager
 	Reset          ResetRequester
 	SSH            SSHManager
@@ -96,6 +102,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	router := http.NewServeMux()
 	router.HandleFunc("GET /healthz", h.health)
 	router.HandleFunc("GET /api/v1/update", h.updateStatus)
+	router.HandleFunc("GET /api/v1/containers", h.runningContainers)
 	router.HandleFunc("POST /api/v1/update", h.applyUpdate)
 	router.HandleFunc("POST /api/v1/update/rollback", h.rollbackUpdate)
 	router.HandleFunc("POST /api/v1/power/reboot", h.reboot)
@@ -143,6 +150,15 @@ func (h *handler) updateStatus(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{"update": status, "monitor": h.dependencies.Monitor.Status()})
+}
+
+func (h *handler) runningContainers(writer http.ResponseWriter, request *http.Request) {
+	items, err := h.dependencies.Containers.RunningContainers(request.Context())
+	if err != nil {
+		fail(writer, http.StatusInternalServerError, "container_status_failed", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"items": items, "count": len(items)})
 }
 
 func (h *handler) applyUpdate(writer http.ResponseWriter, request *http.Request) {
