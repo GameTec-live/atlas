@@ -104,3 +104,37 @@ export const notifyAssignedDriverInBackground = (
         );
     });
 };
+
+export const notifyDispatchersJobsChanged = async (
+    server: Bun.Server<unknown> | null,
+) => {
+    if (!server) return;
+
+    const roles = await db
+        .select({
+            driverId: role.driverId,
+            role: role.role,
+        })
+        .from(role)
+        .where(eq(role.date, sql`current_date`));
+
+    const dispatchers = roles.filter((r) => r.role === "dispatcher");
+
+    for (const dispatcher of dispatchers) {
+        notify(
+            server,
+            {
+                type: "jobs_changed",
+            },
+            dispatcher.driverId,
+        );
+    }
+};
+
+export const notifyDispatchersJobsChangedInBackground = (
+    server: Bun.Server<unknown> | null,
+) => {
+    void notifyDispatchersJobsChanged(server).catch((error) => {
+        console.error("Failed to notify dispatchers about jobs changed", error);
+    });
+};

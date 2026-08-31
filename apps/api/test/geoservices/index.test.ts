@@ -6,19 +6,9 @@ import {
     resetDbMocks,
     setDbMockTableRows,
 } from "../mocks/db";
+import { envMock } from "../mocks/env";
 
-const GEOCODER_URL = "http://geocoder.test";
-const ROUTER_URL = "http://router.test";
-
-mock.module("@/env", () => ({
-    env: {
-        BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters",
-        BETTER_AUTH_URL: "http://auth.test",
-        DATABASE_URL: "postgresql://test:test@database.test/test",
-        GEOCODER_URL,
-        ROUTER_URL,
-    },
-}));
+const { GEOCODER_URL, ROUTER_URL } = envMock;
 
 const { config } = await import("@/src/config");
 const { geoservices } = await import("@/src/geoservices");

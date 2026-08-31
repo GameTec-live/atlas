@@ -720,7 +720,7 @@ describe("WS /realtime/notify", () => {
         );
     });
 
-    it("delivers notifications with required and optional fields to every subscriber for the user", async () => {
+    it("delivers every notification type to every subscriber for the user", async () => {
         const firstClient = await WebSocketClient.connect("/notify");
         const secondClient = await WebSocketClient.connect("/notify");
         const notifications = [
@@ -735,6 +735,9 @@ describe("WS /realtime/notify", () => {
                 from: "Wien Hauptbahnhof",
                 to: "Schwechat",
                 note: "Meet at platform 8 🚕",
+            },
+            {
+                type: "jobs_changed" as const,
             },
         ];
 

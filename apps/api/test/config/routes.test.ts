@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
     existsSync,
     mkdirSync,
@@ -14,12 +14,7 @@ import { join } from "node:path";
 import { Elysia } from "elysia";
 import { MAX_LOGO_SIZE } from "@/src/config/logo";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
-
-mock.module("@/env", () => ({
-    env: {
-        CONFIG_FILE: undefined,
-    },
-}));
+import "../mocks/env";
 
 const { config, configApp } = await import("@/src/config");
 const app = new Elysia().use(configApp);

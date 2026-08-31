@@ -43,13 +43,18 @@ const realtimeResponse = t.Union([trackMessage, connectionChangeMessage]);
 export const RealtimeModel = {
     realtimeResponse,
     trackInputMessage,
-    notifyResponse: t.Object({
-        type: t.Union([t.Literal("assigned"), t.Literal("unassigned")]),
-        jobId: t.String({ format: "uuid" }),
-        from: t.String(),
-        to: t.Optional(t.String()),
-        note: t.Optional(t.String()),
-    }),
+    notifyResponse: t.Union([
+        t.Object({
+            type: t.Union([t.Literal("assigned"), t.Literal("unassigned")]),
+            jobId: t.String({ format: "uuid" }),
+            from: t.String(),
+            to: t.Optional(t.String()),
+            note: t.Optional(t.String()),
+        }),
+        t.Object({
+            type: t.Literal("jobs_changed"),
+        }),
+    ]),
 } as const;
 
 export type NotifyResponse = Static<typeof RealtimeModel.notifyResponse>;

@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 import { Elysia } from "elysia";
 import { getSessionMock, resetAuthMocks, session } from "../mocks/auth";
+import { envMock } from "../mocks/env";
 
 const upstream = Bun.serve({
     hostname: "127.0.0.1",
@@ -30,12 +31,7 @@ const upstream = Bun.serve({
     },
 });
 const GEODATA_URL = `http://127.0.0.1:${upstream.port}`;
-
-mock.module("@/env", () => ({
-    env: {
-        GEODATA_URL,
-    },
-}));
+envMock.GEODATA_URL = GEODATA_URL;
 
 const { geodata, GEODATA_TIMEOUT_MS } = await import("@/src/geodata");
 const app = new Elysia().use(geodata);

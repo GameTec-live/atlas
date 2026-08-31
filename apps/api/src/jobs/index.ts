@@ -15,7 +15,10 @@ import {
     rankDriverCandidates,
 } from "./candidates";
 import { JobModel } from "./model";
-import { notifyAssignedDriverInBackground } from "./notifications";
+import {
+    notifyAssignedDriverInBackground,
+    notifyDispatchersJobsChangedInBackground,
+} from "./notifications";
 
 const calculateCandidates = async (target: CandidateTarget) => {
     const trackedDrivers = [...trackCache.entries()];
@@ -197,6 +200,7 @@ export const jobs = new Elysia({
             }
 
             notifyAssignedDriverInBackground(server, newJob);
+            notifyDispatchersJobsChangedInBackground(server);
 
             return newJob;
         },
@@ -277,6 +281,7 @@ export const jobs = new Elysia({
             }
 
             notifyAssignedDriverInBackground(server, updatedJob);
+            notifyDispatchersJobsChangedInBackground(server);
 
             return updatedJob;
         },
@@ -341,7 +346,7 @@ export const jobs = new Elysia({
     )
     .post(
         "/:id/cancel",
-        async ({ params, user }) => {
+        async ({ params, user, server }) => {
             if (!isAdmin(user.role)) {
                 const [targetJob] = await db
                     .select()
@@ -361,7 +366,7 @@ export const jobs = new Elysia({
                 }
             }
 
-            const updateResult = await db
+            const [updateResult] = await db
                 .update(job)
                 .set({
                     assignedDriverId: null,
@@ -369,11 +374,15 @@ export const jobs = new Elysia({
                     completedAt: null,
                     vehicleId: null,
                 })
-                .where(eq(job.id, params.id));
+                .where(eq(job.id, params.id))
+                .returning();
 
-            if (updateResult.rowCount === 0) {
+            if (!updateResult) {
                 return status(404, { error: "Job not found" });
             }
+
+            notifyAssignedDriverInBackground(server, updateResult);
+            notifyDispatchersJobsChangedInBackground(server);
 
             return { message: "Job canceled successfully" };
         },
@@ -386,7 +395,7 @@ export const jobs = new Elysia({
     )
     .put(
         "/:id",
-        async ({ params, body }) => {
+        async ({ params, body, server }) => {
             const updateResult = await db
                 .update(job)
                 .set(body)
@@ -395,6 +404,8 @@ export const jobs = new Elysia({
             if (updateResult.rowCount === 0) {
                 return status(404, { error: "Job not found" });
             }
+
+            notifyDispatchersJobsChangedInBackground(server);
 
             return { message: "Job updated successfully" };
         },
@@ -408,7 +419,7 @@ export const jobs = new Elysia({
     )
     .delete(
         "/:id",
-        async ({ params }) => {
+        async ({ params, server }) => {
             const deleteResult = await db
                 .delete(job)
                 .where(
@@ -418,6 +429,8 @@ export const jobs = new Elysia({
             if (deleteResult.rowCount === 0) {
                 return status(404, { error: "Unassigned job not found" });
             }
+
+            notifyDispatchersJobsChangedInBackground(server);
 
             return { message: "Job deleted successfully" };
         },

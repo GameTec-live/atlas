@@ -10,24 +10,13 @@ import {
     setDbMockRows,
     setDbMockTableRows,
 } from "../mocks/db";
-
-const envMock: {
-    GEOCODER_URL: string;
-    JOBTOKEN?: string;
-    ROUTER_URL: string;
-} = {
-    GEOCODER_URL: "http://geocoder.test",
-    ROUTER_URL: "http://router.test",
-};
-
-mock.module("@/env", () => ({
-    env: envMock,
-}));
+import { envMock } from "../mocks/env";
 
 const { jobs } = await import("@/src/jobs");
 const {
     NOTIFICATION_ADDRESS_MAX_LENGTH,
     notifyAssignedDriverInBackground,
+    notifyDispatchersJobsChanged,
     sendAssignmentNotification,
     shortenAddress,
 } = await import("@/src/jobs/notifications");
@@ -1824,7 +1813,7 @@ describe("POST /jobs/:id/assign", () => {
     });
 });
 
-describe("assignment notifications", () => {
+describe("job notifications", () => {
     const geocoderResult = (displayName: string) => ({
         count: 1,
         results: [
@@ -1969,6 +1958,25 @@ describe("assignment notifications", () => {
                 note: unassignedJob.note,
             });
         }
+    });
+
+    it("notifies every current dispatcher when jobs change", async () => {
+        setDbMockRows("select", [
+            ["dispatcher-1", "dispatcher"],
+            ["driver-1", "driver"],
+            ["dispatcher-2", "dispatcher"],
+        ]);
+        const publishMock = mock((_topic: string, _message: string) => 1);
+        const server = {
+            publish: publishMock,
+        } as unknown as Bun.Server<unknown>;
+
+        await notifyDispatchersJobsChanged(server);
+
+        expect(publishMock.mock.calls).toEqual([
+            ["api:ws:notify:dispatcher-1", '{"type":"jobs_changed"}'],
+            ["api:ws:notify:dispatcher-2", '{"type":"jobs_changed"}'],
+        ]);
     });
 
     it.each([
@@ -2225,7 +2233,7 @@ describe("POST /jobs/:id/complete", () => {
 
 describe("POST /jobs/:id/cancel", () => {
     beforeEach(() => {
-        setDbMockRowCount("update", 1);
+        setDbMockRows("update", getDbMockTableRows("job"));
     });
 
     it("returns 401 without a session and does not update the job", async () => {
@@ -2285,6 +2293,7 @@ describe("POST /jobs/:id/cancel", () => {
         expect(sql).toContain('"vehicle_id" = $2');
         expect(sql).toContain('"started_at" = $3');
         expect(sql).toContain('"completed_at" = $4');
+        expect(sql).toContain("returning");
         expect(values.slice(0, 4)).toEqual([null, null, null, null]);
         expect(values[4]).toEqual(expect.any(String));
         expect(values[5]).toBe(jobId);
@@ -2292,7 +2301,7 @@ describe("POST /jobs/:id/cancel", () => {
 
     it("returns 404 when the job does not exist", async () => {
         getSessionMock.mockResolvedValue(adminSession);
-        setDbMockRowCount("update", 0);
+        setDbMockRows("update", []);
 
         const response = await mutationRequest("cancel");
 
