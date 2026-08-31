@@ -29,6 +29,8 @@ import androidx.car.app.CarContext
 import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
 import org.gtlv.core.location.AtlasLocation
+import org.gtlv.core.map.addLiveMapUserLayers
+import org.gtlv.core.map.updateLiveMapUsers
 import org.gtlv.core.geoservice.RoutePoint
 import org.gtlv.core.telemetry.LiveMapUser
 import org.gtlv.core.telemetry.TelemetryVehicleState
@@ -109,6 +111,7 @@ internal class MapLibreSurfaceRenderer(
     )
     private var queuedJobCount = 0
     private var sidebarUsers: List<SidebarUser> = emptyList()
+    private var liveMapUsers: List<LiveMapUser> = emptyList()
     private var routePoints: List<RoutePoint> = emptyList()
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
@@ -343,6 +346,11 @@ internal class MapLibreSurfaceRenderer(
     }
 
     fun updateLiveUsers(users: Collection<LiveMapUser>) {
+        liveMapUsers = users.toList()
+        if (isStyleReady) {
+            map?.style?.updateLiveMapUsers(liveMapUsers)
+        }
+
         val updatedUsers = users
             .map { user ->
                 SidebarUser(
@@ -489,6 +497,8 @@ internal class MapLibreSurfaceRenderer(
             activateLocationPuck(readyMap, style)
             style.addAutomotiveRouteLayers()
             style.updateAutomotiveRoute(routePoints)
+            style.addLiveMapUserLayers()
+            style.updateLiveMapUsers(liveMapUsers)
             isStyleReady = true
             lastLocation?.let { location ->
                 updateLocationPuck(readyMap, location)

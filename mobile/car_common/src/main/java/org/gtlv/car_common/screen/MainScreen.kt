@@ -803,7 +803,6 @@ class MainScreen(
 
     private fun observeLiveMapUsers() {
         if (
-            role != ShiftRole.DISPATCHER ||
             liveMapUsersJob != null
         ) {
             return
@@ -814,9 +813,7 @@ class MainScreen(
             users.collectLatest { liveUsersById ->
                 val currentUserId = getUserId()
                 val visibleUsers = liveUsersById.values
-                    .asSequence()
-                    .filter { user -> user.userId != currentUserId }
-                    .toList()
+                    .excludingUser(currentUserId)
 
                 mapRenderer.updateLiveUsers(visibleUsers)
             }
