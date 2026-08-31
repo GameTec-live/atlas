@@ -17,7 +17,6 @@ ProtectKernelLogs=yes
 ProtectKernelModules=yes
 ProtectKernelTunables=yes
 ProtectSystem=strict
-ProtectHome=read-only
 ReadWritePaths=/persistent
 ReadWritePaths=/home
 ReadWritePaths=/run/user/2000
