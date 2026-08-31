@@ -22,6 +22,7 @@ import org.gtlv.core.location.CarLocationProviderRegistry
 import org.gtlv.core.location.LocationProviderProvider
 import org.gtlv.core.job.JobRepositoryProvider
 import org.gtlv.core.job.CollectedJobStoreProvider
+import org.gtlv.core.geoservice.GeoServiceRepositoryProvider
 import org.gtlv.core.session.SessionManagerProvider
 import org.gtlv.core.session.SessionState
 import org.gtlv.core.telemetry.TelemetryProvider
@@ -70,6 +71,9 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
         val collectedJobStore =
             (carContext.applicationContext as? CollectedJobStoreProvider)
                 ?.collectedJobStore
+        val geoServiceRepository =
+            (carContext.applicationContext as? GeoServiceRepositoryProvider)
+                ?.geoServiceRepository
         val sessionManager =
             (carContext.applicationContext as? SessionManagerProvider)
                 ?.sessionManager
@@ -98,6 +102,7 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                     locationProvider = locationProvider,
                     serverSettingsRepository = serverSettingsRepository,
                     collectedJobStore = collectedJobStore,
+                    geoServiceRepository = geoServiceRepository,
                     getUserId = getUserId,
                     telemetryProvider = telemetryProvider,
                     liveMapUsers = liveMapUsers,

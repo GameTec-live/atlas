@@ -13,10 +13,12 @@ import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.location.Location
+import android.text.TextUtils
 import android.util.Log
 import android.view.Surface
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -27,6 +29,7 @@ import androidx.car.app.CarContext
 import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
 import org.gtlv.core.location.AtlasLocation
+import org.gtlv.core.geoservice.RoutePoint
 import org.gtlv.core.telemetry.LiveMapUser
 import org.gtlv.core.telemetry.TelemetryVehicleState
 import org.maplibre.android.MapLibre
@@ -41,6 +44,17 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.maps.widgets.CompassView
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.Point
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.min
@@ -59,11 +73,13 @@ internal class MapLibreSurfaceRenderer(
     private var virtualDisplay: VirtualDisplay? = null
     private var presentation: Presentation? = null
     private var mapView: MapView? = null
+    private var mapCompassView: CompassView? = null
     private var map: MapLibreMap? = null
     private var rootView: FrameLayout? = null
     private var jobCardView: LinearLayout? = null
     private var jobCardToggleView: ImageView? = null
     private var jobQueueView: TextView? = null
+    private var jobTitleView: TextView? = null
     private var jobSummaryView: TextView? = null
     private var dispatcherSidebarView: LinearLayout? = null
     private var dispatcherSidebarToggleView: TextView? = null
@@ -74,6 +90,7 @@ internal class MapLibreSurfaceRenderer(
     private var lastLocation: AtlasLocation? = null
     private var isStyleReady = false
     private var isFollowingLocation = true
+    private var isNorthUp = false
     private var selectedFollowZoom = FOLLOW_ZOOM
     private var selectedFollowTilt = FOLLOW_TILT
     private var surfaceWidth = 0
@@ -92,6 +109,7 @@ internal class MapLibreSurfaceRenderer(
     )
     private var queuedJobCount = 0
     private var sidebarUsers: List<SidebarUser> = emptyList()
+    private var routePoints: List<RoutePoint> = emptyList()
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
         val surface = surfaceContainer.surface ?: return
@@ -169,13 +187,17 @@ internal class MapLibreSurfaceRenderer(
             if (mapView !== newMapView) return@getMapAsync
 
             map = readyMap
+            mapCompassView = newMapView.findCompassView()
             jobCardView?.bringToFront()
             jobCardToggleView?.bringToFront()
             readyMap.uiSettings.apply {
                 isAttributionEnabled = false
                 isLogoEnabled = false
-                isCompassEnabled = false
+                isCompassEnabled = true
+                compassGravity = Gravity.TOP or Gravity.START
+                setCompassFadeFacingNorth(false)
             }
+            configureMapCompass()
             applyVisibleArea()
             styleUrl?.let(::loadStyle)
         }
@@ -234,6 +256,11 @@ internal class MapLibreSurfaceRenderer(
 
     override fun onClick(x: Float, y: Float) {
         if (dispatcherSidebarAnimator != null || jobCardAnimator != null) return
+
+        if (isMapCompassClick(x, y)) {
+            resetBearingNorth()
+            return
+        }
 
         if (isJobCardToggleClick(x, y)) {
             setJobCardExpanded(!isJobCardExpanded)
@@ -295,6 +322,12 @@ internal class MapLibreSurfaceRenderer(
         if (isFollowingLocation) {
             enableLocationTracking(readyMap)
         }
+    }
+
+    fun updateRoute(points: List<RoutePoint>) {
+        routePoints = points.filter(RoutePoint::isValid)
+        if (!isStyleReady) return
+        map?.style?.updateAutomotiveRoute(routePoints)
     }
 
     fun updateJobSummary(summary: String) {
@@ -408,11 +441,30 @@ internal class MapLibreSurfaceRenderer(
 
     fun recenter() {
         isFollowingLocation = true
+        isNorthUp = false
         val location = lastLocation ?: return
         map?.let { readyMap ->
             updateLocationPuck(readyMap, location)
             enableLocationTracking(readyMap)
         }
+    }
+
+    private fun resetBearingNorth() {
+        isNorthUp = true
+        isFollowingLocation = false
+        val readyMap = map ?: return
+        runCatching {
+            readyMap.locationComponent.cameraMode = CameraMode.NONE
+        }
+        readyMap.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder(readyMap.cameraPosition)
+                    .bearing(NORTH_BEARING_DEGREES)
+                    .build(),
+            ),
+            COMPASS_RESET_DURATION_MILLIS,
+        )
+        applyVisibleArea()
     }
 
     fun stopFollowingLocation() {
@@ -435,6 +487,8 @@ internal class MapLibreSurfaceRenderer(
             if (map !== readyMap || styleUrl != url) return@setStyle
 
             activateLocationPuck(readyMap, style)
+            style.addAutomotiveRouteLayers()
+            style.updateAutomotiveRoute(routePoints)
             isStyleReady = true
             lastLocation?.let { location ->
                 updateLocationPuck(readyMap, location)
@@ -490,8 +544,12 @@ internal class MapLibreSurfaceRenderer(
     private fun enableLocationTracking(readyMap: MapLibreMap) {
         runCatching {
             val component = readyMap.locationComponent
-            val bearing = lastLocation?.bearingDegrees?.toDouble()
-            val cameraMode = if (bearing != null) {
+            val bearing = if (isNorthUp) {
+                NORTH_BEARING_DEGREES
+            } else {
+                lastLocation?.bearingDegrees?.toDouble()
+            }
+            val cameraMode = if (!isNorthUp && bearing != null) {
                 CameraMode.TRACKING_GPS
             } else {
                 CameraMode.TRACKING
@@ -552,6 +610,29 @@ internal class MapLibreSurfaceRenderer(
 
         readyMap.setPadding(padding[0], padding[1], padding[2], padding[3])
         appliedMapPadding = padding
+        configureMapCompass()
+    }
+
+    private fun configureMapCompass() {
+        val readyMap = map ?: return
+        readyMap.uiSettings.setCompassMargins(
+            dp(COMPASS_MARGIN_DP),
+            dp(COMPASS_MARGIN_DP),
+            0,
+            0,
+        )
+        mapCompassView?.bringToFront()
+    }
+
+    private fun isMapCompassClick(x: Float, y: Float): Boolean {
+        val compass = mapCompassView ?: return false
+        val root = rootView ?: return false
+        if (!compass.isShown || compass.width <= 0 || compass.height <= 0) {
+            return false
+        }
+        val bounds = Rect().also(compass::getDrawingRect)
+        root.offsetDescendantRectToMyCoords(compass, bounds)
+        return bounds.contains(x.toInt(), y.toInt())
     }
 
     private fun createMapLayout(
@@ -559,7 +640,7 @@ internal class MapLibreSurfaceRenderer(
         newMapView: MapView,
     ): FrameLayout {
         val root = FrameLayout(context)
-        root.clipChildren = false
+        root.clipChildren = true
         root.addView(
             newMapView,
             FrameLayout.LayoutParams(
@@ -586,41 +667,51 @@ internal class MapLibreSurfaceRenderer(
             text = queuedJobText()
             setTextColor(Color.rgb(210, 213, 218))
             textSize = 20f
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            includeFontPadding = false
         }
         jobQueueView = queueView
         jobCard.addView(queueView)
-        jobCard.addView(
-            TextView(context).apply {
-                text = carContext.getString(
-                    org.gtlv.car_common.R.string.driver_current_job,
-                )
-                setTextColor(Color.WHITE)
-                textSize = 26f
-            },
-        )
+        val titleView = TextView(context).apply {
+            text = carContext.getString(
+                org.gtlv.car_common.R.string.driver_current_job,
+            )
+            setTextColor(Color.WHITE)
+            textSize = 26f
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            includeFontPadding = false
+        }
+        jobTitleView = titleView
+        jobCard.addView(titleView)
         val summaryView = TextView(context).apply {
             text = jobSummary
             setTextColor(Color.rgb(210, 213, 218))
             textSize = 22f
+            maxLines = Int.MAX_VALUE
+            ellipsize = null
+            includeFontPadding = false
         }
         jobSummaryView = summaryView
         jobCard.addView(summaryView)
 
-        newMapView.addView(
+        root.addView(
             jobCard,
             FrameLayout.LayoutParams(
                 responsiveJobCardWidth(),
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.BOTTOM or Gravity.START,
             ).apply {
-                leftMargin = dp(OVERLAY_MARGIN_DP)
+                leftMargin = jobCardStartMargin()
                 bottomMargin = dp(OVERLAY_MARGIN_DP)
             },
         )
+        applyResponsiveJobCardLayout()
 
         val jobToggle = createJobCardToggle(context)
         jobCardToggleView = jobToggle
-        newMapView.addView(
+        root.addView(
             jobToggle,
             FrameLayout.LayoutParams(
                 dp(JOB_CARD_TOGGLE_WIDTH_DP),
@@ -686,15 +777,14 @@ internal class MapLibreSurfaceRenderer(
         (jobSummaryView?.parent as? LinearLayout)?.layoutParams
             ?.let { it as? FrameLayout.LayoutParams }
             ?.apply {
-                leftMargin =
-                    (area.left - dispatcherSidebarWidth()).coerceAtLeast(0) +
-                        dp(OVERLAY_MARGIN_DP)
+                leftMargin = jobCardStartMargin()
                 bottomMargin =
                     (surfaceHeight - area.bottom).coerceAtLeast(0) +
                         dp(OVERLAY_MARGIN_DP)
                 (jobSummaryView?.parent as? LinearLayout)?.layoutParams = this
             }
         jobCardView?.post(::positionJobCardToggle)
+        applyResponsiveJobCardLayout()
     }
 
     private fun createJobCardToggle(context: Context): ImageView =
@@ -998,10 +1088,7 @@ internal class MapLibreSurfaceRenderer(
                 leftMargin = visibleSidebarWidth
                 dispatcherSidebarToggleView?.layoutParams = this
             }
-        jobCardView?.layoutParams?.apply {
-            width = responsiveJobCardWidth(visibleSidebarWidth)
-            jobCardView?.layoutParams = this
-        }
+        applyResponsiveJobCardLayout(visibleSidebarWidth)
         positionJobCardToggle()
 
         rootView?.requestLayout()
@@ -1190,12 +1277,114 @@ internal class MapLibreSurfaceRenderer(
     private fun responsiveJobCardWidth(
         sidebarWidth: Int = dispatcherSidebarWidth(),
     ): Int {
-        val mapContentWidth =
-            (surfaceWidth - sidebarWidth).coerceAtLeast(1)
-        return min(
+        val mapContentWidth = (surfaceWidth - sidebarWidth).coerceAtLeast(1)
+        val safeAreaRight = if (stableArea.isEmpty) {
+            surfaceWidth
+        } else {
+            min(surfaceWidth, stableArea.right)
+        }
+        val availableWidth =
+            (
+                safeAreaRight - jobCardStartMargin(sidebarWidth) -
+                    dp(OVERLAY_MARGIN_DP)
+                ).coerceAtLeast(1)
+        val density = renderDensity.coerceAtLeast(MIN_LAYOUT_DENSITY)
+        val availableWidthDp = availableWidth / density
+        val maximumWidthFraction = when {
+            availableWidthDp < VERY_COMPACT_JOB_CARD_WIDTH_DP ->
+                VERY_COMPACT_JOB_CARD_MAX_WIDTH_FRACTION
+            availableWidthDp < COMPACT_JOB_CARD_WIDTH_DP ->
+                COMPACT_JOB_CARD_MAX_WIDTH_FRACTION
+            else -> JOB_CARD_MAX_WIDTH_FRACTION
+        }
+        return minOf(
             dp(JOB_CARD_WIDTH_DP),
-            (mapContentWidth * JOB_CARD_MAX_WIDTH_FRACTION).roundToInt(),
+            (mapContentWidth * maximumWidthFraction).roundToInt(),
+            availableWidth,
         ).coerceAtLeast(1)
+    }
+
+    private fun jobCardStartMargin(
+        sidebarWidth: Int = dispatcherSidebarWidth(),
+    ): Int {
+        val safeAreaMargin = if (stableArea.isEmpty) {
+            sidebarWidth + dp(OVERLAY_MARGIN_DP)
+        } else {
+            maxOf(stableArea.left, sidebarWidth) + dp(OVERLAY_MARGIN_DP)
+        }
+        val driverToggleClearance = if (showDispatcherDriverList) {
+            sidebarWidth +
+                dp(SIDEBAR_TOGGLE_WIDTH_DP + JOB_CARD_DRIVER_TOGGLE_GAP_DP)
+        } else {
+            sidebarWidth + dp(OVERLAY_MARGIN_DP)
+        }
+        return maxOf(safeAreaMargin, driverToggleClearance)
+    }
+
+    private fun applyResponsiveJobCardLayout(
+        sidebarWidth: Int = dispatcherSidebarWidth(),
+    ) {
+        val card = jobCardView ?: return
+        val mapContentWidth = (surfaceWidth - sidebarWidth).coerceAtLeast(1)
+        val density = renderDensity.coerceAtLeast(MIN_LAYOUT_DENSITY)
+        val contentWidthDp = mapContentWidth / density
+        val contentHeightDp = surfaceHeight / density
+        val veryCompact =
+            contentWidthDp < VERY_COMPACT_JOB_CARD_WIDTH_DP ||
+                contentHeightDp < VERY_COMPACT_JOB_CARD_HEIGHT_DP
+        val compact = veryCompact ||
+            contentWidthDp < COMPACT_JOB_CARD_WIDTH_DP ||
+            contentHeightDp < COMPACT_JOB_CARD_HEIGHT_DP
+
+        val horizontalPaddingDp = when {
+            veryCompact -> 10
+            compact -> 14
+            else -> 20
+        }
+        val verticalPaddingDp = when {
+            veryCompact -> 8
+            compact -> 10
+            else -> 14
+        }
+        card.setPadding(
+            dp(horizontalPaddingDp),
+            dp(verticalPaddingDp),
+            dp(horizontalPaddingDp),
+            dp(verticalPaddingDp),
+        )
+
+        jobQueueView?.textSize = when {
+            veryCompact -> 14f
+            compact -> 16f
+            else -> 20f
+        }
+        jobTitleView?.textSize = when {
+            veryCompact -> 18f
+            compact -> 21f
+            else -> 26f
+        }
+        jobSummaryView?.apply {
+            textSize = when {
+                veryCompact -> 16f
+                compact -> 18f
+                else -> 22f
+            }
+        }
+
+        (card.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            val responsiveWidth = responsiveJobCardWidth(sidebarWidth)
+            val responsiveLeftMargin = jobCardStartMargin(sidebarWidth)
+            if (
+                params.width != responsiveWidth ||
+                params.leftMargin != responsiveLeftMargin
+            ) {
+                params.width = responsiveWidth
+                params.leftMargin = responsiveLeftMargin
+                card.layoutParams = params
+            }
+        }
+        card.requestLayout()
+        card.post(::positionJobCardToggle)
     }
 
     private fun queuedJobText(): String =
@@ -1215,10 +1404,12 @@ internal class MapLibreSurfaceRenderer(
         val oldMapView = mapView
         map = null
         mapView = null
+        mapCompassView = null
         rootView = null
         jobCardView = null
         jobCardToggleView = null
         jobQueueView = null
+        jobTitleView = null
         jobSummaryView = null
         dispatcherSidebarView = null
         dispatcherSidebarToggleView = null
@@ -1260,6 +1451,15 @@ internal class MapLibreSurfaceRenderer(
             speedMetersPerSecond?.let { androidLocation.speed = it }
         }
 
+    private fun View.findCompassView(): CompassView? {
+        if (this is CompassView) return this
+        if (this !is ViewGroup) return null
+        for (index in 0 until childCount) {
+            getChildAt(index).findCompassView()?.let { return it }
+        }
+        return null
+    }
+
     private companion object {
         data class SidebarUser(
             val userId: String,
@@ -1276,7 +1476,12 @@ internal class MapLibreSurfaceRenderer(
         const val SIDEBAR_ANIMATION_DURATION_MILLIS = 280L
         const val SIDEBAR_COLLAPSE_CHEVRON = "\u2039"
         const val SIDEBAR_EXPAND_CHEVRON = "\u203A"
-        const val JOB_CARD_WIDTH_DP = 360
+        const val JOB_CARD_WIDTH_DP = 240
+        const val JOB_CARD_DRIVER_TOGGLE_GAP_DP = 12
+        const val COMPACT_JOB_CARD_WIDTH_DP = 700
+        const val COMPACT_JOB_CARD_HEIGHT_DP = 500
+        const val VERY_COMPACT_JOB_CARD_WIDTH_DP = 480
+        const val VERY_COMPACT_JOB_CARD_HEIGHT_DP = 360
         const val JOB_CARD_TOGGLE_WIDTH_DP = 64
         const val JOB_CARD_TOGGLE_HEIGHT_DP = 32
         const val JOB_CARD_TOGGLE_RADIUS_DP = 14
@@ -1288,12 +1493,18 @@ internal class MapLibreSurfaceRenderer(
         const val REFERENCE_SURFACE_WIDTH = 1920f
         const val REFERENCE_SURFACE_HEIGHT = 1080f
         const val MIN_RESOLUTION_SCALE = 0.75f
+        const val MIN_LAYOUT_DENSITY = 0.1f
         const val SIDEBAR_MAX_WIDTH_FRACTION = 0.24f
-        const val JOB_CARD_MAX_WIDTH_FRACTION = 0.55f
+        const val JOB_CARD_MAX_WIDTH_FRACTION = 0.34f
+        const val COMPACT_JOB_CARD_MAX_WIDTH_FRACTION = 0.36f
+        const val VERY_COMPACT_JOB_CARD_MAX_WIDTH_FRACTION = 0.40f
         const val INITIAL_LATITUDE = 48.500
         const val INITIAL_LONGITUDE = 14.580
         const val INITIAL_ZOOM = 12.5
         const val FOLLOW_ZOOM = 15.5
+        const val NORTH_BEARING_DEGREES = 0.0
+        const val COMPASS_MARGIN_DP = 16
+        const val COMPASS_RESET_DURATION_MILLIS = 300
         const val MIN_USER_ZOOM = 3.0
         const val MAX_USER_ZOOM = 20.0
         const val ZOOM_STEP = 1.0
@@ -1314,3 +1525,117 @@ internal class MapLibreSurfaceRenderer(
         SIDEBAR,
     }
 }
+
+private fun Style.addAutomotiveRouteLayers() {
+    if (getSource(AUTOMOTIVE_ROUTE_SOURCE_ID) == null) {
+        addSource(
+            GeoJsonSource(
+                AUTOMOTIVE_ROUTE_SOURCE_ID,
+                emptyAutomotiveRouteFeatures(),
+            ),
+        )
+    }
+    if (getSource(AUTOMOTIVE_DESTINATION_SOURCE_ID) == null) {
+        addSource(
+            GeoJsonSource(
+                AUTOMOTIVE_DESTINATION_SOURCE_ID,
+                emptyAutomotiveRouteFeatures(),
+            ),
+        )
+    }
+
+    if (getLayer(AUTOMOTIVE_ROUTE_CASING_LAYER_ID) == null) {
+        val casing = LineLayer(
+            AUTOMOTIVE_ROUTE_CASING_LAYER_ID,
+            AUTOMOTIVE_ROUTE_SOURCE_ID,
+        ).withProperties(
+            PropertyFactory.lineColor(Color.rgb(17, 24, 39)),
+            PropertyFactory.lineWidth(10f),
+            PropertyFactory.lineOpacity(0.72f),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+        )
+        val firstLabelLayerId = layers
+            .firstOrNull { it is SymbolLayer }
+            ?.id
+        if (firstLabelLayerId != null) {
+            addLayerBelow(casing, firstLabelLayerId)
+        } else {
+            addLayer(casing)
+        }
+    }
+
+    if (getLayer(AUTOMOTIVE_ROUTE_LAYER_ID) == null) {
+        addLayerAbove(
+            LineLayer(
+                AUTOMOTIVE_ROUTE_LAYER_ID,
+                AUTOMOTIVE_ROUTE_SOURCE_ID,
+            ).withProperties(
+                PropertyFactory.lineColor(Color.rgb(37, 99, 235)),
+                PropertyFactory.lineWidth(6f),
+                PropertyFactory.lineOpacity(0.96f),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            ),
+            AUTOMOTIVE_ROUTE_CASING_LAYER_ID,
+        )
+    }
+
+    if (getLayer(AUTOMOTIVE_DESTINATION_LAYER_ID) == null) {
+        addLayer(
+            CircleLayer(
+                AUTOMOTIVE_DESTINATION_LAYER_ID,
+                AUTOMOTIVE_DESTINATION_SOURCE_ID,
+            ).withProperties(
+                PropertyFactory.circleRadius(10f),
+                PropertyFactory.circleColor(Color.rgb(37, 99, 235)),
+                PropertyFactory.circleStrokeColor(Color.WHITE),
+                PropertyFactory.circleStrokeWidth(3f),
+            ),
+        )
+    }
+}
+
+private fun Style.updateAutomotiveRoute(points: List<RoutePoint>) {
+    val routeFeatures = if (points.size >= 2) {
+        FeatureCollection.fromFeature(
+            Feature.fromGeometry(
+                LineString.fromLngLats(
+                    points.map {
+                        Point.fromLngLat(it.longitude, it.latitude)
+                    },
+                ),
+            ),
+        )
+    } else {
+        emptyAutomotiveRouteFeatures()
+    }
+    getSourceAs<GeoJsonSource>(AUTOMOTIVE_ROUTE_SOURCE_ID)
+        ?.setGeoJson(routeFeatures)
+
+    val destinationFeatures = points.lastOrNull()
+        ?.takeIf { points.size >= 2 }
+        ?.let {
+            FeatureCollection.fromFeature(
+                Feature.fromGeometry(
+                    Point.fromLngLat(it.longitude, it.latitude),
+                ),
+            )
+        } ?: emptyAutomotiveRouteFeatures()
+    getSourceAs<GeoJsonSource>(AUTOMOTIVE_DESTINATION_SOURCE_ID)
+        ?.setGeoJson(destinationFeatures)
+}
+
+private fun emptyAutomotiveRouteFeatures(): FeatureCollection =
+    FeatureCollection.fromFeatures(emptyArray<Feature>())
+
+private const val AUTOMOTIVE_ROUTE_SOURCE_ID =
+    "atlas-automotive-route-source"
+private const val AUTOMOTIVE_ROUTE_CASING_LAYER_ID =
+    "atlas-automotive-route-casing-layer"
+private const val AUTOMOTIVE_ROUTE_LAYER_ID =
+    "atlas-automotive-route-layer"
+private const val AUTOMOTIVE_DESTINATION_SOURCE_ID =
+    "atlas-automotive-destination-source"
+private const val AUTOMOTIVE_DESTINATION_LAYER_ID =
+    "atlas-automotive-destination-layer"
