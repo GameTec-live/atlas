@@ -435,6 +435,7 @@ class MainScreen(
         store.setCollectedJobId(userId, job.id)
         isPersonCollected = true
         telemetryProvider?.setVehicleState(TelemetryVehicleState.OCCUPIED)
+        updateJobOverlay()
         reconcileRoute()
         invalidateSafely()
     }
@@ -539,6 +540,7 @@ class MainScreen(
 
                 isPersonCollected = personCollected
                 updateVehicleTelemetry()
+                updateJobOverlay()
                 reconcileRoute()
                 invalidateSafely()
             }
@@ -766,9 +768,16 @@ class MainScreen(
             carContext.getString(R.string.driver_job_load_error)
         currentJob == null -> carContext.getString(R.string.driver_no_job)
         else -> carContext.getString(
-            R.string.driver_job_route,
-            currentJob?.fromDisplayAddress(),
-            currentJob?.toDisplayAddress(),
+            if (isPersonCollected) {
+                R.string.driver_job_destination
+            } else {
+                R.string.driver_job_pickup
+            },
+            if (isPersonCollected) {
+                currentJob?.toDisplayAddress()
+            } else {
+                currentJob?.fromDisplayAddress()
+            },
         )
     }
 

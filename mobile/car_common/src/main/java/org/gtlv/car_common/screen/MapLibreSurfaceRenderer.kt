@@ -13,6 +13,7 @@ import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.location.Location
+import android.text.TextUtils
 import android.util.Log
 import android.view.Surface
 import android.view.Gravity
@@ -78,6 +79,7 @@ internal class MapLibreSurfaceRenderer(
     private var jobCardView: LinearLayout? = null
     private var jobCardToggleView: ImageView? = null
     private var jobQueueView: TextView? = null
+    private var jobTitleView: TextView? = null
     private var jobSummaryView: TextView? = null
     private var dispatcherSidebarView: LinearLayout? = null
     private var dispatcherSidebarToggleView: TextView? = null
@@ -638,7 +640,7 @@ internal class MapLibreSurfaceRenderer(
         newMapView: MapView,
     ): FrameLayout {
         val root = FrameLayout(context)
-        root.clipChildren = false
+        root.clipChildren = true
         root.addView(
             newMapView,
             FrameLayout.LayoutParams(
@@ -665,41 +667,51 @@ internal class MapLibreSurfaceRenderer(
             text = queuedJobText()
             setTextColor(Color.rgb(210, 213, 218))
             textSize = 20f
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            includeFontPadding = false
         }
         jobQueueView = queueView
         jobCard.addView(queueView)
-        jobCard.addView(
-            TextView(context).apply {
-                text = carContext.getString(
-                    org.gtlv.car_common.R.string.driver_current_job,
-                )
-                setTextColor(Color.WHITE)
-                textSize = 26f
-            },
-        )
+        val titleView = TextView(context).apply {
+            text = carContext.getString(
+                org.gtlv.car_common.R.string.driver_current_job,
+            )
+            setTextColor(Color.WHITE)
+            textSize = 26f
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            includeFontPadding = false
+        }
+        jobTitleView = titleView
+        jobCard.addView(titleView)
         val summaryView = TextView(context).apply {
             text = jobSummary
             setTextColor(Color.rgb(210, 213, 218))
             textSize = 22f
+            maxLines = Int.MAX_VALUE
+            ellipsize = null
+            includeFontPadding = false
         }
         jobSummaryView = summaryView
         jobCard.addView(summaryView)
 
-        newMapView.addView(
+        root.addView(
             jobCard,
             FrameLayout.LayoutParams(
                 responsiveJobCardWidth(),
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.BOTTOM or Gravity.START,
             ).apply {
-                leftMargin = dp(OVERLAY_MARGIN_DP)
+                leftMargin = jobCardStartMargin()
                 bottomMargin = dp(OVERLAY_MARGIN_DP)
             },
         )
+        applyResponsiveJobCardLayout()
 
         val jobToggle = createJobCardToggle(context)
         jobCardToggleView = jobToggle
-        newMapView.addView(
+        root.addView(
             jobToggle,
             FrameLayout.LayoutParams(
                 dp(JOB_CARD_TOGGLE_WIDTH_DP),
@@ -765,15 +777,14 @@ internal class MapLibreSurfaceRenderer(
         (jobSummaryView?.parent as? LinearLayout)?.layoutParams
             ?.let { it as? FrameLayout.LayoutParams }
             ?.apply {
-                leftMargin =
-                    (area.left - dispatcherSidebarWidth()).coerceAtLeast(0) +
-                        dp(OVERLAY_MARGIN_DP)
+                leftMargin = jobCardStartMargin()
                 bottomMargin =
                     (surfaceHeight - area.bottom).coerceAtLeast(0) +
                         dp(OVERLAY_MARGIN_DP)
                 (jobSummaryView?.parent as? LinearLayout)?.layoutParams = this
             }
         jobCardView?.post(::positionJobCardToggle)
+        applyResponsiveJobCardLayout()
     }
 
     private fun createJobCardToggle(context: Context): ImageView =
@@ -1077,10 +1088,7 @@ internal class MapLibreSurfaceRenderer(
                 leftMargin = visibleSidebarWidth
                 dispatcherSidebarToggleView?.layoutParams = this
             }
-        jobCardView?.layoutParams?.apply {
-            width = responsiveJobCardWidth(visibleSidebarWidth)
-            jobCardView?.layoutParams = this
-        }
+        applyResponsiveJobCardLayout(visibleSidebarWidth)
         positionJobCardToggle()
 
         rootView?.requestLayout()
@@ -1269,12 +1277,114 @@ internal class MapLibreSurfaceRenderer(
     private fun responsiveJobCardWidth(
         sidebarWidth: Int = dispatcherSidebarWidth(),
     ): Int {
-        val mapContentWidth =
-            (surfaceWidth - sidebarWidth).coerceAtLeast(1)
-        return min(
+        val mapContentWidth = (surfaceWidth - sidebarWidth).coerceAtLeast(1)
+        val safeAreaRight = if (stableArea.isEmpty) {
+            surfaceWidth
+        } else {
+            min(surfaceWidth, stableArea.right)
+        }
+        val availableWidth =
+            (
+                safeAreaRight - jobCardStartMargin(sidebarWidth) -
+                    dp(OVERLAY_MARGIN_DP)
+                ).coerceAtLeast(1)
+        val density = renderDensity.coerceAtLeast(MIN_LAYOUT_DENSITY)
+        val availableWidthDp = availableWidth / density
+        val maximumWidthFraction = when {
+            availableWidthDp < VERY_COMPACT_JOB_CARD_WIDTH_DP ->
+                VERY_COMPACT_JOB_CARD_MAX_WIDTH_FRACTION
+            availableWidthDp < COMPACT_JOB_CARD_WIDTH_DP ->
+                COMPACT_JOB_CARD_MAX_WIDTH_FRACTION
+            else -> JOB_CARD_MAX_WIDTH_FRACTION
+        }
+        return minOf(
             dp(JOB_CARD_WIDTH_DP),
-            (mapContentWidth * JOB_CARD_MAX_WIDTH_FRACTION).roundToInt(),
+            (mapContentWidth * maximumWidthFraction).roundToInt(),
+            availableWidth,
         ).coerceAtLeast(1)
+    }
+
+    private fun jobCardStartMargin(
+        sidebarWidth: Int = dispatcherSidebarWidth(),
+    ): Int {
+        val safeAreaMargin = if (stableArea.isEmpty) {
+            sidebarWidth + dp(OVERLAY_MARGIN_DP)
+        } else {
+            maxOf(stableArea.left, sidebarWidth) + dp(OVERLAY_MARGIN_DP)
+        }
+        val driverToggleClearance = if (showDispatcherDriverList) {
+            sidebarWidth +
+                dp(SIDEBAR_TOGGLE_WIDTH_DP + JOB_CARD_DRIVER_TOGGLE_GAP_DP)
+        } else {
+            sidebarWidth + dp(OVERLAY_MARGIN_DP)
+        }
+        return maxOf(safeAreaMargin, driverToggleClearance)
+    }
+
+    private fun applyResponsiveJobCardLayout(
+        sidebarWidth: Int = dispatcherSidebarWidth(),
+    ) {
+        val card = jobCardView ?: return
+        val mapContentWidth = (surfaceWidth - sidebarWidth).coerceAtLeast(1)
+        val density = renderDensity.coerceAtLeast(MIN_LAYOUT_DENSITY)
+        val contentWidthDp = mapContentWidth / density
+        val contentHeightDp = surfaceHeight / density
+        val veryCompact =
+            contentWidthDp < VERY_COMPACT_JOB_CARD_WIDTH_DP ||
+                contentHeightDp < VERY_COMPACT_JOB_CARD_HEIGHT_DP
+        val compact = veryCompact ||
+            contentWidthDp < COMPACT_JOB_CARD_WIDTH_DP ||
+            contentHeightDp < COMPACT_JOB_CARD_HEIGHT_DP
+
+        val horizontalPaddingDp = when {
+            veryCompact -> 10
+            compact -> 14
+            else -> 20
+        }
+        val verticalPaddingDp = when {
+            veryCompact -> 8
+            compact -> 10
+            else -> 14
+        }
+        card.setPadding(
+            dp(horizontalPaddingDp),
+            dp(verticalPaddingDp),
+            dp(horizontalPaddingDp),
+            dp(verticalPaddingDp),
+        )
+
+        jobQueueView?.textSize = when {
+            veryCompact -> 14f
+            compact -> 16f
+            else -> 20f
+        }
+        jobTitleView?.textSize = when {
+            veryCompact -> 18f
+            compact -> 21f
+            else -> 26f
+        }
+        jobSummaryView?.apply {
+            textSize = when {
+                veryCompact -> 16f
+                compact -> 18f
+                else -> 22f
+            }
+        }
+
+        (card.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            val responsiveWidth = responsiveJobCardWidth(sidebarWidth)
+            val responsiveLeftMargin = jobCardStartMargin(sidebarWidth)
+            if (
+                params.width != responsiveWidth ||
+                params.leftMargin != responsiveLeftMargin
+            ) {
+                params.width = responsiveWidth
+                params.leftMargin = responsiveLeftMargin
+                card.layoutParams = params
+            }
+        }
+        card.requestLayout()
+        card.post(::positionJobCardToggle)
     }
 
     private fun queuedJobText(): String =
@@ -1299,6 +1409,7 @@ internal class MapLibreSurfaceRenderer(
         jobCardView = null
         jobCardToggleView = null
         jobQueueView = null
+        jobTitleView = null
         jobSummaryView = null
         dispatcherSidebarView = null
         dispatcherSidebarToggleView = null
@@ -1365,7 +1476,12 @@ internal class MapLibreSurfaceRenderer(
         const val SIDEBAR_ANIMATION_DURATION_MILLIS = 280L
         const val SIDEBAR_COLLAPSE_CHEVRON = "\u2039"
         const val SIDEBAR_EXPAND_CHEVRON = "\u203A"
-        const val JOB_CARD_WIDTH_DP = 360
+        const val JOB_CARD_WIDTH_DP = 240
+        const val JOB_CARD_DRIVER_TOGGLE_GAP_DP = 12
+        const val COMPACT_JOB_CARD_WIDTH_DP = 700
+        const val COMPACT_JOB_CARD_HEIGHT_DP = 500
+        const val VERY_COMPACT_JOB_CARD_WIDTH_DP = 480
+        const val VERY_COMPACT_JOB_CARD_HEIGHT_DP = 360
         const val JOB_CARD_TOGGLE_WIDTH_DP = 64
         const val JOB_CARD_TOGGLE_HEIGHT_DP = 32
         const val JOB_CARD_TOGGLE_RADIUS_DP = 14
@@ -1377,8 +1493,11 @@ internal class MapLibreSurfaceRenderer(
         const val REFERENCE_SURFACE_WIDTH = 1920f
         const val REFERENCE_SURFACE_HEIGHT = 1080f
         const val MIN_RESOLUTION_SCALE = 0.75f
+        const val MIN_LAYOUT_DENSITY = 0.1f
         const val SIDEBAR_MAX_WIDTH_FRACTION = 0.24f
-        const val JOB_CARD_MAX_WIDTH_FRACTION = 0.55f
+        const val JOB_CARD_MAX_WIDTH_FRACTION = 0.34f
+        const val COMPACT_JOB_CARD_MAX_WIDTH_FRACTION = 0.36f
+        const val VERY_COMPACT_JOB_CARD_MAX_WIDTH_FRACTION = 0.40f
         const val INITIAL_LATITUDE = 48.500
         const val INITIAL_LONGITUDE = 14.580
         const val INITIAL_ZOOM = 12.5

@@ -11,6 +11,8 @@
     <string name="driver_loading_job">Loading job…</string>
     <string name="driver_job_load_error">Could not load the current job</string>
     <string name="driver_job_route">From: %1$s\nTo: %2$s</string>
+    <string name="driver_job_pickup">Pickup: %1$s</string>
+    <string name="driver_job_destination">Destination: %1$s</string>
     <string name="driver_next_job">Next job</string>
     <plurals name="driver_jobs_in_queue">
         <item quantity="one">%1$d in queue</item>
