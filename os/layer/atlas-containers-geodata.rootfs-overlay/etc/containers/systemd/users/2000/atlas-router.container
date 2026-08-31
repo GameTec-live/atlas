@@ -8,8 +8,7 @@ Image=ghcr.io/gametec-live/atlas-router:latest
 Pull=missing
 AutoUpdate=registry
 ContainerName=atlas-router
-Network=atlas.network
-NetworkAlias=router
+Network=atlas.network:alias=router
 Label=live.gametec.atlas.geodata-consumer=router
 Volume=atlas-router-data.volume:/custom_files
 Volume=atlas-geodata.volume:/pbf:ro

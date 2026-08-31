@@ -8,8 +8,7 @@ Image=ghcr.io/gametec-live/atlas-geodata-reloader:latest
 Pull=missing
 AutoUpdate=registry
 ContainerName=atlas-geodata-reloader
-Network=geodata-control.network
-NetworkAlias=geodata-reloader
+Network=geodata-control.network:alias=geodata-reloader
 User=65532
 Group=65532
 UserNS=keep-id:uid=65532,gid=65532

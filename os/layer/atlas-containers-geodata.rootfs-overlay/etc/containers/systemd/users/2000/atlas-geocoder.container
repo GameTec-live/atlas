@@ -8,8 +8,7 @@ Image=ghcr.io/gametec-live/geocoder-go:latest
 Pull=missing
 AutoUpdate=registry
 ContainerName=atlas-geocoder
-Network=atlas.network
-NetworkAlias=geocoder
+Network=atlas.network:alias=geocoder
 User=65532
 Group=65532
 ReadOnly=true

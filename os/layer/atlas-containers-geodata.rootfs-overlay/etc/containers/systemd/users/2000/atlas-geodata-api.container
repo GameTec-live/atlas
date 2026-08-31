@@ -9,8 +9,7 @@ Pull=missing
 AutoUpdate=registry
 ContainerName=atlas-geodata-api
 Network=atlas.network
-Network=geodata-control.network
-NetworkAlias=geodata-api
+Network=geodata-control.network:alias=geodata-api
 User=65532
 Group=65532
 ReadOnly=true

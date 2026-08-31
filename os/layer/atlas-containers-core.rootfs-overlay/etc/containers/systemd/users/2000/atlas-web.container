@@ -9,8 +9,7 @@ Image=ghcr.io/gametec-live/atlas-web:latest
 Pull=missing
 AutoUpdate=registry
 ContainerName=atlas-web
-Network=atlas.network
-NetworkAlias=web
+Network=atlas.network:alias=web
 User=10001
 Group=10001
 PublishPort=80:80

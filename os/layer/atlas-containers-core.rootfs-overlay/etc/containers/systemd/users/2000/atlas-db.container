@@ -8,8 +8,7 @@ Image=docker.io/library/postgres:18-alpine
 Pull=missing
 AutoUpdate=registry
 ContainerName=atlas-db
-Network=atlas.network
-NetworkAlias=db
+Network=atlas.network:alias=db
 EnvironmentFile=%h/.config/atlas/db.env
 Volume=atlas-db-data.volume:/var/lib/postgresql/18/docker
 HealthCmd=pg_isready -U atlas

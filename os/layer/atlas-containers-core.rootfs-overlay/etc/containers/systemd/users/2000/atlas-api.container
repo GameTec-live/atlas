@@ -8,8 +8,7 @@ Image=ghcr.io/gametec-live/atlas-api:latest
 Pull=missing
 AutoUpdate=registry
 ContainerName=atlas-api
-Network=atlas.network
-NetworkAlias=api
+Network=atlas.network:alias=api
 User=65532
 Group=65532
 GroupAdd=keep-groups
