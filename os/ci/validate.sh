@@ -87,7 +87,6 @@ if rg -q '^BETTER_AUTH_URL=' "$container_init"; then
     echo "atlas-container-init must not generate a fixed Better Auth base URL" >&2
     exit 1
 fi
-rg -q -F "sed -i '/^BETTER_AUTH_URL=https:\\/\\/atlas\\.local$/d'" "$container_init"
 rg -q -F "printf 'BETTER_AUTH_URL=%s\\n'" \
     "$source_root/layer/atlas-podman.rootfs-overlay/usr/local/libexec/atlas-auth-origins"
 

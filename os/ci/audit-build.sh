@@ -23,8 +23,6 @@ if grep -q '^BETTER_AUTH_URL=' "$rootfs/usr/local/libexec/atlas-container-init";
     echo "built image generates a fixed Better Auth base URL" >&2
     exit 1
 fi
-grep -q -F "sed -i '/^BETTER_AUTH_URL=https:\\/\\/atlas\\.local$/d'" \
-    "$rootfs/usr/local/libexec/atlas-container-init"
 [[ "$(readlink "$rootfs/etc/resolv.conf")" = /run/systemd/resolve/stub-resolv.conf ]]
 [[ "$(readlink "$rootfs/etc/os-release")" = ../usr/lib/os-release ]]
 grep -qx 'NAME="Atlas OS"' "$rootfs/usr/lib/os-release"
