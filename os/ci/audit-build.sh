@@ -11,6 +11,13 @@ rootfs=$(find "$work_root" -mindepth 2 -maxdepth 2 -type d \
 [[ -x "$rootfs/usr/lib/systemd/systemd-resolved" ]]
 [[ -x "$rootfs/usr/sbin/nft" ]]
 [[ -x "$rootfs/usr/local/libexec/atlas-auth-origins" ]]
+[[ -x "$rootfs/usr/local/libexec/atlas-management" ]]
+[[ -x "$rootfs/usr/local/sbin/atlas-sys" ]]
+file "$rootfs/usr/local/libexec/atlas-management" | grep -q 'ARM aarch64'
+grep -q -F 'ConditionPathExists=/persistent/atlas/system/factory-reset-pending' \
+    "$rootfs/usr/lib/systemd/system/atlas-factory-reset.service"
+grep -q -F 'd /run/atlas-management 0750 root atlas-containers' \
+    "$rootfs/usr/lib/tmpfiles.d/atlas-management.conf"
 [[ -x "$rootfs/etc/NetworkManager/dispatcher.d/90-atlas-auth-origins" ]]
 if grep -q '^BETTER_AUTH_URL=' "$rootfs/usr/local/libexec/atlas-container-init"; then
     echo "built image generates a fixed Better Auth base URL" >&2

@@ -63,4 +63,3 @@ Use at your own risk.
 System management: sudo atlas-sys status
 SSH state:         sudo atlas-ssh status
 Update state:      sudo atlas-ab-update status
-

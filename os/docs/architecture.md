@@ -12,9 +12,10 @@ state:
 - the only normal host ingress is Caddy on ports 80 and 443;
 - SSH is an explicitly enabled maintenance path, not a default service.
 
-The `os` directory is a complete external source tree. It does not patch or
-vendor `rpi-image-gen`; builds point `rpi-image-gen` at this directory with
-`-S`.
+The `os` directory is an external source tree and does not patch or vendor
+`rpi-image-gen`; builds point the generator at this directory with `-S`. The
+Atlas repository layout is required because its pre-build hook compiles the
+sibling `apps/osManagementAPI` module into the image.
 
 ## Storage and boot layout
 
@@ -67,6 +68,7 @@ Important persistent paths include:
 | --- | --- |
 | `/persistent/atlas/system/` | A/B pending state, SSH enablement, USB boot-order marker and EEPROM backup |
 | `/home/atlas-containers/` | Rootless Podman storage, generated environment files and persistent user configuration |
+| `/persistent/shared/{etc,var}/.../NetworkManager` | Slot-shared IP/Wi-Fi profiles and NetworkManager secret state |
 | Podman named volumes | PostgreSQL, API, Caddy, map, router and shared geodata state |
 
 Changing system slots does not revert any of these paths. This is a feature for
@@ -108,7 +110,7 @@ System services handle host-level policy:
 - NetworkManager, systemd-resolved and network-online coordination;
 - persistent SSH state;
 - one-time Raspberry Pi EEPROM boot-order policy;
-- the placeholder privileged management service.
+- the authenticated Unix-socket management API and early-boot factory reset.
 
 The lingering `atlas-containers` user manager handles:
 
@@ -137,7 +139,7 @@ The configuration deliberately avoids one monolithic custom layer:
 | `atlas-ab-update` | Signed inactive-slot update tooling |
 | `atlas-device-policy` | Serial console, PCIe Gen 3 and EEPROM boot order |
 | `atlas-ssh` | Hardened, persistent, disabled-by-default SSH |
-| `atlas-management` | Placeholder privileged management service |
+| `atlas-management` | Privileged Unix-socket API, A/B health commit and factory reset |
 | `atlas-branding` | Console/SSH branding and `os-release` identity |
 
 Keep future features in the narrowest sensible layer. Cross-layer ordering is

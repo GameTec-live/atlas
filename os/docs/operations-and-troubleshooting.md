@@ -161,41 +161,56 @@ If SSH is unexpectedly unavailable:
 
 ## Management service
 
-`atlas-management.service` is currently a hardened placeholder. It runs as
-host root, creates the persistent trusted-origin allowlist, logs that no
-external API exists, then waits. It cannot yet power-cycle the Pi or receive UI
-commands.
+`atlas-management.service` runs the privileged Go API on
+`/run/atlas-management/api.sock`. The socket is group-accessible only to the
+rootless workload account and every request also needs the random token at
+`/home/atlas-containers/.config/atlas/management-token`. Only `atlas-api`
+receives those two paths. The service has no TCP listener and does not download
+updates.
 
-Its current sandbox denies new privileges, private device access, kernel log/
-module/tunable changes, control-group changes, non-Unix address families and
-general filesystem writes. The only declared writable locations are
-`/persistent/atlas/system` and
-`/home/atlas-containers/.config/atlas`. Extend these narrowly when real
-operations are added; broadening the service to unrestricted root would erase
-most of the value of having a small management boundary.
+Its systemd sandbox denies new privileges, kernel log/module/tunable and
+control-group changes. Filesystem writes are limited to update boot metadata,
+management state and Atlas configuration. Raw device access remains available
+because the A/B installer must write the inactive boot/system partitions.
 
 Use:
 
 ```sh
-systemctl status atlas-management.service
+sudo atlas-sys status
 sudo journalctl -u atlas-management.service --no-pager
 ```
 
-The current login MOTD mentions `sudo atlas-sys status`, but no `atlas-sys`
-command is implemented yet. Treat that line as a placeholder; use the systemd
-commands above.
+The root-only `atlas-sys` command supplies the per-device bearer token and
+talks to the Unix socket for these supported operations:
 
-When implementing the real service:
+```sh
+sudo atlas-sys update apply /path/to/atlas-rpi5-update.tar.zst
+sudo atlas-sys update rollback
+sudo atlas-sys reboot
+sudo atlas-sys poweroff
+sudo atlas-sys factory-reset
+```
 
-- expose an authenticated Unix-socket API, not a public root daemon;
-- keep privileged operations small and explicit;
-- delegate SSH state changes to `atlas-ssh`;
-- validate and atomically update the trusted-origin file;
-- run `atlas-auth-origins` as UID 2000 and restart the API after origin changes;
-- preserve the existing systemd sandbox and add permissions only when an
-  implemented operation demonstrably needs them;
-- carefully design authorization, replay protection and UI-to-host request
-  boundaries before adding reboot/power operations.
+Factory reset requires typing `RESET` interactively. Use `factory-reset --yes`
+only from automation that has already obtained explicit authorization for the
+destructive operation.
+
+`GET /api/v1/update` reports both A/B state and the automatic trial monitor.
+After an uploaded update tryboots, all eight containers and the local HTTPS API
+must remain healthy for five continuous minutes before automatic commit. Any
+failed observation resets the timer; an unhealthy candidate remains uncommitted
+and an ordinary reboot returns to the previous slot.
+
+Factory reset is deliberately two-stage. The request writes a marker and
+reboots. Before NetworkManager or containers start, `atlas-factory-reset`
+deletes application volumes, configuration/secrets, network profiles, machine
+identity, logs and host policy, then reboots into the fresh state. It preserves
+the LUKS container and hardware-bound key when encrypted, and retains the OCI
+image layers required for offline startup. Factory reset is rejected while an
+A/B update is pending.
+
+The complete endpoint contract and local curl examples are in the
+[management API README](../../apps/osManagementAPI/README.md).
 
 ## Adding external auth origins
 

@@ -15,6 +15,10 @@ not embed a site SSID or credentials. systemd-resolved owns DNS through the
 systemd-timesyncd supplies time synchronization. Global IPv6 addresses use
 privacy extensions (`ipv6.ip6-privacy=2`).
 
+Connection profiles and NetworkManager's secret state are explicit slot-shared
+paths, so static IP and Wi-Fi configuration survives an A/B update. Factory
+reset clears both paths before NetworkManager starts.
+
 The minimal diagnostic stack includes CA certificates, `curl`, `ip`, `ping`
 and `ethtool`. nftables is installed because rootless Podman/netavark needs the
 standard host networking stack, but Atlas does not maintain a separate custom
@@ -194,8 +198,9 @@ Consequences:
 
 ## Generated secrets and environment
 
-Persistent files under `/home/atlas-containers/.config/atlas` are mode 0600 and
-owned by `atlas-containers`:
+Persistent files under `/home/atlas-containers/.config/atlas` are owned by
+`atlas-containers`. They are mode 0600 except for the group-readable management
+token:
 
 | File | Purpose |
 | --- | --- |
@@ -204,6 +209,7 @@ owned by `atlas-containers`:
 | `api.env` | Better Auth secret, database URL, service URLs and job token |
 | `trusted-origins` | Management-owned list of additional HTTPS origins |
 | `trusted-origins.env` | Generated Better Auth base URL and complete trusted-origin list |
+| `management-token` | Per-device bearer token for the host management socket (mode 0640) |
 
 Initialization is conservative: secrets and primary env files are generated
 only when missing. Do not delete them casually; deletion rotates credentials
@@ -243,9 +249,9 @@ quietly if the lingering user D-Bus socket is not ready; normal boot generation
 still occurs in `atlas-container-init.service`.
 
 With multiple physical/VPN addresses, “first” follows `ip -o addr` ordering and
-may not be the externally preferred hostname. Additional names can be trusted,
-but the management service will eventually need an explicit canonical-URL
-policy if redirects/callbacks must prefer a public domain.
+may not be the externally preferred hostname. Additional names can be trusted
+through the management API. An explicit canonical-URL policy is still needed
+if redirects/callbacks must prefer a public domain.
 
 To add domains manually:
 

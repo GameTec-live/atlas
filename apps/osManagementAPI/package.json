@@ -1,0 +1,13 @@
+{
+    "name": "os-management-api",
+    "private": true,
+    "scripts": {
+        "build": "go build -o bin/atlas-management",
+        "dev": "go run .",
+        "test": "go test ./...",
+        "format": "go fmt ./...",
+        "lint": "go vet ./...",
+        "check": "go test ./... && go vet ./...",
+        "check-types": "go test -run=^$ ./..."
+    }
+}

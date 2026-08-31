@@ -1,6 +1,7 @@
 # Atlas Raspberry Pi image
 
-This directory is an independent, out-of-tree `rpi-image-gen` source tree. It
+This directory is an out-of-tree `rpi-image-gen` source tree. In the Atlas
+repository build it also compiles the sibling `apps/osManagementAPI` module. It
 builds a minimal Raspberry Pi 5 appliance with an immutable A/B root, persistent
 data, rootless Podman Quadlets, NetworkManager, optional SSH and text branding.
 
@@ -35,6 +36,7 @@ git -C rpi-image-gen checkout 33e98d9aca74b83002ab01ff760ae5d4fa8e99a5
 sudo ./rpi-image-gen/install_deps.sh
 sudo apt-get install podman ripgrep shellcheck zstd
 chmod +x os/pre-build.sh os/post-image.sh os/ci/*.sh
+# Go 1.26+ is also required to build apps/osManagementAPI for ARM64.
 ./os/ci/validate.sh ./os ./rpi-image-gen
 ATLAS_UPDATE_SIGNING_KEY="$PWD/os/keys/atlas-update.key" \
   ./rpi-image-gen/rpi-image-gen build -S "$PWD/os" -c atlas.yaml
@@ -126,6 +128,27 @@ regenerates the environment and restarts the API after DHCP address changes.
 The management service may update the same file for externally configured
 domains, then run `atlas-auth-origins` as the `atlas-containers` user and
 restart `atlas-api.service`.
+
+## OS management API
+
+The root service listens only on `/run/atlas-management/api.sock`. The API
+container receives that socket plus a per-device bearer-token file; no other
+workload receives either. Updates are streamed over this socket rather than
+downloaded by the root daemon. Trial boots are committed after all eight
+containers remain healthy for five minutes. Power, NetworkManager, trusted
+origin and factory-reset operations use the same narrow API. See the
+[management API contract](../apps/osManagementAPI/README.md).
+
+Host administrators can use the authenticated Unix-socket client directly:
+
+```sh
+sudo atlas-sys status
+sudo atlas-sys update apply /path/to/atlas-rpi5-update.tar.zst
+sudo atlas-sys factory-reset
+```
+
+Factory reset asks for the exact confirmation `RESET` before scheduling the
+wipe and reboot.
 
 ## Device policy
 

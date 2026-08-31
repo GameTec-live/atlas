@@ -18,6 +18,12 @@ if [ ! -s "$db_password_file" ]; then
 fi
 db_password=$(cat "$db_password_file")
 
+management_token_file="$config_dir/management-token"
+if [ ! -s "$management_token_file" ]; then
+    umask 027
+    openssl rand -hex 32 > "$management_token_file"
+fi
+
 write_if_missing() {
     target=$1
     shift
@@ -47,3 +53,4 @@ EOF
 fi
 
 chmod 0600 "$config_dir"/*.env "$db_password_file"
+chmod 0640 "$management_token_file"

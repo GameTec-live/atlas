@@ -52,6 +52,32 @@ rg -q 'geodata-consumer=router' "$quadlet_dir/atlas-router.container"
 rg -q 'geodata-consumer=geocoder' "$quadlet_dir/atlas-geocoder.container"
 rg -q -F 'EnvironmentFile=%h/.config/atlas/trusted-origins.env' \
     "$quadlet_dir/atlas-api.container"
+rg -q -F 'Volume=/run/atlas-management:/run/atlas-management:ro' \
+    "$quadlet_dir/atlas-api.container"
+rg -q -F 'management-token:/run/secrets/atlas-management-token:ro' \
+    "$quadlet_dir/atlas-api.container"
+rg -q -F 'GroupAdd=keep-groups' "$quadlet_dir/atlas-api.container"
+[[ "$(rg -l '/run/atlas-management' "$quadlet_dir" | wc -l)" -eq 1 ]]
+
+management_unit="$source_root/layer/atlas-management.rootfs-overlay/usr/lib/systemd/system/atlas-management.service"
+reset_unit="$source_root/layer/atlas-management.rootfs-overlay/usr/lib/systemd/system/atlas-factory-reset.service"
+rg -q -F 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK' "$management_unit"
+rg -q -F 'ConditionPathExists=/persistent/atlas/system/factory-reset-pending' "$reset_unit"
+rg -q -F 'Before=multi-user.target NetworkManager.service user@2000.service atlas-management.service' "$reset_unit"
+rg -q -F 'SuccessAction=reboot' "$reset_unit"
+rg -q -F 'factory-reset [--yes]' \
+    "$source_root/layer/atlas-management.rootfs-overlay/usr/local/sbin/atlas-sys"
+management_cli="$source_root/layer/atlas-management.rootfs-overlay/usr/local/sbin/atlas-sys"
+rg -q -F 'ATLAS_SYS_SOCKET:-/run/atlas-management/api.sock' "$management_cli"
+rg -q -F 'Authorization: Bearer $(token)' "$management_cli"
+rg -q -F 'request GET /api/v1/update' "$management_cli"
+rg -q -F 'request POST /api/v1/update --form "bundle=@$bundle"' "$management_cli"
+rg -q -F 'request POST /api/v1/update/rollback' "$management_cli"
+rg -q -F 'request POST /api/v1/factory-reset' "$management_cli"
+rg -q -F 'Path=/etc/NetworkManager/system-connections' \
+    "$source_root/layer/atlas-networking.rootfs-overlay/etc/rpi-image-gen/slot-shared.d/atlas-networkmanager.conf"
+rg -q -F 'Path=/var/lib/NetworkManager' \
+    "$source_root/layer/atlas-networking.rootfs-overlay/etc/rpi-image-gen/slot-shared.d/atlas-networkmanager.conf"
 
 container_init="$source_root/layer/atlas-podman.rootfs-overlay/usr/local/libexec/atlas-container-init"
 if rg -q '^BETTER_AUTH_URL=' "$container_init"; then

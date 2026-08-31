@@ -151,8 +151,8 @@ secrets.
 - The web container receives only `NET_BIND_SERVICE` so rootless Caddy can bind
   ports 80/443. The host lowers `net.ipv4.ip_unprivileged_port_start` to 80 for
   all unprivileged processes, which is a deliberate host-wide trade-off.
-- The management placeholder runs as host root but has systemd sandboxing and
-  narrow writable paths. It does not yet expose an API.
+- The management API runs as host root but listens only on its authenticated
+  Unix socket and retains narrow systemd/filesystem permissions.
 - Serial console is enabled for recovery. Physical console access is therefore
   a privileged attack surface and must be controlled operationally.
 - PCIe Gen 3 is enabled on Pi 5 even though it is not the conservative certified

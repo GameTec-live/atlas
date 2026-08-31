@@ -12,9 +12,14 @@ Network=atlas.network
 NetworkAlias=api
 User=65532
 Group=65532
+GroupAdd=keep-groups
 EnvironmentFile=%h/.config/atlas/api.env
 EnvironmentFile=%h/.config/atlas/trusted-origins.env
+Environment=OS_MANAGEMENT_SOCKET=/run/atlas-management/api.sock
+Environment=OS_MANAGEMENT_TOKEN_FILE=/run/secrets/atlas-management-token
 Volume=atlas-api-data.volume:/data
+Volume=/run/atlas-management:/run/atlas-management:ro
+Volume=%h/.config/atlas/management-token:/run/secrets/atlas-management-token:ro
 NoNewPrivileges=true
 DropCapability=all
 

@@ -116,10 +116,11 @@ that can corrupt the ownership which should appear on the target.
 
 ### `pre-build.sh`
 
-1. reads non-empty, non-comment entries from `images.txt`;
-2. pulls each image explicitly for `linux/arm64`;
-3. saves all eight tagged images into one deduplicated Docker-format archive;
-4. exposes the archive to the `atlas-podman` layer.
+1. builds `apps/osManagementAPI` as a static Linux/ARM64 host binary;
+2. reads non-empty, non-comment entries from `images.txt`;
+3. pulls each image explicitly for `linux/arm64`;
+4. saves all eight tagged images into one deduplicated Docker-format archive;
+5. exposes the binary and archive to their image layers.
 
 The build must have registry access, including access to any private image if a
 future image list introduces one.
@@ -147,6 +148,8 @@ will reject the update.
 - exact tryboot invocation behavior;
 - generation of every Quadlet;
 - the single Podman socket mount and required reloader labels;
+- management socket/token mounts only on `atlas-api`;
+- factory-reset ordering and slot-shared NetworkManager state;
 - dynamic Better Auth configuration wiring;
 - every image listed in `images.txt` has a matching Quadlet.
 
@@ -154,6 +157,7 @@ will reject the update.
 checks the assembled root filesystem and output artifacts, including:
 
 - required networking/security binaries and symlinks;
+- the static management binary, socket configuration and reset unit;
 - branded `os-release` fields;
 - auth-origin helper and migration behavior;
 - ownership of persistent rootless directories;

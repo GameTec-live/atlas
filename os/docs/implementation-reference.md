@@ -6,7 +6,7 @@
 | --- | --- |
 | `config/atlas.yaml` | Composes the Pi 5 device, image layout, Atlas layers, public update key and secure-boot policy |
 | `images.txt` | Authoritative list of OCI tags captured for offline first boot |
-| `pre-build.sh` | Pulls ARM64 images and creates the multi-image archive |
+| `pre-build.sh` | Builds the ARM64 management binary, pulls ARM64 images and creates the multi-image archive |
 | `post-image.sh` | Adds hashes/signature to the generated A/B bundle |
 | `ci/validate.sh` | Fast source/configuration/Quadlet validation |
 | `ci/audit-build.sh` | Post-build filesystem, partition, OCI and signature audit |
@@ -47,6 +47,7 @@ When adding a layer or changing ordering:
 | NetworkManager packages and online target | `layer/atlas-networking.yaml` |
 | systemd-resolved and IPv6 privacy config | `layer/atlas-networking.rootfs-overlay/etc/NetworkManager/conf.d/10-atlas.conf` |
 | Dynamic auth refresh on network events | `layer/atlas-podman.rootfs-overlay/etc/NetworkManager/dispatcher.d/90-atlas-auth-origins` |
+| Slot-shared NetworkManager profiles and secrets | `layer/atlas-networking.rootfs-overlay/etc/rpi-image-gen/slot-shared.d/atlas-networkmanager.conf` |
 | Rootless low-port sysctl | `layer/atlas-podman.rootfs-overlay/etc/sysctl.d/90-atlas-rootless-ports.conf` |
 
 ### Rootless runtime and workloads
@@ -70,7 +71,8 @@ When adding a layer or changing ordering:
 | EEPROM boot-order service/tool | `layer/atlas-device-policy.rootfs-overlay/usr/lib/systemd/system/atlas-usb-boot-order.service`, `usr/local/sbin/atlas-usb-boot-order` |
 | Encryption diagnostic | `layer/atlas-device-policy.rootfs-overlay/usr/local/sbin/atlas-security-status` |
 | Persistent SSH controller and hardening | `layer/atlas-ssh.rootfs-overlay/` |
-| Placeholder privileged management service | `layer/atlas-management.rootfs-overlay/` |
+| Privileged management API and factory-reset boot unit | `apps/osManagementAPI/`, `layer/atlas-management.rootfs-overlay/` |
+| Root-only management CLI | `layer/atlas-management.rootfs-overlay/usr/local/sbin/atlas-sys` |
 
 ## Invariants to preserve
 
@@ -108,6 +110,22 @@ When adding a layer or changing ordering:
 - Interface filtering does not trust Podman/virtual bridge addresses.
 - Managed origins remain persistent, HTTPS-only and path-free.
 - Address-change regeneration restarts the API through the UID 2000 user bus.
+- NetworkManager profiles remain shared across A/B slots and are erased by a
+  factory reset.
+
+### Management boundary
+
+- The manager listens only on `/run/atlas-management/api.sock`.
+- Socket access requires the retained UID 2000 group and every request also
+  requires the per-device bearer token.
+- Update data enters only as a streamed upload; the root service has no update
+  downloader.
+- A candidate is committed only after all eight workloads stay healthy for
+  five continuous minutes.
+- Factory reset preserves the encryption container and OCI image layers, but
+  removes application data, credentials, host policy and network profiles.
+- `atlas-sys` remains a narrow Unix-socket client and keeps destructive reset
+  confirmation in front of the API call.
 
 ### Security and persistence
 

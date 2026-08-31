@@ -1,13 +1,23 @@
 # METABEGIN
 # X-Env-Layer-Name: atlas-management
 # X-Env-Layer-Category: atlas
-# X-Env-Layer-Desc: Placeholder privileged Atlas system-management service.
+# X-Env-Layer-Desc: Privileged Atlas system-management API over a Unix socket.
 # X-Env-Layer-Version: 1.0.0
 # X-Env-Layer-Requires: systemd-min
+#
+# X-Env-VarPrefix: atlasmanagement
+#
+# X-Env-Var-binary: ${IGconf_sys_workroot}/atlas-management
+# X-Env-Var-binary-Desc: Statically linked ARM64 Atlas management API binary.
+# X-Env-Var-binary-Required: n
+# X-Env-Var-binary-Valid: string
+# X-Env-Var-binary-Set: y
 # METAEND
 ---
 mmdebstrap:
   customize-hooks:
-    - chmod 0755 "$1/usr/local/libexec/atlas-management"
-    - chmod 0644 "$1/usr/lib/systemd/system/atlas-management.service"
-    - $BDEBSTRAP_HOOKS/enable-units "$1" atlas-management.service
+    - install -D -m 0755 "$IGconf_atlasmanagement_binary" "$1/usr/local/libexec/atlas-management"
+    - chmod 0755 "$1/usr/local/sbin/atlas-sys"
+    - chmod 0644 "$1/usr/lib/systemd/system/atlas-management.service" "$1/usr/lib/systemd/system/atlas-factory-reset.service"
+    - chmod 0644 "$1/usr/lib/tmpfiles.d/atlas-management.conf"
+    - $BDEBSTRAP_HOOKS/enable-units "$1" atlas-management.service atlas-factory-reset.service

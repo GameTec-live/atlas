@@ -6,12 +6,9 @@ on:
       - main
     paths:
       - "os/**"
+      - "apps/osManagementAPI/**"
       - ".github/workflows/os.yml"
   push:
-    tags:
-      - "v*"
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -79,6 +76,12 @@ jobs:
           sudo chmod o+x /home/runner
           sudo ./rpi-image-gen/install_deps.sh
           sudo apt-get install -y --no-install-recommends podman ripgrep shellcheck zstd
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: atlas/apps/osManagementAPI/go.mod
+          cache-dependency-path: atlas/apps/osManagementAPI/go.mod
 
       - name: Validate configuration
         run: |

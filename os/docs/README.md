@@ -13,6 +13,7 @@ minimal Raspberry Pi 5 appliance for the Atlas container stack.
 | Pick the correct first-install artifact and provision a device | [Provisioning and security](provisioning-and-security.md) |
 | Understand or operate the rootless containers and networking | [Containers and networking](containers-and-networking.md) |
 | Install, validate, commit or recover an A/B update | [A/B updates](updates.md) |
+| Operate the privileged Unix-socket API or factory reset | [Operations and troubleshooting](operations-and-troubleshooting.md#management-service) |
 | Bring up a device, change SSH/origins, or diagnose failures | [Operations and troubleshooting](operations-and-troubleshooting.md) |
 | Find the source file responsible for a feature | [Implementation reference](implementation-reference.md) |
 
@@ -39,6 +40,8 @@ Always verify the artifact against the release `SHA256SUMS` before using it.
   socket can control every container owned by `atlas-containers`; the router
   and geocoder labels are an application-level restriction, not a kernel-level
   boundary.
+- The API container is the only workload with the separate OS-management
+  socket and token. The host manager has no TCP listener and no downloader.
 - The current API image requires `BETTER_AUTH_URL`. Atlas therefore generates
   it from the current interface addresses; simply deleting the variable makes
   the API fail its environment validation and restart repeatedly.
