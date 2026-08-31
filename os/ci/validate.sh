@@ -56,7 +56,7 @@ rg -q -F 'Volume=/run/atlas-management:/run/atlas-management:ro' \
     "$quadlet_dir/atlas-api.container"
 rg -q -F 'management-token:/run/secrets/atlas-management-token:ro' \
     "$quadlet_dir/atlas-api.container"
-rg -q -F 'GroupAdd=keep-groups' "$quadlet_dir/atlas-api.container"
+rg -q -F 'PodmanArgs=--group-add=keep-groups' "$quadlet_dir/atlas-api.container"
 [[ "$(rg -l '/run/atlas-management' "$quadlet_dir" | wc -l)" -eq 1 ]]
 
 management_unit="$source_root/layer/atlas-management.rootfs-overlay/usr/lib/systemd/system/atlas-management.service"

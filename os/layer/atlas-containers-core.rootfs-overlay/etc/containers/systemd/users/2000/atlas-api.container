@@ -11,7 +11,7 @@ ContainerName=atlas-api
 Network=atlas.network:alias=api
 User=65532
 Group=65532
-GroupAdd=keep-groups
+PodmanArgs=--group-add=keep-groups
 EnvironmentFile=%h/.config/atlas/api.env
 EnvironmentFile=%h/.config/atlas/trusted-origins.env
 Environment=OS_MANAGEMENT_SOCKET=/run/atlas-management/api.sock
