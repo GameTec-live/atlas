@@ -37,6 +37,8 @@ import kotlinx.coroutines.delay
 import org.gtlv.atlas.R
 import org.gtlv.atlas.location.toAndroidLocation
 import org.gtlv.core.location.LocationState
+import org.gtlv.core.map.addLiveMapUserLayers
+import org.gtlv.core.map.updateLiveMapUsers
 import org.gtlv.core.location.VehicleHeadingEstimator
 import org.gtlv.core.geoservice.RoutePoint
 import org.gtlv.core.telemetry.LiveMapUser

@@ -29,6 +29,9 @@ import androidx.car.app.CarContext
 import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
 import org.gtlv.core.location.AtlasLocation
+import org.gtlv.core.map.addLiveMapUserLayers
+import org.gtlv.core.map.liveMapMarkerColor
+import org.gtlv.core.map.updateLiveMapUsers
 import org.gtlv.core.geoservice.RoutePoint
 import org.gtlv.core.telemetry.LiveMapUser
 import org.gtlv.core.telemetry.TelemetryVehicleState
@@ -109,6 +112,7 @@ internal class MapLibreSurfaceRenderer(
     )
     private var queuedJobCount = 0
     private var sidebarUsers: List<SidebarUser> = emptyList()
+    private var liveMapUsers: List<LiveMapUser> = emptyList()
     private var routePoints: List<RoutePoint> = emptyList()
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
@@ -343,6 +347,11 @@ internal class MapLibreSurfaceRenderer(
     }
 
     fun updateLiveUsers(users: Collection<LiveMapUser>) {
+        liveMapUsers = users.toList()
+        if (isStyleReady) {
+            map?.style?.updateLiveMapUsers(liveMapUsers)
+        }
+
         val updatedUsers = users
             .map { user ->
                 SidebarUser(
@@ -489,6 +498,8 @@ internal class MapLibreSurfaceRenderer(
             activateLocationPuck(readyMap, style)
             style.addAutomotiveRouteLayers()
             style.updateAutomotiveRoute(routePoints)
+            style.addLiveMapUserLayers()
+            style.updateLiveMapUsers(liveMapUsers)
             isStyleReady = true
             lastLocation?.let { location ->
                 updateLocationPuck(readyMap, location)
@@ -1151,7 +1162,7 @@ internal class MapLibreSurfaceRenderer(
             addView(
                 TextView(context).apply {
                     text = "\u25CF ${carContext.getString(user.state.statusResource())}"
-                    setTextColor(user.state.statusColor())
+                    setTextColor(user.state.liveMapMarkerColor)
                     textSize = 17f
                 },
             )
@@ -1167,13 +1178,6 @@ internal class MapLibreSurfaceRenderer(
             org.gtlv.car_common.R.string.driver_status_occupied
         TelemetryVehicleState.AWAY ->
             org.gtlv.car_common.R.string.driver_status_away
-    }
-
-    private fun TelemetryVehicleState.statusColor(): Int = when (this) {
-        TelemetryVehicleState.FREE -> Color.rgb(0, 170, 70)
-        TelemetryVehicleState.ON_THE_WAY -> Color.rgb(210, 145, 0)
-        TelemetryVehicleState.OCCUPIED -> Color.rgb(220, 35, 45)
-        TelemetryVehicleState.AWAY -> Color.rgb(150, 155, 165)
     }
 
     private fun TelemetryVehicleState.sidebarSortOrder(): Int = when (this) {

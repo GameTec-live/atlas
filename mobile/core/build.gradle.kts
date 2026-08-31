@@ -23,6 +23,7 @@ android {
 }
 
 dependencies {
+    api(libs.maplibre.sdk)
     implementation(libs.androidx.car.app)
     implementation(libs.google.play.services.location)
     implementation(libs.androidx.appcompat)
