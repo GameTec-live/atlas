@@ -8,7 +8,7 @@ Image=ghcr.io/gametec-live/atlas-geodata-api:latest
 Pull=missing
 AutoUpdate=registry
 ContainerName=atlas-geodata-api
-Network=atlas.network
+Network=atlas.network:alias=geodata-api
 Network=geodata-control.network:alias=geodata-api
 User=65532
 Group=65532
