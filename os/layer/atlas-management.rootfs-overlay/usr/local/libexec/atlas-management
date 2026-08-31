@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+install -d -m 0700 /persistent/atlas/system
+echo "Atlas management placeholder started; no external API is implemented yet."
+
+# Replace this loop with the authenticated Unix-socket management API. Keep
+# privileged operations small and delegate SSH state to /usr/local/sbin/atlas-ssh.
+trap 'exit 0' INT TERM
+while :; do
+    sleep 3600 &
+    wait "$!"
+done

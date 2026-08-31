@@ -1,0 +1,24 @@
+[Unit]
+Description=Atlas system management service
+After=local-fs.target
+RequiresMountsFor=/persistent
+
+[Service]
+Type=simple
+ExecStart=/usr/local/libexec/atlas-management
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/persistent/atlas/system
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

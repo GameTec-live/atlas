@@ -1,0 +1,50 @@
+# METABEGIN
+# X-Env-Layer-Name: atlas-podman
+# X-Env-Layer-Category: atlas
+# X-Env-Layer-Desc: Rootless Podman, Quadlet and automatic registry updates.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: atlas-users
+#
+# X-Env-VarPrefix: atlasoci
+#
+# X-Env-Var-archive: ${IGconf_sys_workroot}/atlas-images.tar
+# X-Env-Var-archive-Desc: Build-time multi-image archive loaded on first boot.
+# X-Env-Var-archive-Required: n
+# X-Env-Var-archive-Valid: string
+# X-Env-Var-archive-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - aardvark-dns
+    - crun
+    - dbus-user-session
+    - fuse-overlayfs
+    - netavark
+    - nftables
+    - openssl
+    - passt
+    - podman
+    - slirp4netns
+    - uidmap
+  customize-hooks:
+    - |-
+      set -eu
+      home="$1/home/atlas-containers"
+      install -d -m 0700 -o 2000 -g 2000 "$home/.config/systemd/user/timers.target.wants"
+      install -d -m 0700 -o 2000 -g 2000 "$home/.config/systemd/user/sockets.target.wants"
+      ln -sf /usr/lib/systemd/user/podman-auto-update.timer \
+        "$home/.config/systemd/user/timers.target.wants/podman-auto-update.timer"
+      ln -sf /usr/lib/systemd/user/podman.socket \
+        "$home/.config/systemd/user/sockets.target.wants/podman.socket"
+      chown -h 2000:2000 \
+        "$home/.config/systemd/user/timers.target.wants/podman-auto-update.timer" \
+        "$home/.config/systemd/user/sockets.target.wants/podman.socket"
+      install -d -m 0700 -o 2000 -g 2000 "$home/.cache/atlas"
+      install -m 0600 -o 2000 -g 2000 \
+        "$IGconf_atlasoci_archive" "$home/.cache/atlas/images.tar"
+      # install -d does not change intermediate directories it creates. The
+      # user service must be able to add its generated Atlas configuration.
+      chown -R 2000:2000 "$home/.config" "$home/.cache"
+      chmod 0755 "$1/usr/local/libexec/atlas-container-init"
+      chmod 0644 "$1/usr/lib/systemd/user/atlas-container-init.service"

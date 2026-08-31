@@ -1,0 +1,158 @@
+name: Atlas OS
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "os/**"
+      - ".github/workflows/os.yml"
+  push:
+    tags:
+      - "v*"
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: os-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  RPI_IMAGE_GEN_REVISION: 33e98d9aca74b83002ab01ff760ae5d4fa8e99a5
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Atlas
+        uses: actions/checkout@v6
+        with:
+          path: atlas
+
+      - name: Check out pinned rpi-image-gen
+        uses: actions/checkout@v6
+        with:
+          repository: raspberrypi/rpi-image-gen
+          ref: ${{ env.RPI_IMAGE_GEN_REVISION }}
+          path: rpi-image-gen
+
+      - name: Install validation dependencies
+        run: |
+          sudo apt-get update
+          sudo ./rpi-image-gen/install_deps.sh
+          sudo apt-get install -y --no-install-recommends podman ripgrep shellcheck
+
+      - name: Validate configuration
+        run: |
+          chmod +x atlas/os/pre-build.sh atlas/os/post-image.sh atlas/os/ci/*.sh
+          ./atlas/os/ci/validate.sh "$GITHUB_WORKSPACE/atlas/os" "$GITHUB_WORKSPACE/rpi-image-gen"
+
+  build:
+    name: Build and publish
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - name: Check out Atlas
+        uses: actions/checkout@v6
+        with:
+          path: atlas
+
+      - name: Check out pinned rpi-image-gen
+        uses: actions/checkout@v6
+        with:
+          repository: raspberrypi/rpi-image-gen
+          ref: ${{ env.RPI_IMAGE_GEN_REVISION }}
+          path: rpi-image-gen
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo chmod o+x /home/runner
+          sudo ./rpi-image-gen/install_deps.sh
+          sudo apt-get install -y --no-install-recommends podman ripgrep shellcheck zstd
+
+      - name: Validate configuration
+        run: |
+          chmod +x atlas/os/pre-build.sh atlas/os/post-image.sh atlas/os/ci/*.sh
+          ./atlas/os/ci/validate.sh "$GITHUB_WORKSPACE/atlas/os" "$GITHUB_WORKSPACE/rpi-image-gen"
+
+      - name: Select build version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            version=$GITHUB_REF_NAME
+          else
+            version=${GITHUB_SHA:0:12}
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build image
+        env:
+          ATLAS_UPDATE_SIGNING_KEY: ${{ github.workspace }}/atlas/os/keys/atlas-update.key
+        run: |
+          mkdir -p "$RUNNER_TEMP/atlas-image-work"
+          ./rpi-image-gen/rpi-image-gen build \
+            -S "$GITHUB_WORKSPACE/atlas/os" \
+            -c atlas.yaml \
+            -B "$RUNNER_TEMP/atlas-image-work" \
+            -- IGconf_artefact_version="${{ steps.version.outputs.value }}"
+
+      - name: Audit build
+        run: ./atlas/os/ci/audit-build.sh "$RUNNER_TEMP/atlas-image-work"
+
+      - name: Stage release files
+        id: files
+        shell: bash
+        run: |
+          set -euo pipefail
+          work_root="$RUNNER_TEMP/atlas-image-work"
+          release_dir="$RUNNER_TEMP/atlas-release"
+          version="${{ steps.version.outputs.value }}"
+          deploy_dir=$(find "$work_root" -maxdepth 1 -type d -name 'deploy-*' -print -quit)
+          provisioning=$(find "$deploy_dir" -maxdepth 1 -type f -name 'atlas-rpi5-*.tar.zst' -print -quit)
+          mkdir -p "$release_dir"
+          install -m 0644 "$provisioning" \
+            "$release_dir/atlas-rpi5-${version}-provisioning.tar.zst"
+          install -m 0644 "$deploy_dir/atlas-rpi5.img.zst" \
+            "$release_dir/atlas-rpi5-${version}-development.img.zst"
+          install -m 0644 "$work_root/image-atlas-rpi5/update.tar.zst" \
+            "$release_dir/atlas-rpi5-${version}-update.tar.zst"
+          (cd "$release_dir" && sha256sum atlas-rpi5-* > SHA256SUMS)
+          echo "directory=$release_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: atlas-os-${{ steps.version.outputs.value }}
+          path: ${{ steps.files.outputs.directory }}/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Publish GitHub Release assets
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_DIR: ${{ steps.files.outputs.directory }}
+        shell: bash
+        run: |
+          files=("$RELEASE_DIR"/*)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" \
+              --verify-tag \
+              --generate-notes \
+              --title "Atlas OS $GITHUB_REF_NAME"
+          fi

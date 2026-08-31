@@ -1,0 +1,12 @@
+[Unit]
+Description=Apply persistent Atlas SSH state
+After=local-fs.target
+RequiresMountsFor=/persistent
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/atlas-ssh apply
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

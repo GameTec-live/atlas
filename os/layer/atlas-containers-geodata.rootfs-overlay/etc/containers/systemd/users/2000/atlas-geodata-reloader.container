@@ -1,0 +1,30 @@
+[Unit]
+Description=Atlas geodata consumer reloader
+Requires=atlas-container-init.service podman.socket
+After=atlas-container-init.service podman.socket
+
+[Container]
+Image=ghcr.io/gametec-live/atlas-geodata-reloader:latest
+Pull=missing
+AutoUpdate=registry
+ContainerName=atlas-geodata-reloader
+Network=geodata-control.network
+NetworkAlias=geodata-reloader
+User=65532
+Group=65532
+UserNS=keep-id:uid=65532,gid=65532
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+SecurityLabelDisable=true
+Volume=%t/podman/podman.sock:/var/run/docker.sock
+# Keep the image's exec-form healthcheck. This scratch image has no shell, so a
+# Quadlet HealthCmd string would fail as a shell-form healthcheck.
+Notify=healthy
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

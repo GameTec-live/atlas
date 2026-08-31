@@ -1,0 +1,54 @@
+#!/bin/sh
+set -eu
+
+state_dir=/persistent/atlas/system
+marker=$state_dir/usb-boot-order.applied
+order=0xf164
+
+case "$(tr -d '\000' < /proc/device-tree/model 2>/dev/null || true)" in
+    *Raspberry\ Pi\ 5*) ;;
+    *)
+        echo "Atlas USB boot policy applies only to Raspberry Pi 5; skipping."
+        exit 0
+        ;;
+esac
+
+install -d -m 0700 "$state_dir"
+current=$(mktemp)
+updated=$(mktemp)
+trap 'rm -f "$current" "$updated"' EXIT INT TERM
+
+rpi-eeprom-config > "$current"
+cp -f "$current" "$state_dir/eeprom-config.before-usb-order"
+chmod 0600 "$state_dir/eeprom-config.before-usb-order"
+
+awk -v order="$order" '
+    BEGIN { replaced = 0 }
+    /^BOOT_ORDER=/ { print "BOOT_ORDER=" order; replaced = 1; next }
+    { print }
+    END { if (!replaced) print "BOOT_ORDER=" order }
+' "$current" > "$updated"
+
+if cmp -s "$current" "$updated"; then
+    printf '%s\n' "$order" > "$marker"
+    exit 0
+fi
+
+remounted=n
+cleanup_mount() {
+    if [ "$remounted" = y ]; then
+        mount -o remount,ro /boot/firmware || true
+    fi
+}
+trap 'cleanup_mount; rm -f "$current" "$updated"' EXIT INT TERM
+
+mount -o remount,rw /boot/firmware
+remounted=y
+rpi-eeprom-config --apply "$updated"
+sync /boot/firmware
+cleanup_mount
+remounted=n
+
+printf '%s\n' "$order" > "$marker"
+chmod 0600 "$marker"
+echo "Scheduled USB-first EEPROM boot order $order; it will apply on reboot."

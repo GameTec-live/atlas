@@ -1,0 +1,30 @@
+# METABEGIN
+# X-Env-Layer-Name: atlas-ab-update
+# X-Env-Layer-Category: atlas
+# X-Env-Layer-Desc: Safe inactive-slot installation and Raspberry Pi tryboot control.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: rpi-ab-slot-mapper
+#
+# X-Env-VarPrefix: abupdate
+#
+# X-Env-Var-public_key:
+# X-Env-Var-public_key-Desc: Optional PEM public key required for signed updates.
+# X-Env-Var-public_key-Required: n
+# X-Env-Var-public_key-Valid: string-or-empty
+# X-Env-Var-public_key-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - android-sdk-libsparse-utils
+    - openssl
+    - tar
+    - zstd
+  customize-hooks:
+    - chmod 0755 "$1/usr/local/sbin/atlas-ab-update"
+    - |-
+      set -eu
+      if [ -n "${IGconf_abupdate_public_key:-}" ]; then
+        install -D -m 0644 "$IGconf_abupdate_public_key" \
+          "$1/etc/atlas/update-public.pem"
+      fi

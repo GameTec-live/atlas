@@ -1,0 +1,27 @@
+[Unit]
+Description=Atlas geocoder
+Requires=atlas-container-init.service
+After=atlas-container-init.service
+
+[Container]
+Image=ghcr.io/gametec-live/geocoder-go:latest
+Pull=missing
+AutoUpdate=registry
+ContainerName=atlas-geocoder
+Network=atlas.network
+NetworkAlias=geocoder
+User=65532
+Group=65532
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+Label=live.gametec.atlas.geodata-consumer=geocoder
+Volume=atlas-geodata.volume:/data:ro
+Notify=healthy
+
+[Service]
+Restart=always
+TimeoutStartSec=12h
+
+[Install]
+WantedBy=default.target

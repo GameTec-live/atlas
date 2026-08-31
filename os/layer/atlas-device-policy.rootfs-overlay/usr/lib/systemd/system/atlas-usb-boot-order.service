@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule the Atlas USB-first Raspberry Pi boot order
+After=local-fs.target
+RequiresMountsFor=/persistent /boot/firmware
+ConditionPathExists=!/persistent/atlas/system/usb-boot-order.applied
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/atlas-usb-boot-order
+
+[Install]
+WantedBy=multi-user.target

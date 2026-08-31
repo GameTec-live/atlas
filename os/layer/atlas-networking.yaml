@@ -1,0 +1,29 @@
+# METABEGIN
+# X-Env-Layer-Name: atlas-networking
+# X-Env-Layer-Category: atlas
+# X-Env-Layer-Desc: NetworkManager DHCP networking and essential network tools.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: network-manager-iwd,wireless-regulatory,
+#  systemd-resolved,systemd-timesyncd,ca-certificates
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - curl
+    - ethtool
+    - iproute2
+    - iputils-ping
+  customize-hooks:
+    - $BDEBSTRAP_HOOKS/enable-units "$1" NetworkManager-wait-online.service
+    - |-
+      # Rootless Quadlet waits for the system network-online target. Pull the
+      # target into every normal boot, otherwise the user manager waits forever.
+      install -d "$1/etc/systemd/system/multi-user.target.wants"
+      ln -sfn /usr/lib/systemd/system/network-online.target \
+        "$1/etc/systemd/system/multi-user.target.wants/network-online.target"
+    - $BDEBSTRAP_HOOKS/disable-units "$1" systemd-networkd.service systemd-networkd.socket
+  # Keep mmdebstrap's temporary resolver until every customize hook has had a
+  # chance to install packages inside the target chroot.
+  cleanup-hooks:
+    - rm -f "$1/etc/resolv.conf"
+    - ln -s /run/systemd/resolve/stub-resolv.conf "$1/etc/resolv.conf"

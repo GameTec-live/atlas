@@ -1,0 +1,26 @@
+[Unit]
+Description=Atlas PostgreSQL database
+Requires=atlas-container-init.service
+After=atlas-container-init.service
+
+[Container]
+Image=docker.io/library/postgres:18-alpine
+Pull=missing
+AutoUpdate=registry
+ContainerName=atlas-db
+Network=atlas.network
+NetworkAlias=db
+EnvironmentFile=%h/.config/atlas/db.env
+Volume=atlas-db-data.volume:/var/lib/postgresql/18/docker
+HealthCmd=pg_isready -U atlas
+HealthInterval=10s
+HealthTimeout=5s
+HealthRetries=5
+Notify=healthy
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

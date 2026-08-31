@@ -1,0 +1,182 @@
+#!/bin/sh
+set -eu
+
+state_dir=/persistent/atlas/system
+pending_file=$state_dir/update-pending
+public_key=/etc/atlas/update-public.pem
+
+die() {
+    echo "atlas-ab-update: $*" >&2
+    exit 1
+}
+
+require_root() {
+    [ "$(id -u)" -eq 0 ] || die "must run as root"
+}
+
+slot_device() {
+    role=$1
+    component=$2
+    device="/dev/disk/by-slot/$role/$component"
+    [ -b "$device" ] || die "missing slot device: $device"
+    readlink -f "$device"
+}
+
+slot_label() {
+    lsblk -ndo PARTLABEL "$1" 2>/dev/null | head -n 1
+}
+
+write_autoboot() {
+    tmp=$(mktemp /bootfs/autoboot.txt.XXXXXX)
+    rpi-slot-tryboot > "$tmp"
+    chmod 0644 "$tmp"
+    mv -f "$tmp" /bootfs/autoboot.txt
+    sync /bootfs
+}
+
+convert_payload() {
+    source=$1
+    destination=$2
+    magic=$(od -An -N4 -tx1 "$source" | tr -d ' \n')
+    if [ "$magic" = "3aff26ed" ]; then
+        simg2img "$source" "$destination"
+    else
+        cp --sparse=always "$source" "$destination"
+    fi
+}
+
+write_payload() {
+    source=$1
+    target=$2
+    source_size=$(stat -c %s "$source")
+    target_size=$(blockdev --getsize64 "$target")
+    [ "$source_size" -le "$target_size" ] || \
+        die "$source is larger than $target"
+    dd if="$source" of="$target" bs=4M conv=fsync,notrunc status=progress
+}
+
+install_update() {
+    require_root
+    insecure=n
+    reboot=n
+    bundle=
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --insecure) insecure=y ;;
+            --reboot) reboot=y ;;
+            -*) die "unknown option: $1" ;;
+            *) [ -z "$bundle" ] || die "only one bundle may be installed"; bundle=$1 ;;
+        esac
+        shift
+    done
+    [ -n "$bundle" ] || die "usage: atlas-ab-update install [--insecure] [--reboot] BUNDLE"
+    [ -f "$bundle" ] || die "bundle does not exist: $bundle"
+    [ ! -e "$pending_file" ] || die "an update is already pending"
+
+    install -d -m 0700 "$state_dir"
+    work=$(mktemp -d "$state_dir/update.XXXXXX")
+    trap 'rm -rf "$work"' EXIT INT TERM
+
+    members=$(tar --zstd -tf "$bundle" | sed 's#^\./##')
+    for required in boot system SHA256SUMS; do
+        printf '%s\n' "$members" | grep -qx "$required" || \
+            die "bundle is missing $required"
+    done
+    printf '%s\n' "$members" | while IFS= read -r member; do
+        case "$member" in
+            boot|system|SHA256SUMS|SHA256SUMS.sig) ;;
+            *) die "unexpected bundle member: $member" ;;
+        esac
+    done
+    tar --zstd --extract --file "$bundle" --directory "$work" --no-same-owner
+    (cd "$work" && sha256sum --check --strict SHA256SUMS)
+
+    if [ -f "$public_key" ]; then
+        [ -f "$work/SHA256SUMS.sig" ] || die "signed update required"
+        openssl dgst -sha256 -verify "$public_key" \
+            -signature "$work/SHA256SUMS.sig" "$work/SHA256SUMS" >/dev/null || \
+            die "invalid update signature"
+    elif [ "$insecure" != y ]; then
+        die "no update public key is installed; use --insecure only for development"
+    fi
+
+    other_system=$(slot_device other system)
+    other_boot=$(slot_device other boot)
+    active_system=$(slot_device active system)
+    [ "$other_system" != "$active_system" ] || die "slot mapper returned the active system as the target"
+
+    convert_payload "$work/system" "$work/system.raw"
+    convert_payload "$work/boot" "$work/boot.raw"
+
+    # System first, boot second, and tryboot metadata last: interruption cannot
+    # select a partially written candidate.
+    write_payload "$work/system.raw" "$other_system"
+    write_payload "$work/boot.raw" "$other_boot"
+    sync
+
+    candidate=$(slot_label "$other_system")
+    [ -n "$candidate" ] || candidate=$other_system
+    printf '%s\n' "$candidate" > "$pending_file"
+    chmod 0600 "$pending_file"
+    write_autoboot
+
+    echo "Installed candidate $candidate; the next tryboot must be committed explicitly."
+    if [ "$reboot" = y ]; then
+        # The Raspberry Pi firmware only selects the [tryboot] partition when
+        # the kernel reboot command contains this exact request.
+        reboot '0 tryboot'
+    fi
+}
+
+commit_update() {
+    require_root
+    [ -s "$pending_file" ] || die "no update is pending"
+    active_system=$(slot_device active system)
+    active=$(slot_label "$active_system")
+    [ -n "$active" ] || active=$active_system
+    pending=$(cat "$pending_file")
+    [ "$active" = "$pending" ] || \
+        die "running slot $active is not pending candidate $pending"
+    write_autoboot
+    rm -f "$pending_file"
+    sync "$state_dir"
+    echo "Committed slot $active."
+}
+
+rollback_update() {
+    require_root
+    [ -s "$pending_file" ] || die "no update is pending"
+    active_system=$(slot_device active system)
+    active=$(slot_label "$active_system")
+    [ -n "$active" ] || active=$active_system
+    pending=$(cat "$pending_file")
+    if [ "$active" = "$pending" ]; then
+        echo "Rebooting without commit; Raspberry Pi tryboot will return to the previous slot."
+        systemctl reboot
+    else
+        rm -f "$pending_file"
+        echo "Cleared the failed candidate marker; current slot is $active."
+    fi
+}
+
+status_update() {
+    active_system=$(slot_device active system)
+    other_system=$(slot_device other system)
+    echo "active=$(slot_label "$active_system") ($active_system)"
+    echo "other=$(slot_label "$other_system") ($other_system)"
+    if [ -s "$pending_file" ]; then
+        echo "pending=$(cat "$pending_file")"
+    else
+        echo "pending=none"
+    fi
+}
+
+command=${1:-}
+[ "$#" -gt 0 ] && shift
+case "$command" in
+    install) install_update "$@" ;;
+    commit) commit_update "$@" ;;
+    rollback) rollback_update "$@" ;;
+    status) status_update "$@" ;;
+    *) die "usage: atlas-ab-update {install|commit|rollback|status}" ;;
+esac

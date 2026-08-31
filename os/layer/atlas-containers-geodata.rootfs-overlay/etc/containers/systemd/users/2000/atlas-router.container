@@ -1,0 +1,23 @@
+[Unit]
+Description=Atlas routing engine
+Requires=atlas-container-init.service
+After=atlas-container-init.service
+
+[Container]
+Image=ghcr.io/gametec-live/atlas-router:latest
+Pull=missing
+AutoUpdate=registry
+ContainerName=atlas-router
+Network=atlas.network
+NetworkAlias=router
+Label=live.gametec.atlas.geodata-consumer=router
+Volume=atlas-router-data.volume:/custom_files
+Volume=atlas-geodata.volume:/pbf:ro
+Notify=healthy
+
+[Service]
+Restart=always
+TimeoutStartSec=12h
+
+[Install]
+WantedBy=default.target

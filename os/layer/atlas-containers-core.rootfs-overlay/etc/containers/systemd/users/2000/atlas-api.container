@@ -1,0 +1,25 @@
+[Unit]
+Description=Atlas API
+Requires=atlas-container-init.service atlas-db.service
+After=atlas-container-init.service atlas-db.service
+
+[Container]
+Image=ghcr.io/gametec-live/atlas-api:latest
+Pull=missing
+AutoUpdate=registry
+ContainerName=atlas-api
+Network=atlas.network
+NetworkAlias=api
+User=65532
+Group=65532
+EnvironmentFile=%h/.config/atlas/api.env
+Volume=atlas-api-data.volume:/data
+NoNewPrivileges=true
+DropCapability=all
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,59 @@
+#!/bin/sh
+set -eu
+
+state_dir=/persistent/atlas/system
+state_file=$state_dir/ssh.state
+
+[ "$(id -u)" -eq 0 ] || {
+    echo "atlas-ssh: must run as root" >&2
+    exit 1
+}
+
+write_state() {
+    value=$1
+    install -d -m 0700 "$state_dir"
+    tmp=$(mktemp "$state_dir/ssh.state.XXXXXX")
+    printf '%s\n' "$value" > "$tmp"
+    chmod 0600 "$tmp"
+    mv -f "$tmp" "$state_file"
+    sync "$state_dir"
+}
+
+start_ssh() {
+    systemctl --no-block start ssh.service
+}
+
+stop_ssh() {
+    systemctl --no-block stop ssh.service
+}
+
+case "${1:-}" in
+    enable)
+        write_state enabled
+        start_ssh
+        echo "SSH enabled."
+        ;;
+    disable)
+        write_state disabled
+        stop_ssh
+        echo "SSH disabled."
+        ;;
+    apply)
+        if [ -f "$state_file" ] && [ "$(cat "$state_file")" = enabled ]; then
+            start_ssh
+        else
+            stop_ssh
+        fi
+        ;;
+    status)
+        if [ -f "$state_file" ]; then
+            cat "$state_file"
+        else
+            echo disabled
+        fi
+        ;;
+    *)
+        echo "usage: atlas-ssh {enable|disable|apply|status}" >&2
+        exit 2
+        ;;
+esac

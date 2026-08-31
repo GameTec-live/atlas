@@ -1,0 +1,11 @@
+# METABEGIN
+# X-Env-Layer-Name: atlas-containers-geodata
+# X-Env-Layer-Category: atlas
+# X-Env-Layer-Desc: Rootless Atlas geodata and consumer Quadlets.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: atlas-containers-core
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - find "$1/etc/containers/systemd/users/2000" -type f -exec chmod 0644 {} +
