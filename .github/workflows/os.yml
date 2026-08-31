@@ -111,7 +111,7 @@ jobs:
             -- IGconf_artefact_version="${{ steps.version.outputs.value }}"
 
       - name: Audit build
-        run: ./atlas/os/ci/audit-build.sh "$RUNNER_TEMP/atlas-image-work"
+        run: podman unshare ./atlas/os/ci/audit-build.sh "$RUNNER_TEMP/atlas-image-work"
 
       - name: Stage release files
         id: files
