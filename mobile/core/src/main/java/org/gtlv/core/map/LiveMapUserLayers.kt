@@ -1,6 +1,5 @@
 package org.gtlv.core.map
 
-import android.app.Notification
 import android.graphics.Color
 import com.google.gson.JsonObject
 import org.gtlv.core.telemetry.LiveMapUser
