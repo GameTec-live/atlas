@@ -119,7 +119,7 @@ that can corrupt the ownership which should appear on the target.
 1. builds `apps/osManagementAPI` as a static Linux/ARM64 host binary;
 2. reads non-empty, non-comment entries from `images.txt`;
 3. pulls each image explicitly for `linux/arm64`;
-4. saves all eight tagged images into one deduplicated Docker-format archive;
+4. saves all ten tagged images into one deduplicated Docker-format archive;
 5. exposes the binary and archive to their image layers.
 
 The build must have registry access, including access to any private image if a
@@ -163,7 +163,7 @@ checks the assembled root filesystem and output artifacts, including:
 - ownership of persistent rootless directories;
 - serial, PCIe and SSH enablement policy;
 - provisioning-map expansion flags;
-- exactly eight expected ARM64 images in the offline archive;
+- exactly ten expected ARM64 images in the offline archive;
 - update payload hashes and signature against the embedded public key.
 
 Keep both scripts. Validation catches cheap source mistakes before a long

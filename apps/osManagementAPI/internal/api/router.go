@@ -20,6 +20,7 @@ import (
 
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/health"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/networkmanager"
+	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/remoteaccess"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/update"
 )
 
@@ -71,6 +72,14 @@ type OriginsManager interface {
 	RestartAPI(context.Context) error
 }
 
+type RemoteAccessManager interface {
+	Status(context.Context) (remoteaccess.Status, error)
+	ProvisionCloudflare(context.Context, remoteaccess.CloudflareRequest) error
+	RemoveCloudflare(context.Context) error
+	ProvisionTailscale(context.Context, remoteaccess.TailscaleRequest) error
+	RemoveTailscale(context.Context) error
+}
+
 type Scheduler interface {
 	After(time.Duration, func())
 }
@@ -88,6 +97,7 @@ type Dependencies struct {
 	SSH            SSHManager
 	Network        NetworkManager
 	Origins        OriginsManager
+	RemoteAccess   RemoteAccessManager
 	Scheduler      Scheduler
 }
 
@@ -123,6 +133,11 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	router.HandleFunc("GET /api/v1/connections/auth-origins", h.origins)
 	router.HandleFunc("POST /api/v1/connections/auth-origins", h.addOrigin)
 	router.HandleFunc("DELETE /api/v1/connections/auth-origins", h.removeOrigin)
+	router.HandleFunc("GET /api/v1/connections/remote-access", h.remoteAccessStatus)
+	router.HandleFunc("PUT /api/v1/connections/remote-access/cloudflare-tunnel", h.provisionCloudflare)
+	router.HandleFunc("DELETE /api/v1/connections/remote-access/cloudflare-tunnel", h.removeCloudflare)
+	router.HandleFunc("PUT /api/v1/connections/remote-access/tailscale", h.provisionTailscale)
+	router.HandleFunc("DELETE /api/v1/connections/remote-access/tailscale", h.removeTailscale)
 	return h.authenticate(router)
 }
 
@@ -309,7 +324,7 @@ func (h *handler) disableSSH(writer http.ResponseWriter, request *http.Request) 
 }
 
 func (h *handler) adapters(writer http.ResponseWriter, _ *http.Request) {
-	writeJSON(writer, http.StatusOK, map[string]any{"items": []map[string]string{{"id": "network-manager", "status": "available"}, {"id": "auth-origins", "status": "available"}, {"id": "cloudflare-tunnel", "status": "placeholder"}}})
+	writeJSON(writer, http.StatusOK, map[string]any{"items": []map[string]string{{"id": "network-manager", "status": "available"}, {"id": "auth-origins", "status": "available"}, {"id": "cloudflare-tunnel", "status": "available"}, {"id": "tailscale", "status": "available"}}})
 }
 
 func (h *handler) connections(writer http.ResponseWriter, request *http.Request) {
@@ -413,6 +428,60 @@ func (h *handler) changeOrigin(writer http.ResponseWriter, request *http.Request
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{"items": items, "count": len(items)})
 	h.schedule("Atlas API restart after trusted-origin change", h.dependencies.Origins.RestartAPI)
+}
+
+func (h *handler) remoteAccessStatus(writer http.ResponseWriter, request *http.Request) {
+	status, err := h.dependencies.RemoteAccess.Status(request.Context())
+	if err != nil {
+		fail(writer, http.StatusInternalServerError, "remote_access_status_failed", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, status)
+}
+
+func (h *handler) provisionCloudflare(writer http.ResponseWriter, request *http.Request) {
+	var body remoteaccess.CloudflareRequest
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	h.changeRemoteAccess(writer, request, func(ctx context.Context) error {
+		return h.dependencies.RemoteAccess.ProvisionCloudflare(ctx, body)
+	})
+}
+
+func (h *handler) removeCloudflare(writer http.ResponseWriter, request *http.Request) {
+	h.changeRemoteAccess(writer, request, h.dependencies.RemoteAccess.RemoveCloudflare)
+}
+
+func (h *handler) provisionTailscale(writer http.ResponseWriter, request *http.Request) {
+	var body remoteaccess.TailscaleRequest
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	h.changeRemoteAccess(writer, request, func(ctx context.Context) error {
+		return h.dependencies.RemoteAccess.ProvisionTailscale(ctx, body)
+	})
+}
+
+func (h *handler) removeTailscale(writer http.ResponseWriter, request *http.Request) {
+	h.changeRemoteAccess(writer, request, h.dependencies.RemoteAccess.RemoveTailscale)
+}
+
+func (h *handler) changeRemoteAccess(writer http.ResponseWriter, request *http.Request, change func(context.Context) error) {
+	if !h.beginMutation(writer) {
+		return
+	}
+	defer h.mutations.Unlock()
+	if err := change(request.Context()); err != nil {
+		fail(writer, http.StatusBadRequest, "remote_access_failed", err.Error())
+		return
+	}
+	status, err := h.dependencies.RemoteAccess.Status(request.Context())
+	if err != nil {
+		fail(writer, http.StatusInternalServerError, "remote_access_status_failed", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, status)
 }
 
 func (h *handler) mutate(writer http.ResponseWriter, request *http.Request, code string, operation func(context.Context) error) {

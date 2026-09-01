@@ -9,11 +9,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/health"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/networkmanager"
+	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/remoteaccess"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/update"
 )
 
@@ -89,6 +91,30 @@ func (fakeOrigins) Add(context.Context, string) ([]string, error)    { return ni
 func (fakeOrigins) Remove(context.Context, string) ([]string, error) { return nil, nil }
 func (fakeOrigins) RestartAPI(context.Context) error                 { return nil }
 
+type fakeRemoteAccess struct {
+	status remoteaccess.Status
+}
+
+func (r *fakeRemoteAccess) Status(context.Context) (remoteaccess.Status, error) {
+	return r.status, nil
+}
+func (r *fakeRemoteAccess) ProvisionCloudflare(_ context.Context, _ remoteaccess.CloudflareRequest) error {
+	r.status.CloudflareTunnel = remoteaccess.ProviderStatus{Provisioned: true, State: "active", Detail: "running"}
+	return nil
+}
+func (r *fakeRemoteAccess) RemoveCloudflare(context.Context) error {
+	r.status.CloudflareTunnel = remoteaccess.ProviderStatus{State: "not_provisioned"}
+	return nil
+}
+func (r *fakeRemoteAccess) ProvisionTailscale(_ context.Context, _ remoteaccess.TailscaleRequest) error {
+	r.status.Tailscale = remoteaccess.ProviderStatus{Provisioned: true, State: "active", Detail: "running"}
+	return nil
+}
+func (r *fakeRemoteAccess) RemoveTailscale(context.Context) error {
+	r.status.Tailscale = remoteaccess.ProviderStatus{State: "not_provisioned"}
+	return nil
+}
+
 type immediateScheduler struct{}
 
 func (immediateScheduler) After(_ time.Duration, operation func()) { operation() }
@@ -106,6 +132,7 @@ func testRouter(stateDir string, updateManager *fakeUpdate, powerManager *fakePo
 		SSH:            &fakeSSH{},
 		Network:        fakeNetwork{},
 		Origins:        fakeOrigins{},
+		RemoteAccess:   &fakeRemoteAccess{},
 		Scheduler:      immediateScheduler{},
 	})
 }
@@ -124,6 +151,7 @@ func TestSSHStatusEnableAndDisable(t *testing.T) {
 		SSH:            sshManager,
 		Network:        fakeNetwork{},
 		Origins:        fakeOrigins{},
+		RemoteAccess:   &fakeRemoteAccess{},
 		Scheduler:      immediateScheduler{},
 	})
 
@@ -174,6 +202,28 @@ func TestRunningContainersReturnsCurrentVersions(t *testing.T) {
 	}
 	if body.Count != 1 || len(body.Items) != 1 || body.Items[0].Version != "2.4.1" || body.Items[0].ImageID != "sha256:api" {
 		t.Fatalf("unexpected container response: %#v", body)
+	}
+}
+
+func TestRemoteAccessCanBeProvisionedAndGathered(t *testing.T) {
+	manager := &fakeRemoteAccess{}
+	router := NewRouter(Dependencies{Token: "secret-token", RemoteAccess: manager})
+
+	body := bytes.NewBufferString(`{"authKey":"tskey-auth-test","hostname":"atlas-1"}`)
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/connections/remote-access/tailscale", body)
+	request.Header.Set("Authorization", "Bearer secret-token")
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !manager.status.Tailscale.Provisioned {
+		t.Fatalf("provision failed: code=%d body=%s", response.Code, response.Body.String())
+	}
+
+	request = authenticatedRequest(http.MethodGet, "/api/v1/connections/remote-access")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"tailscale":{"provisioned":true,"state":"active","detail":"running"}`) {
+		t.Fatalf("unexpected status: code=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

@@ -83,7 +83,16 @@ sudo -u atlas-containers \
     atlas-geodata-api atlas-geodata-reloader
 ```
 
-All eight should eventually report `active`.
+All eight core workloads should eventually report `active`.
+
+The optional connectors report `inactive` until provisioned. After
+provisioning, inspect them with:
+
+```sh
+sudo -u atlas-containers \
+  XDG_RUNTIME_DIR=/run/user/2000 \
+  systemctl --user status atlas-cloudflare-tunnel atlas-tailscale
+```
 
 ### External endpoints
 
@@ -201,8 +210,16 @@ sudo atlas-sys poweroff
 sudo atlas-sys ssh status
 sudo atlas-sys ssh enable
 sudo atlas-sys ssh disable
+sudo atlas-sys remote-access status
+sudo atlas-sys cloudflare-tunnel provision /path/to/cloudflare-token
+sudo atlas-sys cloudflare-tunnel remove
+sudo atlas-sys tailscale provision /path/to/tailscale-auth-key atlas-1
+sudo atlas-sys tailscale remove
 sudo atlas-sys factory-reset
 ```
+
+Remote-access credentials are read from files and are not literal command-line
+arguments. Pass `-` as the file to read a credential from stdin.
 
 Factory reset requires typing `RESET` interactively. Use `factory-reset --yes`
 only from automation that has already obtained explicit authorization for the
@@ -226,6 +243,22 @@ update is pending.
 
 The complete endpoint contract and local curl examples are in the
 [management API README](../../apps/osManagementAPI/README.md).
+
+Remote access is managed directly through that authenticated Unix socket:
+
+```text
+GET    /api/v1/connections/remote-access
+PUT    /api/v1/connections/remote-access/cloudflare-tunnel
+DELETE /api/v1/connections/remote-access/cloudflare-tunnel
+PUT    /api/v1/connections/remote-access/tailscale
+DELETE /api/v1/connections/remote-access/tailscale
+```
+
+One aggregate `GET` gathers both providers. A provider `PUT` persists its
+credential and starts its rootless Quadlet in the same call. A `DELETE` stops
+the Quadlet and removes local credentials; Tailscale local node state is also
+removed. Provider-side revocation remains an explicit Cloudflare or Tailscale
+control-plane operation.
 
 ## Adding external auth origins
 

@@ -98,6 +98,8 @@ reloader. The geodata API also joins `atlas.network`; the reloader does not.
 | `atlas-geocoder` | 65532 | `atlas` as `geocoder` | shared geodata read-only | Read-only root; labeled `geodata-consumer=geocoder`; long start timeout |
 | `atlas-geodata-api` | 65532 | `atlas`, `geodata-control` | shared geodata read/write | Read-only root plus a constrained `/tmp` tmpfs |
 | `atlas-geodata-reloader` | 65532 with keep-id mapping | `geodata-control` | rootless Podman socket | Read-only root; all capabilities dropped; SELinux label separation disabled for the socket mount |
+| `atlas-cloudflare-tunnel` | 65532 | host | none | Optional, condition-gated connector; read-only root and all capabilities dropped |
+| `atlas-tailscale` | root in the user namespace | host, userspace Tailscale | Tailscale node state | Optional, condition-gated connector; read-only root and all capabilities dropped |
 
 The router, geocoder and map use a 12-hour systemd start timeout because first
 data processing/health checks can be genuinely long. Do not replace these with
@@ -118,6 +120,32 @@ All other ports remain on Podman bridges. The host setting
 `net.ipv4.ip_unprivileged_port_start=80` lets rootless Caddy bind 80/443. It also
 allows any host user to bind ports 80 and above; this is not scoped only to
 Podman.
+
+## Optional remote access
+
+Cloudflare Tunnel and Tailscale are shipped in the offline image but remain
+stopped until their credential files exist. The management API provisions and
+starts either provider with one `PUT`, reports both with one `GET`, and stops
+and removes one with `DELETE`. Both are still rootless Podman containers owned
+by UID 2000. They use host networking so their outbound connectors can proxy
+the local Atlas HTTPS listener without publishing another host port.
+
+Tailscale runs in userspace mode, needs no `/dev/net/tun` or `NET_ADMIN`, and
+applies the immutable serve policy at `/usr/share/atlas/tailscale-serve.json`.
+That policy exposes `https://<node>.<tailnet>.ts.net/` and proxies it to the
+local Atlas HTTPS listener. Cloudflare uses a remotely managed tunnel token;
+configure its public hostname's service as `https://127.0.0.1:443` with origin
+TLS verification disabled for Atlas's device-local certificate.
+
+After provisioning, add the connector's external HTTPS URL through the
+management API's `auth-origins` adapter. Trusted origins and DNS/tunnel routing
+are separate policies; provisioning remote transport does not guess a public
+Cloudflare hostname or a tailnet domain.
+
+Neither connector receives the Podman socket or the OS-management socket.
+Removing local configuration does not revoke provider-side credentials, so
+retiring a device must also remove it in the Cloudflare or Tailscale control
+plane.
 
 ## Geodata reloader and the Podman socket
 
@@ -222,6 +250,8 @@ token:
 | `trusted-origins` | Management-owned list of additional HTTPS origins |
 | `trusted-origins.env` | Generated Better Auth base URL and complete trusted-origin list |
 | `management-token` | Per-device bearer token for the host management socket (mode 0640) |
+| `cloudflare-tunnel.env` | Cloudflare Tunnel token; created only when provisioned |
+| `tailscale.env` | Tailscale auth key and optional hostname; created only when provisioned |
 
 Initialization is conservative: secrets and primary env files are generated
 only when missing. Do not delete them casually; deletion rotates credentials

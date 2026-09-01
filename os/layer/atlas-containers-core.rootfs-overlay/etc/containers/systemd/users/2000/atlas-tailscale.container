@@ -1,0 +1,32 @@
+[Unit]
+Description=Atlas Tailscale connector
+Requires=atlas-container-init.service
+After=atlas-container-init.service network-online.target
+Wants=network-online.target
+ConditionPathExists=%h/.config/atlas/tailscale.env
+
+[Container]
+Image=docker.io/tailscale/tailscale:stable
+Pull=missing
+AutoUpdate=registry
+ContainerName=atlas-tailscale
+Network=host
+EnvironmentFile=%h/.config/atlas/tailscale.env
+Environment=TS_STATE_DIR=/var/lib/tailscale
+Environment=TS_USERSPACE=true
+Environment=TS_AUTH_ONCE=true
+Environment=TS_SERVE_CONFIG=/config/serve.json
+Volume=atlas-tailscale-state.volume:/var/lib/tailscale
+Volume=/usr/share/atlas/tailscale-serve.json:/config/serve.json:ro
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+Tmpfs=/tmp:rw,noexec,nosuid,size=16m
+
+[Service]
+Restart=always
+RestartSec=5s
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

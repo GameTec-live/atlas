@@ -21,6 +21,7 @@ import (
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/networkmanager"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/origins"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/power"
+	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/remoteaccess"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/reset"
 	sshmanager "github.com/GameTec-live/atlas/apps/osManagementAPI/internal/ssh"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/update"
@@ -93,6 +94,7 @@ func main() {
 		SSH:            sshmanager.New(runner),
 		Network:        networkmanager.New(runner),
 		Origins:        origins.New(cfg.TrustedOriginsPath, cfg.ContainerUID, runner),
+		RemoteAccess:   remoteaccess.New(cfg.RemoteAccessDir, cfg.ContainerUID, runner),
 		Scheduler:      realScheduler{},
 	})
 	server := &http.Server{
