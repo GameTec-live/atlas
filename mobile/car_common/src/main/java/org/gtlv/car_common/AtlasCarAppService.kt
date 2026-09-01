@@ -21,6 +21,7 @@ import org.gtlv.core.location.CarLocationProvider
 import org.gtlv.core.location.CarLocationProviderRegistry
 import org.gtlv.core.location.LocationProviderProvider
 import org.gtlv.core.job.JobRepositoryProvider
+import org.gtlv.core.job.JobNotificationSyncProvider
 import org.gtlv.core.job.CollectedJobStoreProvider
 import org.gtlv.core.geoservice.GeoServiceRepositoryProvider
 import org.gtlv.core.session.SessionManagerProvider
@@ -84,6 +85,8 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
         val liveMapUsers =
             (carContext.applicationContext as? LiveMapUsersProvider)
                 ?.liveMapUsers
+        val jobNotificationSync =
+            carContext.applicationContext as? JobNotificationSyncProvider
 
         return WaitingScreen(
             carContext = carContext,
@@ -106,6 +109,13 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                     getUserId = getUserId,
                     telemetryProvider = telemetryProvider,
                     liveMapUsers = liveMapUsers,
+                    jobNotifications = jobNotificationSync?.jobNotifications,
+                    resolvedJobNotifications =
+                        jobNotificationSync?.resolvedJobNotifications,
+                    resolveJobNotification =
+                        jobNotificationSync?.let { sync ->
+                            sync::resolveJobNotification
+                        },
                 )
 
                 carContext.getCarService(ScreenManager::class.java).push(roleScreen)

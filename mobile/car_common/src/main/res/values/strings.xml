@@ -28,6 +28,15 @@
     <string name="driver_starting_job">Starting next job…</string>
     <string name="driver_start_job_error">Could not start the next job</string>
     <string name="driver_unknown_address">Unknown address</string>
+    <string name="job_notification_title">New job</string>
+    <string name="job_notification_unassigned_title">New unassigned job</string>
+    <string name="job_notification_from">From: %1$s</string>
+    <string name="job_notification_to">To: %1$s</string>
+    <string name="job_notification_note">Note: %1$s</string>
+    <string name="job_notification_decline">Decline</string>
+    <string name="job_notification_assign_now">Assign Now</string>
+    <string name="job_notification_declining">Declining…</string>
+    <string name="job_notification_decline_failed">Could not decline the new job</string>
     <string name="dispatcher_new_job_unavailable">New job creation is not available yet</string>
     <string name="dispatcher_active_users">Active drivers (%1$d)</string>
     <string name="dispatcher_no_active_users">No other active users</string>

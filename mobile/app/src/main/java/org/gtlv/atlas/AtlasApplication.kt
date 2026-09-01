@@ -25,6 +25,8 @@ import org.gtlv.core.telemetry.TelemetryProviderRegistry
 import org.gtlv.core.telemetry.Telemetry
 import org.gtlv.core.job.JobRepositoryImpl
 import org.gtlv.core.job.JobRepositoryProvider
+import org.gtlv.core.job.JobNotification
+import org.gtlv.core.job.JobNotificationSyncProvider
 import org.gtlv.core.geoservice.GeoServiceRepositoryImpl
 import org.gtlv.core.geoservice.GeoServiceRepositoryProvider
 import org.gtlv.core.telemetry.TelemetryWebSocketSender
@@ -34,6 +36,7 @@ import org.gtlv.core.job.CollectedJobStoreProvider
 import org.gtlv.core.session.SessionManagerProvider
 import org.gtlv.atlas.notification.AppVisibilityTracker
 import org.gtlv.atlas.notification.JobNotificationWebSocket
+import org.gtlv.atlas.notification.JobNotificationSync
 import org.gtlv.atlas.notification.JobSystemNotificationManager
 
 class AtlasApplication : Application(), ShiftSessionProvider,
@@ -41,7 +44,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     TelemetryProviderRegistry, LocationProviderProvider,
     JobRepositoryProvider, CollectedJobStoreProvider,
     SessionManagerProvider, LiveMapUsersProvider,
-    GeoServiceRepositoryProvider {
+    GeoServiceRepositoryProvider, JobNotificationSyncProvider {
 
     private val applicationScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate
@@ -115,6 +118,23 @@ class AtlasApplication : Application(), ShiftSessionProvider,
                 jobSystemNotificationManager,
             scope = applicationScope
         )
+    }
+
+    val jobNotificationSync by lazy {
+        JobNotificationSync(
+            webSocket = jobNotificationWebSocket,
+            scope = applicationScope
+        )
+    }
+
+    override val jobNotifications
+        get() = jobNotificationSync.jobNotifications
+
+    override val resolvedJobNotifications
+        get() = jobNotificationSync.resolvedJobNotifications
+
+    override fun resolveJobNotification(notification: JobNotification) {
+        jobNotificationSync.resolveJobNotification(notification)
     }
 
     val networkClient by lazy {
@@ -216,6 +236,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
 
         applicationTelemetry.start()
         telemetryWebSocketSender.start()
+        jobNotificationSync
         jobNotificationWebSocket.start()
     }
 }

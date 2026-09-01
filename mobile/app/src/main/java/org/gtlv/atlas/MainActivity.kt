@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
             JobNotificationViewModel by viewModels {
         JobNotificationViewModelFactory(
             jobRepository = atlasApplication.jobRepository,
-            webSocket = atlasApplication.jobNotificationWebSocket
+            notificationSync = atlasApplication.jobNotificationSync
         )
     }
 

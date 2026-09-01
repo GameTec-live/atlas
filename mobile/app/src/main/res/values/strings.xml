@@ -161,17 +161,17 @@
 
     <string name="job_notification_channel">Jobs</string>
     <string name="job_notification_channel_description">Notifications about assigned and unassigned jobs</string>
-    <string name="job_notification_title">New Job</string>
+    <string name="job_notification_title">New job</string>
     <string name="job_notification_from">From: %1$s</string>
     <string name="job_notification_to">To: %1$s</string>
     <string name="job_notification_note">Note: %1$s</string>
-    <string name="job_notification_decline">Decline job</string>
-    <string name="job_notification_decline_failed">Could not decline the assigned job</string>
+    <string name="job_notification_decline">Decline</string>
+    <string name="job_notification_decline_failed">Could not decline the new job</string>
     <string name="job_notification_decline_dialog_title">Decline job?</string>
     <string name="job_notification_decline_dialog_message">Do you really want to decline the job from %1$s to %2$s?</string>
     <string name="job_notification_confirm_decline">Decline</string>
-    <string name="unassigned_job_notification_title">New unassigned job!</string>
-    <string name="unassigned_job_notification_assign">Assign now</string>
+    <string name="unassigned_job_notification_title">New unassigned job</string>
+    <string name="unassigned_job_notification_assign">Assign Now</string>
 
     <string name="address_search_hint">Enter address</string>
     <string name="address_search_close">Close address search</string>

@@ -17,12 +17,17 @@ import kotlinx.coroutines.launch
 import org.gtlv.core.job.AssignedJobNotification
 import org.gtlv.core.job.JobActionResult
 import org.gtlv.core.job.JobNotification
+import org.gtlv.core.job.JobNotificationResolution
+import org.gtlv.core.job.JobNotificationType
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.UnassignedJobNotification
+import org.gtlv.core.job.matches
+import org.gtlv.core.job.hasSameIdentity
+import org.gtlv.core.job.type
 
 class JobNotificationViewModel(
     private val jobRepository: JobRepository,
-    private val webSocket: JobNotificationWebSocket
+    private val notificationSync: JobNotificationSync
 ) : ViewModel() {
 
     private val _uiState =
@@ -54,7 +59,7 @@ class JobNotificationViewModel(
 
     init {
         viewModelScope.launch {
-            webSocket.events.collect { event ->
+            notificationSync.events.collect { event ->
                 when (event) {
                     JobNotificationEvent.Connected -> {
                         _refreshRequests.tryEmit(Unit)
@@ -85,6 +90,14 @@ class JobNotificationViewModel(
                 }
             }
         }
+
+        viewModelScope.launch {
+            notificationSync.resolvedJobNotifications.collect { resolution ->
+                applyResolution(resolution)
+                _refreshRequests.tryEmit(Unit)
+                _unassignedRefreshRequests.tryEmit(Unit)
+            }
+        }
     }
 
     fun dismissCurrentNotification() {
@@ -101,23 +114,7 @@ class JobNotificationViewModel(
             return
         }
 
-        val remainingNotifications =
-            state.foregroundNotifications
-                .drop(1)
-
-        _uiState.value = state.copy(
-            foregroundNotifications =
-                remainingNotifications,
-            currentNotificationExpiresAtElapsedRealtime =
-                if (
-                    remainingNotifications
-                        .isNotEmpty()
-                ) {
-                    newExpirationTime()
-                } else {
-                    null
-                }
-        )
+        resolve(currentNotification)
     }
 
     fun declineCurrentNotification() {
@@ -145,33 +142,18 @@ class JobNotificationViewModel(
             return
         }
 
-        webSocket.dismissSystemNotification(jobId)
+        notificationSync.dismissSystemNotification(jobId)
+
+        val notification = _uiState.value.foregroundNotifications
+            .filterIsInstance<UnassignedJobNotification>()
+            .firstOrNull { queued -> queued.jobId == jobId }
+
+        if (notification != null) {
+            resolve(notification)
+        }
 
         _uiState.update { state ->
-            val removedCurrentNotification =
-                state.currentNotification
-                    ?.jobId == jobId
-
-            val remainingNotifications =
-                state.foregroundNotifications
-                    .filterNot { notification ->
-                        notification.jobId == jobId
-                    }
-
             state.copy(
-                foregroundNotifications =
-                    remainingNotifications,
-                currentNotificationExpiresAtElapsedRealtime =
-                    when {
-                        !removedCurrentNotification ->
-                            state
-                                .currentNotificationExpiresAtElapsedRealtime
-
-                        remainingNotifications.isNotEmpty() ->
-                            newExpirationTime()
-
-                        else -> null
-                    },
                 assignmentJobId = jobId
             )
         }
@@ -226,7 +208,7 @@ class JobNotificationViewModel(
         declineTask?.cancel()
         declineTask = null
 
-        webSocket.clearSystemNotifications()
+        notificationSync.clearSystemNotifications()
 
         _uiState.value =
             JobNotificationUiState()
@@ -273,54 +255,22 @@ class JobNotificationViewModel(
 
                 when (result) {
                     JobActionResult.Success -> {
-                        webSocket
-                            .dismissSystemNotification(
-                                notification.jobId
-                            )
-
-                        val state =
-                            _uiState.value
-
-                        val removedCurrentNotification =
-                            state
-                                .currentNotification
-                                ?.jobId ==
-                                    notification.jobId
-
-                        val remainingNotifications =
-                            state
-                                .foregroundNotifications
-                                .filterNot { queued ->
-                                    queued.jobId ==
-                                            notification.jobId
-                                }
-
-                        _uiState.value = state.copy(
-                            foregroundNotifications =
-                                remainingNotifications,
-                            currentNotificationExpiresAtElapsedRealtime =
-                                when {
-                                    !removedCurrentNotification -> {
-                                        state
-                                            .currentNotificationExpiresAtElapsedRealtime
-                                    }
-
-                                    remainingNotifications
-                                        .isNotEmpty() -> {
-                                        newExpirationTime()
-                                    }
-
-                                    else -> null
-                                },
-                            declineConfirmation = null,
-                            decliningJobId = null,
-                            declineFailed = false
-                        )
+                        resolve(notification)
 
                         _refreshRequests.tryEmit(Unit)
                     }
 
                     else -> {
+                        val state = _uiState.value
+                        val notificationIsStillPending =
+                            state.foregroundNotifications.any { queued ->
+                                queued.hasSameIdentity(notification)
+                            } || state.declineConfirmation
+                                ?.hasSameIdentity(notification) == true
+                        if (!notificationIsStillPending) {
+                            return@launch
+                        }
+
                         _uiState.update {
                             it.copy(
                                 decliningJobId = null,
@@ -336,13 +286,61 @@ class JobNotificationViewModel(
         return SystemClock.elapsedRealtime() +
                 JOB_NOTIFICATION_DURATION_MILLIS
     }
+
+    private fun resolve(notification: JobNotification) {
+        val resolution = JobNotificationResolution(
+            jobId = notification.jobId,
+            type = notification.type
+        )
+        applyResolution(resolution)
+        notificationSync.resolveJobNotification(notification)
+    }
+
+    private fun applyResolution(resolution: JobNotificationResolution) {
+        _uiState.update { state ->
+            val removedCurrentNotification =
+                state.currentNotification?.matches(resolution) == true
+            val remainingNotifications =
+                state.foregroundNotifications.filterNot { notification ->
+                    notification.matches(resolution)
+                }
+            val resolvedAssignedNotification =
+                resolution.type == JobNotificationType.ASSIGNED
+
+            state.copy(
+                foregroundNotifications = remainingNotifications,
+                currentNotificationExpiresAtElapsedRealtime = when {
+                    !removedCurrentNotification ->
+                        state.currentNotificationExpiresAtElapsedRealtime
+
+                    remainingNotifications.isNotEmpty() -> newExpirationTime()
+                    else -> null
+                },
+                declineConfirmation = state.declineConfirmation
+                    ?.takeUnless { notification ->
+                        notification.matches(resolution)
+                    },
+                decliningJobId = if (
+                    resolvedAssignedNotification &&
+                    state.decliningJobId == resolution.jobId
+                ) {
+                    null
+                } else {
+                    state.decliningJobId
+                },
+                declineFailed = if (resolvedAssignedNotification) {
+                    false
+                } else {
+                    state.declineFailed
+                }
+            )
+        }
+    }
 }
 
 internal fun JobNotification.hasSameQueueIdentity(
     other: JobNotification
-): Boolean =
-    jobId == other.jobId &&
-            this::class == other::class
+): Boolean = hasSameIdentity(other)
 
 internal fun JobNotificationUiState.withEnqueuedNotification(
     notification: JobNotification,

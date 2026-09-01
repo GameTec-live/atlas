@@ -13,6 +13,7 @@ import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.location.Location
+import android.os.SystemClock
 import android.text.TextUtils
 import android.util.Log
 import android.view.Surface
@@ -20,15 +21,19 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.car.app.CarContext
 import androidx.car.app.SurfaceCallback
 import androidx.car.app.SurfaceContainer
 import org.gtlv.core.location.AtlasLocation
+import org.gtlv.core.job.JobNotification
+import org.gtlv.core.job.UnassignedJobNotification
 import org.gtlv.core.map.addLiveMapUserLayers
 import org.gtlv.core.map.liveMapMarkerColor
 import org.gtlv.core.map.updateLiveMapUsers
@@ -89,6 +94,13 @@ internal class MapLibreSurfaceRenderer(
     private var dispatcherUserScrollView: ScrollView? = null
     private var dispatcherUserRowsView: LinearLayout? = null
     private var dispatcherUserCountView: TextView? = null
+    private var jobNotificationView: LinearLayout? = null
+    private var jobNotificationTitleView: TextView? = null
+    private var jobNotificationFromView: TextView? = null
+    private var jobNotificationToView: TextView? = null
+    private var jobNotificationNoteView: TextView? = null
+    private var jobNotificationProgressView: ProgressBar? = null
+    private var jobNotificationProgressAnimator: ValueAnimator? = null
     private var styleUrl: String? = null
     private var lastLocation: AtlasLocation? = null
     private var isStyleReady = false
@@ -114,6 +126,9 @@ internal class MapLibreSurfaceRenderer(
     private var sidebarUsers: List<SidebarUser> = emptyList()
     private var liveMapUsers: List<LiveMapUser> = emptyList()
     private var routePoints: List<RoutePoint> = emptyList()
+    private var jobNotification: JobNotification? = null
+    private var jobNotificationExpiresAtElapsedRealtime = 0L
+    private var isJobNotificationDeclining = false
 
     override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
         val surface = surfaceContainer.surface ?: return
@@ -194,6 +209,7 @@ internal class MapLibreSurfaceRenderer(
             mapCompassView = newMapView.findCompassView()
             jobCardView?.bringToFront()
             jobCardToggleView?.bringToFront()
+            jobNotificationView?.bringToFront()
             readyMap.uiSettings.apply {
                 isAttributionEnabled = false
                 isLogoEnabled = false
@@ -217,11 +233,13 @@ internal class MapLibreSurfaceRenderer(
     override fun onVisibleAreaChanged(visibleArea: Rect) {
         this.visibleArea = Rect(visibleArea)
         applyVisibleArea()
+        applyJobNotificationInsets()
     }
 
     override fun onStableAreaChanged(stableArea: Rect) {
         this.stableArea = Rect(stableArea)
         applyOverlayInsets()
+        applyJobNotificationInsets()
     }
 
     override fun onScroll(distanceX: Float, distanceY: Float) {
@@ -370,6 +388,30 @@ internal class MapLibreSurfaceRenderer(
         if (sidebarUsers == updatedUsers) return
         sidebarUsers = updatedUsers
         renderDispatcherUsers()
+    }
+
+    fun showJobNotification(
+        notification: JobNotification,
+        expiresAtElapsedRealtime: Long,
+    ) {
+        jobNotification = notification
+        jobNotificationExpiresAtElapsedRealtime = expiresAtElapsedRealtime
+        isJobNotificationDeclining = false
+        renderJobNotification()
+    }
+
+    fun setJobNotificationDeclining(declining: Boolean) {
+        isJobNotificationDeclining = declining
+        updateJobNotificationProgress()
+    }
+
+    fun hideJobNotification() {
+        jobNotificationProgressAnimator?.cancel()
+        jobNotificationProgressAnimator = null
+        jobNotification = null
+        jobNotificationExpiresAtElapsedRealtime = 0L
+        isJobNotificationDeclining = false
+        jobNotificationView?.visibility = View.GONE
     }
 
     fun zoomIn() {
@@ -765,6 +807,21 @@ internal class MapLibreSurfaceRenderer(
             )
         }
 
+        val notificationView = createJobNotificationView(context)
+        jobNotificationView = notificationView
+        root.addView(
+            notificationView,
+            FrameLayout.LayoutParams(
+                responsiveJobNotificationWidth(),
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.START,
+            ).apply {
+                leftMargin = jobNotificationLeftMargin(width)
+                topMargin = jobNotificationTopMargin()
+            },
+        )
+        renderJobNotification()
+
         root.post {
             applyOverlayInsets()
             jobCard.bringToFront()
@@ -772,6 +829,7 @@ internal class MapLibreSurfaceRenderer(
             positionJobCardToggle()
             dispatcherSidebarView?.bringToFront()
             dispatcherSidebarToggleView?.bringToFront()
+            notificationView.bringToFront()
             Log.d(
                 LOG_TAG,
                 "overlay root=${root.width}x${root.height} " +
@@ -796,6 +854,178 @@ internal class MapLibreSurfaceRenderer(
             }
         jobCardView?.post(::positionJobCardToggle)
         applyResponsiveJobCardLayout()
+        applyJobNotificationInsets()
+    }
+
+    private fun createJobNotificationView(context: Context): LinearLayout {
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedBackground(
+                color = Color.argb(242, 32, 33, 36),
+                radiusDp = JOB_NOTIFICATION_RADIUS_DP,
+            )
+            elevation = dp(14).toFloat()
+            visibility = View.GONE
+        }
+
+        val labels = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(14), dp(18), dp(10))
+        }
+        jobNotificationTitleView = TextView(context).apply {
+            setTextColor(Color.WHITE)
+            textSize = 23f
+            maxLines = 1
+            includeFontPadding = false
+        }
+        labels.addView(jobNotificationTitleView)
+        jobNotificationFromView = notificationLabel(context)
+        labels.addView(jobNotificationFromView)
+        jobNotificationToView = notificationLabel(context)
+        labels.addView(jobNotificationToView)
+        jobNotificationNoteView = notificationLabel(context).apply {
+            visibility = View.GONE
+        }
+        labels.addView(jobNotificationNoteView)
+        card.addView(labels)
+
+        jobNotificationProgressView = ProgressBar(
+            context,
+            null,
+            android.R.attr.progressBarStyleHorizontal,
+        ).apply {
+            max = JOB_NOTIFICATION_PROGRESS_MAX
+            progress = JOB_NOTIFICATION_PROGRESS_MAX
+            progressTintList = ColorStateList.valueOf(Color.rgb(70, 135, 255))
+            progressBackgroundTintList =
+                ColorStateList.valueOf(Color.rgb(75, 77, 82))
+        }
+        card.addView(
+            jobNotificationProgressView,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(JOB_NOTIFICATION_PROGRESS_HEIGHT_DP),
+            ),
+        )
+        return card
+    }
+
+    private fun notificationLabel(context: Context): TextView =
+        TextView(context).apply {
+            setTextColor(Color.rgb(215, 218, 224))
+            textSize = 18f
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+            includeFontPadding = false
+        }
+
+    private fun renderJobNotification() {
+        val notification = jobNotification
+        val card = jobNotificationView ?: return
+        if (notification == null) {
+            card.visibility = View.GONE
+            return
+        }
+
+        jobNotificationTitleView?.text = carContext.getString(
+            if (notification is UnassignedJobNotification) {
+                org.gtlv.car_common.R.string.job_notification_unassigned_title
+            } else {
+                org.gtlv.car_common.R.string.job_notification_title
+            },
+        )
+        jobNotificationFromView?.text = carContext.getString(
+            org.gtlv.car_common.R.string.job_notification_from,
+            notification.from,
+        )
+        jobNotificationToView?.apply {
+            val destination = notification.to
+            visibility = if (destination.isNullOrBlank()) {
+                View.GONE
+            } else {
+                View.VISIBLE
+            }
+            text = destination?.takeIf(String::isNotBlank)?.let { address ->
+                carContext.getString(
+                    org.gtlv.car_common.R.string.job_notification_to,
+                    address,
+                )
+            }
+        }
+        jobNotificationNoteView?.apply {
+            val note = notification.note
+            visibility = if (note.isNullOrBlank()) View.GONE else View.VISIBLE
+            text = note?.takeIf(String::isNotBlank)?.let { jobNote ->
+                carContext.getString(
+                    org.gtlv.car_common.R.string.job_notification_note,
+                    jobNote,
+                )
+            }
+        }
+
+        card.visibility = View.VISIBLE
+        updateJobNotificationProgress()
+        applyJobNotificationInsets()
+        card.bringToFront()
+    }
+
+    private fun updateJobNotificationProgress() {
+        jobNotificationProgressAnimator?.cancel()
+        jobNotificationProgressAnimator = null
+        val progressView = jobNotificationProgressView ?: return
+        if (jobNotification == null) return
+
+        val remainingMillis = (
+            jobNotificationExpiresAtElapsedRealtime -
+                SystemClock.elapsedRealtime()
+            ).coerceAtLeast(0L)
+        val progress = (
+            remainingMillis.toDouble() /
+                JOB_NOTIFICATION_DURATION_MILLIS.toDouble() *
+                JOB_NOTIFICATION_PROGRESS_MAX
+            ).roundToInt().coerceIn(0, JOB_NOTIFICATION_PROGRESS_MAX)
+        progressView.progress = progress
+        if (isJobNotificationDeclining || remainingMillis == 0L) return
+
+        jobNotificationProgressAnimator = ValueAnimator.ofInt(progress, 0).apply {
+            duration = remainingMillis
+            interpolator = LinearInterpolator()
+            addUpdateListener { animator ->
+                progressView.progress = animator.animatedValue as Int
+            }
+            start()
+        }
+    }
+
+    private fun applyJobNotificationInsets() {
+        val card = jobNotificationView ?: return
+        val params = card.layoutParams as? FrameLayout.LayoutParams ?: return
+        val width = responsiveJobNotificationWidth()
+        params.width = width
+        params.leftMargin = jobNotificationLeftMargin(width)
+        params.topMargin = jobNotificationTopMargin()
+        card.layoutParams = params
+    }
+
+    private fun responsiveJobNotificationWidth(): Int {
+        val bounds = jobNotificationBounds()
+        val availableWidth =
+            (bounds.width() - dp(OVERLAY_MARGIN_DP * 2)).coerceAtLeast(1)
+        return min(dp(JOB_NOTIFICATION_WIDTH_DP), availableWidth)
+    }
+
+    private fun jobNotificationLeftMargin(width: Int): Int {
+        val bounds = jobNotificationBounds()
+        return bounds.left + ((bounds.width() - width) / 2).coerceAtLeast(0)
+    }
+
+    private fun jobNotificationTopMargin(): Int =
+        jobNotificationBounds().top + dp(OVERLAY_MARGIN_DP)
+
+    private fun jobNotificationBounds(): Rect = when {
+        !stableArea.isEmpty && stableArea.width() > 0 -> Rect(stableArea)
+        !visibleArea.isEmpty && visibleArea.width() > 0 -> Rect(visibleArea)
+        else -> Rect(0, 0, surfaceWidth.coerceAtLeast(1), surfaceHeight)
     }
 
     private fun createJobCardToggle(context: Context): ImageView =
@@ -1405,6 +1635,8 @@ internal class MapLibreSurfaceRenderer(
         jobCardAnimator?.removeAllListeners()
         jobCardAnimator?.cancel()
         jobCardAnimator = null
+        jobNotificationProgressAnimator?.cancel()
+        jobNotificationProgressAnimator = null
         val oldMapView = mapView
         map = null
         mapView = null
@@ -1420,6 +1652,12 @@ internal class MapLibreSurfaceRenderer(
         dispatcherUserScrollView = null
         dispatcherUserRowsView = null
         dispatcherUserCountView = null
+        jobNotificationView = null
+        jobNotificationTitleView = null
+        jobNotificationFromView = null
+        jobNotificationToView = null
+        jobNotificationNoteView = null
+        jobNotificationProgressView = null
         appliedMapPadding = null
         interactionTarget = InteractionTarget.MAP
         isDispatcherSidebarExpanded = false
@@ -1491,6 +1729,11 @@ internal class MapLibreSurfaceRenderer(
         const val JOB_CARD_TOGGLE_RADIUS_DP = 14
         const val JOB_CARD_ANIMATION_DURATION_MILLIS = 240L
         const val OVERLAY_MARGIN_DP = 8
+        const val JOB_NOTIFICATION_WIDTH_DP = 520
+        const val JOB_NOTIFICATION_RADIUS_DP = 16
+        const val JOB_NOTIFICATION_PROGRESS_HEIGHT_DP = 6
+        const val JOB_NOTIFICATION_PROGRESS_MAX = 1_000
+        const val JOB_NOTIFICATION_DURATION_MILLIS = 10_000L
         const val BASE_DENSITY_DPI = 160
         const val MAX_RENDER_DPI = 200
         const val MIN_RENDER_DPI = 140
