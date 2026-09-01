@@ -31,6 +31,11 @@ import org.gtlv.core.telemetry.TelemetryWebSocketSender
 import org.gtlv.core.telemetry.LiveMapUsersProvider
 import org.gtlv.core.job.CollectedJobStore
 import org.gtlv.core.job.CollectedJobStoreProvider
+import org.gtlv.core.job.JobMileageStore
+import org.gtlv.core.job.JobMileageStoreProvider
+import org.gtlv.core.pricing.PricingRepository
+import org.gtlv.core.pricing.PricingRepositoryImpl
+import org.gtlv.core.pricing.PricingRepositoryProvider
 import org.gtlv.core.session.SessionManagerProvider
 import org.gtlv.atlas.notification.AppVisibilityTracker
 import org.gtlv.atlas.notification.JobNotificationWebSocket
@@ -40,6 +45,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     ServerSettingsProvider, CarLocationProviderRegistry,
     TelemetryProviderRegistry, LocationProviderProvider,
     JobRepositoryProvider, CollectedJobStoreProvider,
+    JobMileageStoreProvider, PricingRepositoryProvider,
     SessionManagerProvider, LiveMapUsersProvider,
     GeoServiceRepositoryProvider {
 
@@ -201,6 +207,20 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     override val collectedJobStore by lazy {
         CollectedJobStore(
             context = applicationContext
+        )
+    }
+
+    override val jobMileageStore by lazy {
+        JobMileageStore(
+            context = applicationContext
+        )
+    }
+
+    override val pricingRepository: PricingRepository by lazy {
+        PricingRepositoryImpl(
+            networkClient = networkClient,
+            serverSettingsRepository =
+                serverSettingsRepository
         )
     }
 

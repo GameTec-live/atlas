@@ -67,7 +67,9 @@ class MainActivity : ComponentActivity() {
             jobRepository = atlasApplication.jobRepository,
             geoServiceRepository = atlasApplication.geoServiceRepository,
             telemetryProvider = atlasApplication.telemetryProvider,
-            collectedJobStore = atlasApplication.collectedJobStore
+            collectedJobStore = atlasApplication.collectedJobStore,
+            jobMileageStore = atlasApplication.jobMileageStore,
+            pricingRepository = atlasApplication.pricingRepository
         )
     }
 
@@ -395,9 +397,13 @@ class MainActivity : ComponentActivity() {
                                         onToggleJobList = mainScreenViewModel::toggleJobList,
                                         onRetryJobs = mainScreenViewModel::refresh,
                                         onStartNextJob = mainScreenViewModel::startNextJob,
-                                        onCancelCurrentJob = mainScreenViewModel::cancelCurrentJob,
+                                        onCancelCurrentJob = mainScreenViewModel::requestCancelCurrentJob,
+                                        onDismissCancelConfirmation = mainScreenViewModel::dismissCancelConfirmation,
+                                        onConfirmCancel = mainScreenViewModel::confirmCancelCurrentJob,
                                         onPersonCollected = mainScreenViewModel::personCollected,
-                                        onJobFinished = mainScreenViewModel::finishCurrentJob,
+                                        onJobFinished = mainScreenViewModel::requestFinishCurrentJob,
+                                        onDismissFinishConfirmation = mainScreenViewModel::dismissFinishConfirmation,
+                                        onConfirmFinish = mainScreenViewModel::confirmFinishCurrentJob,
                                         onLoadNewJob = newJobViewModel::load,
                                         onClearNewJob = newJobViewModel::clear,
                                         onEditNewJobAddress = newJobViewModel::openAddressEditor,

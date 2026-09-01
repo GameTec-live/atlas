@@ -52,7 +52,8 @@ internal fun JobActionButtons(
                 FilledTonalIconButton(
                     onClick = onCancelCurrentJobClick,
                     enabled =
-                        !isCancellingCurrentJob &&
+                        isPrimaryJobActionEnabled &&
+                                !isCancellingCurrentJob &&
                                 !isFinishingCurrentJob,
                     modifier = Modifier.size(48.dp)
                 ) {
