@@ -83,6 +83,8 @@ rg -q -F 'Path=/var/lib/NetworkManager' \
     "$source_root/layer/atlas-networking.rootfs-overlay/etc/rpi-image-gen/slot-shared.d/atlas-networkmanager.conf"
 
 container_init="$source_root/layer/atlas-podman.rootfs-overlay/usr/local/libexec/atlas-container-init"
+container_init_unit="$source_root/layer/atlas-podman.rootfs-overlay/usr/lib/systemd/user/atlas-container-init.service"
+rg -q -F 'Wants=podman-auto-update.timer' "$container_init_unit"
 if rg -q '^BETTER_AUTH_URL=' "$container_init"; then
     echo "atlas-container-init must not generate a fixed Better Auth base URL" >&2
     exit 1

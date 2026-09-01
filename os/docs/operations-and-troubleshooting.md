@@ -219,8 +219,10 @@ reboots. Before NetworkManager or containers start, `atlas-factory-reset`
 deletes application volumes, configuration/secrets, network profiles, machine
 identity, logs and host policy, then reboots into the fresh state. It preserves
 the LUKS container and hardware-bound key when encrypted, and retains the OCI
-image layers required for offline startup. Factory reset is rejected while an
-A/B update is pending.
+image layers required for offline startup. Container auto-update scheduling is
+restored from the immutable `atlas-container-init.service` dependency rather
+than persistent user configuration. Factory reset is rejected while an A/B
+update is pending.
 
 The complete endpoint contract and local curl examples are in the
 [management API README](../../apps/osManagementAPI/README.md).

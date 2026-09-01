@@ -44,8 +44,9 @@ ATLAS_UPDATE_SIGNING_KEY="$PWD/os/keys/atlas-update.key" \
 
 The preloaded OCI archive is imported by `atlas-container-init.service` before
 any Quadlet starts and then deleted. First boot therefore needs no network.
-Quadlets use `Pull=missing`; the rootless `podman-auto-update.timer` checks the
-same mutable tags on later online boots.
+Quadlets use `Pull=missing`; `atlas-container-init.service` starts the rootless
+`podman-auto-update.timer`, which checks the same mutable tags on later online
+boots.
 
 The 8 GiB persistent filesystem is a minimum needed for the compressed archive
 and imported image store to coexist on first boot. IDP provisioning expands the

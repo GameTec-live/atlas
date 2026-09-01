@@ -13,6 +13,8 @@ rootfs=$(find "$work_root" -mindepth 2 -maxdepth 2 -type d \
 [[ -x "$rootfs/usr/local/libexec/atlas-auth-origins" ]]
 [[ -x "$rootfs/usr/local/libexec/atlas-management" ]]
 [[ -x "$rootfs/usr/local/sbin/atlas-sys" ]]
+grep -q -F 'Wants=podman-auto-update.timer' \
+    "$rootfs/usr/lib/systemd/user/atlas-container-init.service"
 file "$rootfs/usr/local/libexec/atlas-management" | grep -q 'ARM aarch64'
 grep -q -F 'ConditionPathExists=/persistent/atlas/system/factory-reset-pending' \
     "$rootfs/usr/lib/systemd/system/atlas-factory-reset.service"

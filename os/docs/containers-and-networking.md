@@ -184,9 +184,15 @@ provisioning image.
 
 ## Container auto-updates
 
-Each application container has `AutoUpdate=registry`; the lingering user has
-`podman-auto-update.timer` enabled. Updates are independent of Atlas OS A/B
-updates and use mutable image tags.
+Each application container has `AutoUpdate=registry`.
+`atlas-container-init.service` pulls `podman-auto-update.timer` into the
+lingering user manager on every boot. This immutable dependency remains intact
+when factory reset clears the user's persistent configuration. Updates are
+independent of Atlas OS A/B updates and use mutable image tags.
+
+The timer is dependency-started rather than directly enabled, so its loaded
+state may say `disabled`. The runtime invariant is `Active: active (waiting)`
+with a future trigger in `systemctl --user list-timers`.
 
 Consequences:
 
@@ -196,6 +202,9 @@ Consequences:
 - first boot is offline-capable, but registry auto-update requires working
   network, DNS, CA trust and registry access;
 - release operators should publish containers before starting the OS build;
+- multi-platform images must use Docker schema 2 media types. Podman 5.4 does
+  not expose Docker `Healthcheck` metadata from OCI image configs, so
+  `Notify=healthy` units cannot start after such an update;
 - use `journalctl --user` and `podman auto-update --dry-run` when diagnosing the
   timer rather than assuming an OS update changed the image.
 

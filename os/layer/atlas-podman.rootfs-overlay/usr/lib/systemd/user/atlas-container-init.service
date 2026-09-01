@@ -1,5 +1,6 @@
 [Unit]
 Description=Initialize persistent Atlas container configuration
+Wants=podman-auto-update.timer
 
 [Service]
 Type=oneshot
