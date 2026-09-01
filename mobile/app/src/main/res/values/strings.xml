@@ -86,8 +86,18 @@
     <string name="job_action_cancel">Cancel current job</string>
     <string name="job_action_start_failed">Could not start the next job</string>
     <string name="job_action_cancel_failed">Could not cancel the current job</string>
+    <string name="job_cancel_confirmation_title">Cancel job?</string>
+    <string name="job_cancel_confirmation_message">Cancel the current job?</string>
+    <string name="job_cancel_no">No</string>
+    <string name="job_cancel_yes">Yes</string>
     <string name="job_action_job_finished">Job finished</string>
     <string name="job_action_finish_failed">Could not finish the current job</string>
+    <string name="job_finish_confirmation_title">Finish job?</string>
+    <string name="job_finish_total">Total driven: %1$s km — %2$s</string>
+    <string name="job_finish_passenger">With passenger: %1$s km — %2$s</string>
+    <string name="job_finish_rate">Rate: %1$s/km</string>
+    <string name="job_finish_no">No</string>
+    <string name="job_finish_yes">Yes</string>
     <string name="dispatcher_action_unassigned_jobs">Unassigned jobs</string>
     <string name="dispatcher_action_new_job">Create new job</string>
 

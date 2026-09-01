@@ -2,6 +2,7 @@ package org.gtlv.atlas.main
 
 import org.gtlv.atlas.address.AddressSearchUiState
 import org.gtlv.core.job.Job
+import org.gtlv.core.job.JobFareQuote
 import org.gtlv.core.job.JobLocationField
 
 data class MainScreenUiState(
@@ -14,8 +15,12 @@ data class MainScreenUiState(
     val startNextJobFailed: Boolean = false,
     val isCancellingCurrentJob: Boolean = false,
     val cancelCurrentJobFailed: Boolean = false,
+    val isCancelConfirmationVisible: Boolean = false,
     val isFinishingCurrentJob: Boolean = false,
     val finishCurrentJobFailed: Boolean = false,
+    val isPreparingFinishConfirmation: Boolean = false,
+    val finishConfirmation:
+        FinishJobConfirmation? = null,
     val isPersonCollected: Boolean = false,
     val isAddressEditorOpen: Boolean = false,
     val editedLocationField: JobLocationField? = null,
@@ -23,4 +28,8 @@ data class MainScreenUiState(
         AddressSearchUiState(),
     val navigation: NavigationUiState =
         NavigationUiState()
+)
+
+data class FinishJobConfirmation(
+    val quote: JobFareQuote?
 )

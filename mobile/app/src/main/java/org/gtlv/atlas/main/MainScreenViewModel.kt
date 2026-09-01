@@ -21,6 +21,8 @@ import org.gtlv.core.geoservice.RouteResult
 import org.gtlv.core.geoservice.ResolveAddressResult
 import org.gtlv.core.job.CollectedJobStateStore
 import org.gtlv.core.job.JobActionResult
+import org.gtlv.core.job.JobMileageStateStore
+import org.gtlv.core.job.calculateJobFareQuote
 import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
@@ -29,6 +31,8 @@ import org.gtlv.core.location.LocationState
 import org.gtlv.core.location.VehicleHeadingEstimator
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryVehicleState
+import org.gtlv.core.pricing.PriceResult
+import org.gtlv.core.pricing.PricingRepository
 
 class MainScreenViewModel(
     private val jobRepository: JobRepository,
@@ -37,7 +41,11 @@ class MainScreenViewModel(
     private val telemetryProvider:
     TelemetryProvider,
     private val collectedJobStore:
-    CollectedJobStateStore
+    CollectedJobStateStore,
+    private val jobMileageStore:
+    JobMileageStateStore,
+    private val pricingRepository:
+    PricingRepository
 ) : ViewModel() {
 
     private val _uiState =
@@ -237,15 +245,18 @@ class MainScreenViewModel(
 
     fun startNextJob() {
         val state = _uiState.value
+        val userId = activeUserId
 
         if (
-            activeUserId == null ||
+            userId == null ||
             state.currentJob != null ||
             state.queuedJobs.isEmpty() ||
             state.isLoading ||
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
             state.isFinishingCurrentJob ||
+            state.isPreparingFinishConfirmation ||
+            state.finishConfirmation != null ||
             state.isAddressEditorOpen ||
             state.addressSearch.isSaving
         ) {
@@ -253,6 +264,7 @@ class MainScreenViewModel(
         }
 
         val nextJob = state.queuedJobs.first()
+        val startedOdometer = currentOdometerKilometers()
 
         refreshJob?.cancel()
         jobActionTask?.cancel()
@@ -266,6 +278,12 @@ class MainScreenViewModel(
                     finishCurrentJobFailed = false
                 )
             }
+
+            jobMileageStore.recordJobStarted(
+                userId = userId,
+                jobId = nextJob.id,
+                odometerKilometers = startedOdometer
+            )
 
             val result = jobRepository.startJob(
                 jobId = nextJob.id
@@ -281,6 +299,10 @@ class MainScreenViewModel(
                 }
 
                 else -> {
+                    jobMileageStore.clearIfJobMatches(
+                        userId = userId,
+                        jobId = nextJob.id
+                    )
                     _uiState.update {
                         it.copy(
                             isStartingNextJob = false,
@@ -292,7 +314,7 @@ class MainScreenViewModel(
         }
     }
 
-    fun cancelCurrentJob() {
+    fun requestCancelCurrentJob() {
         val state = _uiState.value
 
         if (
@@ -302,6 +324,42 @@ class MainScreenViewModel(
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
             state.isFinishingCurrentJob ||
+            state.isPreparingFinishConfirmation ||
+            state.finishConfirmation != null ||
+            state.isCancelConfirmationVisible ||
+            state.isAddressEditorOpen ||
+            state.addressSearch.isSaving
+        ) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(isCancelConfirmationVisible = true)
+        }
+    }
+
+    fun dismissCancelConfirmation() {
+        val state = _uiState.value
+        if (state.isCancellingCurrentJob) return
+
+        _uiState.update {
+            it.copy(isCancelConfirmationVisible = false)
+        }
+    }
+
+    fun confirmCancelCurrentJob() {
+        val state = _uiState.value
+
+        if (
+            !state.isCancelConfirmationVisible ||
+            activeUserId == null ||
+            state.currentJob == null ||
+            state.isLoading ||
+            state.isStartingNextJob ||
+            state.isCancellingCurrentJob ||
+            state.isFinishingCurrentJob ||
+            state.isPreparingFinishConfirmation ||
+            state.finishConfirmation != null ||
             state.isAddressEditorOpen ||
             state.addressSearch.isSaving
         ) {
@@ -355,7 +413,7 @@ class MainScreenViewModel(
         }
     }
 
-    fun finishCurrentJob() {
+    fun requestFinishCurrentJob() {
         val state = _uiState.value
         val currentJob = state.currentJob ?: return
         val userId = activeUserId ?: return
@@ -365,6 +423,106 @@ class MainScreenViewModel(
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
             state.isFinishingCurrentJob ||
+            state.isPreparingFinishConfirmation ||
+            state.finishConfirmation != null ||
+            state.isCancelConfirmationVisible ||
+            !state.isPersonCollected ||
+            state.isAddressEditorOpen ||
+            state.addressSearch.isSaving
+        ) {
+            return
+        }
+
+        jobActionTask?.cancel()
+
+        val finishedOdometer = currentOdometerKilometers()
+        val snapshots = jobMileageStore
+            .getSnapshots(userId)
+            ?.takeIf { it.jobId == currentJob.id }
+        val hasCompleteMileage = calculateJobFareQuote(
+            snapshots = snapshots,
+            finishedOdometerKilometers = finishedOdometer,
+            pricePerKilometer = 0.0
+        ) != null
+
+        if (!hasCompleteMileage) {
+            _uiState.update {
+                it.copy(
+                    finishConfirmation =
+                        FinishJobConfirmation(quote = null)
+                )
+            }
+            return
+        }
+
+        jobActionTask = viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isPreparingFinishConfirmation = true
+                )
+            }
+
+            val priceResult =
+                pricingRepository.getPricePerKilometer()
+
+            currentCoroutineContext()
+                .ensureActive()
+
+            if (
+                _uiState.value.currentJob?.id != currentJob.id
+            ) {
+                _uiState.update {
+                    it.copy(
+                        isPreparingFinishConfirmation = false
+                    )
+                }
+                return@launch
+            }
+
+            val price = (priceResult as? PriceResult.Success)
+                ?.pricePerKilometer
+            val quote = calculateJobFareQuote(
+                snapshots = snapshots,
+                finishedOdometerKilometers = finishedOdometer,
+                pricePerKilometer = price
+            )
+
+            _uiState.update {
+                it.copy(
+                    isPreparingFinishConfirmation = false,
+                    finishConfirmation =
+                        FinishJobConfirmation(quote = quote)
+                )
+            }
+        }
+    }
+
+    fun dismissFinishConfirmation() {
+        val state = _uiState.value
+        if (
+            state.isFinishingCurrentJob ||
+            state.isPreparingFinishConfirmation
+        ) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(finishConfirmation = null)
+        }
+    }
+
+    fun confirmFinishCurrentJob() {
+        val state = _uiState.value
+        val currentJob = state.currentJob ?: return
+        val userId = activeUserId ?: return
+
+        if (
+            state.finishConfirmation == null ||
+            state.isLoading ||
+            state.isStartingNextJob ||
+            state.isCancellingCurrentJob ||
+            state.isFinishingCurrentJob ||
+            state.isPreparingFinishConfirmation ||
             !state.isPersonCollected ||
             state.isAddressEditorOpen ||
             state.addressSearch.isSaving
@@ -422,6 +580,9 @@ class MainScreenViewModel(
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
             state.isFinishingCurrentJob ||
+            state.isPreparingFinishConfirmation ||
+            state.finishConfirmation != null ||
+            state.isCancelConfirmationVisible ||
             state.isPersonCollected ||
             state.addressSearch.isSaving
         ) {
@@ -433,6 +594,12 @@ class MainScreenViewModel(
         collectedJobStore.setCollectedJobId(
             userId = userId,
             jobId = currentJob.id
+        )
+
+        jobMileageStore.recordPersonCollected(
+            userId = userId,
+            jobId = currentJob.id,
+            odometerKilometers = currentOdometerKilometers()
         )
 
         telemetryProvider.setVehicleState(
@@ -474,6 +641,7 @@ class MainScreenViewModel(
     ) {
         collectedJobId = null
         collectedJobStore.clearCollectedJobId(userId)
+        jobMileageStore.clear(userId)
         telemetryProvider.setVehicleState(
             TelemetryVehicleState.FREE
         )
@@ -482,7 +650,10 @@ class MainScreenViewModel(
             it.copy(
                 currentJob = null,
                 isCancellingCurrentJob = false,
+                isCancelConfirmationVisible = false,
                 isFinishingCurrentJob = false,
+                isPreparingFinishConfirmation = false,
+                finishConfirmation = null,
                 isPersonCollected = false,
                 isAddressEditorOpen = false,
                 editedLocationField = null,
@@ -524,6 +695,8 @@ class MainScreenViewModel(
         val previousJobId = _uiState.value.currentJob?.id
         val currentJob = result.currentJob
         val userId = activeUserId
+        val currentState = _uiState.value
+        val jobChanged = previousJobId != currentJob?.id
 
         if (userId != null) {
             collectedJobId =
@@ -534,10 +707,24 @@ class MainScreenViewModel(
             currentJob != null &&
                     currentJob.id == collectedJobId
 
-        if (previousJobId != currentJob?.id) {
+        if (jobChanged) {
             pickupRouteOrigin = null
             destinationRouteOrigin = null
             clearNavigation()
+        }
+
+        if (userId != null) {
+            val mileageJobId = jobMileageStore
+                .getSnapshots(userId)
+                ?.jobId
+            val shouldClearMileage = when {
+                mileageJobId == null -> false
+                currentJob != null -> mileageJobId != currentJob.id
+                else -> !currentState.isStartingNextJob
+            }
+            if (shouldClearMileage) {
+                jobMileageStore.clear(userId)
+            }
         }
 
         if (
@@ -582,8 +769,26 @@ class MainScreenViewModel(
                 startNextJobFailed = false,
                 isCancellingCurrentJob = false,
                 cancelCurrentJobFailed = false,
+                isCancelConfirmationVisible =
+                    if (jobChanged) {
+                        false
+                    } else {
+                        it.isCancelConfirmationVisible
+                    },
                 isFinishingCurrentJob = false,
                 finishCurrentJobFailed = false,
+                isPreparingFinishConfirmation =
+                    if (jobChanged) {
+                        false
+                    } else {
+                        it.isPreparingFinishConfirmation
+                    },
+                finishConfirmation =
+                    if (jobChanged) {
+                        null
+                    } else {
+                        it.finishConfirmation
+                    },
                 isPersonCollected = personCollected
             )
         }
@@ -1300,6 +1505,12 @@ class MainScreenViewModel(
         jobLifecycleTask = null
 
         clearNavigationRequest()
+    }
+
+    private fun currentOdometerKilometers(): Double? {
+        return telemetryProvider.telemetry.value
+            ?.odometer
+            ?.takeIf { it.isFinite() && it >= 0.0 }
     }
 
     private companion object {
