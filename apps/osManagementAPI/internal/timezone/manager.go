@@ -2,6 +2,8 @@ package timezone
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -126,18 +128,30 @@ func (m *Manager) validate(value string) error {
 }
 
 func (m *Manager) setDatabase(ctx context.Context, value string) error {
+	unit, err := databaseUnitName()
+	if err != nil {
+		return err
+	}
 	timezoneQuery := "ALTER SYSTEM SET timezone TO '" + value + "'"
 	logTimezoneQuery := "ALTER SYSTEM SET log_timezone TO '" + value + "'"
 	args := []string{
 		"-u", "atlas-containers", "--", "env",
 		"HOME=/home/atlas-containers", "XDG_RUNTIME_DIR=/run/user/2000",
-		"/usr/bin/systemd-run", "--user", "--wait", "--collect", "--quiet", "--pipe", "--unit=atlas-db-timezone",
+		"/usr/bin/systemd-run", "--user", "--wait", "--collect", "--quiet", "--pipe", "--unit=" + unit,
 		"/usr/bin/podman", "exec", "atlas-db", "psql",
 		"--username=atlas", "--dbname=atlas", "--no-psqlrc", "--set=ON_ERROR_STOP=1",
 		"--command", timezoneQuery, "--command", logTimezoneQuery, "--command", "SELECT pg_reload_conf()",
 	}
-	_, err := m.runner.Run(ctx, "", "/usr/sbin/runuser", args...)
+	_, err = m.runner.Run(ctx, "", "/usr/sbin/runuser", args...)
 	return err
+}
+
+func databaseUnitName() (string, error) {
+	var suffix [16]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", fmt.Errorf("generate database timezone unit name: %w", err)
+	}
+	return "atlas-db-timezone-" + hex.EncodeToString(suffix[:]), nil
 }
 
 func wrapRollbackError(target string, err error) error {

@@ -59,7 +59,7 @@ func TestStatusAndSetUpdateSystemAndDatabase(t *testing.T) {
 	if !slices.ContainsFunc(runner.calls, func(call call) bool {
 		arguments := strings.Join(call.args, " ")
 		return call.name == "/usr/sbin/runuser" &&
-			strings.Contains(arguments, "/usr/bin/systemd-run --user --wait --collect --quiet --pipe --unit=atlas-db-timezone") &&
+			strings.Contains(arguments, "/usr/bin/systemd-run --user --wait --collect --quiet --pipe --unit=atlas-db-timezone-") &&
 			strings.Contains(arguments, "/usr/bin/podman exec atlas-db psql") &&
 			strings.Contains(arguments, "ALTER SYSTEM SET timezone TO 'Europe/Vienna'") &&
 			strings.Contains(arguments, "ALTER SYSTEM SET log_timezone TO 'Europe/Vienna'") &&
@@ -104,6 +104,25 @@ func TestDatabaseFailureRollsBackSystemAndDatabase(t *testing.T) {
 	if runner.databaseContextErrors[1] != nil || !runner.databaseHasDeadlines[1] {
 		t.Fatalf("rollback reused canceled context: error=%v has deadline=%v", runner.databaseContextErrors[1], runner.databaseHasDeadlines[1])
 	}
+	forwardUnit := databaseUnit(t, runner.calls[0])
+	rollbackUnit := databaseUnit(t, runner.calls[1])
+	if forwardUnit == rollbackUnit {
+		t.Fatalf("rollback reused transient unit %q", forwardUnit)
+	}
+}
+
+func databaseUnit(t *testing.T, call call) string {
+	t.Helper()
+	for _, argument := range call.args {
+		if unit, ok := strings.CutPrefix(argument, "--unit="); ok {
+			if !strings.HasPrefix(unit, "atlas-db-timezone-") {
+				t.Fatalf("unexpected database unit %q", unit)
+			}
+			return unit
+		}
+	}
+	t.Fatalf("database call has no transient unit: %#v", call)
+	return ""
 }
 
 func testManager(t *testing.T, runner *fakeRunner, zones ...string) *Manager {
