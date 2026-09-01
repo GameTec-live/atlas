@@ -93,7 +93,7 @@ func main() {
 		Power:          powerManager,
 		Reset:          reset.NewRequester(cfg.StateDir),
 		SSH:            sshmanager.New(runner),
-		Timezone:       timezone.New(cfg.StateDir, runner),
+		Timezone:       timezone.New(cfg.TimezonePath, runner),
 		Network:        networkmanager.New(runner),
 		Origins:        origins.New(cfg.TrustedOriginsPath, cfg.ContainerUID, runner),
 		RemoteAccess:   remoteaccess.New(cfg.RemoteAccessDir, cfg.ContainerUID, runner),

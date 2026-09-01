@@ -13,7 +13,6 @@ import (
 
 const (
 	zoneinfoRoot = "/usr/share/zoneinfo"
-	stateName    = "localtime"
 )
 
 type Manager struct {
@@ -26,8 +25,8 @@ type Request struct {
 	Timezone string `json:"timezone"`
 }
 
-func New(stateDir string, runner command.Runner) *Manager {
-	return &Manager{runner: runner, zoneinfoRoot: zoneinfoRoot, statePath: filepath.Join(stateDir, stateName)}
+func New(statePath string, runner command.Runner) *Manager {
+	return &Manager{runner: runner, zoneinfoRoot: zoneinfoRoot, statePath: statePath}
 }
 
 func (m *Manager) Status(context.Context) (string, error) {

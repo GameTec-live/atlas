@@ -74,12 +74,13 @@ management_unit="$source_root/layer/atlas-management.rootfs-overlay/usr/lib/syst
 reset_unit="$source_root/layer/atlas-management.rootfs-overlay/usr/lib/systemd/system/atlas-factory-reset.service"
 management_tmpfiles="$source_root/layer/atlas-management.rootfs-overlay/usr/lib/tmpfiles.d/atlas-management.conf"
 rg -q -F 'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK' "$management_unit"
+rg -q -F 'ReadWritePaths=/persistent/atlas/timezone' "$management_unit"
 rg -q -F 'ConditionPathExists=/persistent/atlas/system/factory-reset-pending' "$reset_unit"
 rg -q -F 'Before=multi-user.target NetworkManager.service user@2000.service atlas-management.service' "$reset_unit"
 rg -q -F 'SuccessAction=reboot' "$reset_unit"
 rg -q -F 'factory-reset [--yes]' \
     "$source_root/layer/atlas-management.rootfs-overlay/usr/local/sbin/atlas-sys"
-rg -q -F 'L /persistent/atlas/system/localtime - - - - /usr/share/zoneinfo/Etc/UTC' \
+rg -q -F 'L /persistent/atlas/timezone/localtime - - - - /usr/share/zoneinfo/Etc/UTC' \
     "$management_tmpfiles"
 management_cli="$source_root/layer/atlas-management.rootfs-overlay/usr/local/sbin/atlas-sys"
 rg -q -F 'ATLAS_SYS_SOCKET:-/run/atlas-management/api.sock' "$management_cli"

@@ -102,7 +102,7 @@ func testManager(t *testing.T, runner *fakeRunner, zones ...string) *Manager {
 		}
 	}
 	stateDir := t.TempDir()
-	statePath := filepath.Join(stateDir, stateName)
+	statePath := filepath.Join(stateDir, "localtime")
 	if err := os.Symlink(filepath.Join(root, filepath.FromSlash(zones[0])), statePath); err != nil {
 		t.Fatal(err)
 	}

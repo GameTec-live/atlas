@@ -254,7 +254,7 @@ PUT /api/v1/timezone  {"timezone":"Europe/Vienna"}
 ```
 
 The immutable `/etc/localtime` entry points at
-`/persistent/atlas/system/localtime`; the API atomically replaces that
+`/persistent/atlas/timezone/localtime`; the API atomically replaces that
 persistent symlink and reloads PostgreSQL's default and log timezones.
 
 Remote access is managed directly through that authenticated Unix socket:

@@ -18,6 +18,7 @@ ProtectKernelTunables=yes
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/persistent/atlas/system
+ReadWritePaths=/persistent/atlas/timezone
 ReadWritePaths=/home/atlas-containers/.config/atlas
 ReadWritePaths=/bootfs
 ReadWritePaths=/run/atlas-management

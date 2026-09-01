@@ -129,7 +129,7 @@ Timezone names are validated against the host's installed IANA zoneinfo
 database. A change updates the host plus PostgreSQL's default and log
 timezones, then reloads the database configuration without interrupting active
 connections. Because the system slot is read-only, `/etc/localtime` points to
-the atomically replaced `/persistent/atlas/system/localtime` symlink.
+the atomically replaced `/persistent/atlas/timezone/localtime` symlink.
 The database container also inherits the host timezone whenever it is created.
 
 The upload is staged under `/persistent/atlas/system`, verified and installed
