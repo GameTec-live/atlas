@@ -13,6 +13,7 @@ type Config struct {
 	TokenPath          string
 	StateDir           string
 	TrustedOriginsPath string
+	RemoteAccessDir    string
 	ContainerHome      string
 	ContainerUID       int
 	HealthWindow       time.Duration
@@ -29,6 +30,7 @@ func Load() (Config, error) {
 		TokenPath:          env("ATLAS_MANAGEMENT_TOKEN_FILE", "/home/atlas-containers/.config/atlas/management-token"),
 		StateDir:           env("ATLAS_MANAGEMENT_STATE_DIR", "/persistent/atlas/system"),
 		TrustedOriginsPath: env("ATLAS_TRUSTED_ORIGINS_FILE", "/home/atlas-containers/.config/atlas/trusted-origins"),
+		RemoteAccessDir:    env("ATLAS_REMOTE_ACCESS_CONFIG_DIR", "/home/atlas-containers/.config/atlas"),
 		ContainerHome:      env("ATLAS_CONTAINER_HOME", "/home/atlas-containers"),
 		HealthURL:          env("ATLAS_MANAGEMENT_HEALTH_URL", "https://127.0.0.1/api/api/auth/get-session"),
 		PodmanSocket:       env("ATLAS_MANAGEMENT_PODMAN_SOCKET", "/run/user/2000/podman/podman.sock"),

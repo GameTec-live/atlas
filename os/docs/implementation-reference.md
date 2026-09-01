@@ -58,7 +58,8 @@ When adding a layer or changing ordering:
 | Podman packages, timer/socket enablement and embedded archive | `layer/atlas-podman.yaml` |
 | Secret generation and offline import | `layer/atlas-podman.rootfs-overlay/usr/local/libexec/atlas-container-init` |
 | Better Auth URL/origin generation | `layer/atlas-podman.rootfs-overlay/usr/local/libexec/atlas-auth-origins` |
-| Database/API/web Quadlets and application network | `layer/atlas-containers-core.rootfs-overlay/etc/containers/systemd/users/2000/` |
+| Database/API/web and optional remote-access Quadlets | `layer/atlas-containers-core.rootfs-overlay/etc/containers/systemd/users/2000/` |
+| Tailscale HTTPS serve policy | `layer/atlas-containers-core.rootfs-overlay/usr/share/atlas/tailscale-serve.json` |
 | Geodata Quadlets and internal control network | `layer/atlas-containers-geodata.rootfs-overlay/etc/containers/systemd/users/2000/` |
 
 ### Updates and host policy
@@ -96,6 +97,8 @@ When adding a layer or changing ordering:
 - All images in `images.txt` have a Quadlet and vice versa.
 - `Pull=missing` preserves offline first boot.
 - Only web publishes host ports.
+- Optional Cloudflare and Tailscale connectors stay rootless, capability-free
+  and condition-gated by their mode-0600 credential files.
 - Only reloader mounts the Podman socket.
 - Router/geocoder retain exact consumer labels.
 - Reloader keeps the image's exec-form health check.
@@ -149,8 +152,8 @@ Before merging an OS change:
    ownership requires it);
 5. record release checksums;
 6. install into the inactive slot without committing first;
-7. verify host services, all eight Quadlets, UI/map/auth, reloader socket and
-   labels;
+7. verify host services, all eight core Quadlets, any configured optional
+   connectors, UI/map/auth, reloader socket and labels;
 8. commit and perform an ordinary reboot;
 9. verify the active slot and endpoints again;
 10. remove temporary update bundles from the target.

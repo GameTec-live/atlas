@@ -1,4 +1,6 @@
 docker.io/library/postgres:18-alpine
+docker.io/cloudflare/cloudflared:latest
+docker.io/tailscale/tailscale:stable
 ghcr.io/gametec-live/atlas-router:latest
 ghcr.io/gametec-live/atlas-map:latest
 ghcr.io/gametec-live/geocoder-go:latest
