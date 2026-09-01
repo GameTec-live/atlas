@@ -12,33 +12,36 @@ import (
 )
 
 const (
-	timedatectl  = "/usr/bin/timedatectl"
 	zoneinfoRoot = "/usr/share/zoneinfo"
+	stateName    = "localtime"
 )
 
 type Manager struct {
 	runner       command.Runner
 	zoneinfoRoot string
+	statePath    string
 }
 
 type Request struct {
 	Timezone string `json:"timezone"`
 }
 
-func New(runner command.Runner) *Manager {
-	return &Manager{runner: runner, zoneinfoRoot: zoneinfoRoot}
+func New(stateDir string, runner command.Runner) *Manager {
+	return &Manager{runner: runner, zoneinfoRoot: zoneinfoRoot, statePath: filepath.Join(stateDir, stateName)}
 }
 
-func (m *Manager) Status(ctx context.Context) (string, error) {
-	value, err := m.runner.Run(ctx, "", timedatectl, "show", "--property=Timezone", "--value")
+func (m *Manager) Status(context.Context) (string, error) {
+	target, err := os.Readlink(m.statePath)
 	if err != nil {
-		return "", fmt.Errorf("read system timezone: %w", err)
+		return "", fmt.Errorf("read persistent system timezone: %w", err)
 	}
-	if value == "" {
-		return "", errors.New("system timezone is empty")
+	relative, err := filepath.Rel(m.zoneinfoRoot, target)
+	if err != nil {
+		return "", fmt.Errorf("resolve system timezone: %w", err)
 	}
+	value := filepath.ToSlash(relative)
 	if err := m.validate(value); err != nil {
-		return "", fmt.Errorf("system returned an invalid timezone: %w", err)
+		return "", fmt.Errorf("persistent system timezone is invalid: %w", err)
 	}
 	return value, nil
 }
@@ -51,14 +54,14 @@ func (m *Manager) Set(ctx context.Context, value string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := m.runner.Run(ctx, "", timedatectl, "set-timezone", value); err != nil {
+	if err := m.setSystem(value); err != nil {
 		return fmt.Errorf("set system timezone: %w", err)
 	}
 	if err := m.setDatabase(ctx, value); err == nil {
 		return nil
 	} else {
 		setErr := err
-		_, systemRollbackErr := m.runner.Run(ctx, "", timedatectl, "set-timezone", previous)
+		systemRollbackErr := m.setSystem(previous)
 		databaseRollbackErr := m.setDatabase(ctx, previous)
 		return errors.Join(
 			fmt.Errorf("set database timezone: %w", setErr),
@@ -66,6 +69,35 @@ func (m *Manager) Set(ctx context.Context, value string) error {
 			wrapRollbackError("database", databaseRollbackErr),
 		)
 	}
+}
+
+// /etc/localtime is immutable on Atlas OS and points at this persistent
+// symlink. Replacing its target changes the host timezone without writing the
+// EROFS system slot and keeps the setting across A/B updates.
+func (m *Manager) setSystem(value string) error {
+	stateDir := filepath.Dir(m.statePath)
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(stateDir, ".localtime.*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	defer os.Remove(temporaryPath)
+	if err := os.Remove(temporaryPath); err != nil {
+		return err
+	}
+	if err := os.Symlink(filepath.Join(m.zoneinfoRoot, filepath.FromSlash(value)), temporaryPath); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, m.statePath); err != nil {
+		return err
+	}
+	return syncDirectory(stateDir)
 }
 
 func (m *Manager) validate(value string) error {

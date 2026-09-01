@@ -16,7 +16,6 @@ type call struct {
 }
 
 type fakeRunner struct {
-	timezone     string
 	databaseErr  error
 	calls        []call
 	databaseRuns int
@@ -24,13 +23,6 @@ type fakeRunner struct {
 
 func (r *fakeRunner) Run(_ context.Context, _ string, name string, args ...string) (string, error) {
 	r.calls = append(r.calls, call{name: name, args: slices.Clone(args)})
-	if name == timedatectl && slices.Contains(args, "show") {
-		return r.timezone, nil
-	}
-	if name == timedatectl && slices.Contains(args, "set-timezone") {
-		r.timezone = args[len(args)-1]
-		return "", nil
-	}
 	if name == "/usr/sbin/runuser" {
 		r.databaseRuns++
 		if r.databaseRuns == 1 && r.databaseErr != nil {
@@ -41,7 +33,7 @@ func (r *fakeRunner) Run(_ context.Context, _ string, name string, args ...strin
 }
 
 func TestStatusAndSetUpdateSystemAndDatabase(t *testing.T) {
-	runner := &fakeRunner{timezone: "Etc/UTC"}
+	runner := &fakeRunner{}
 	manager := testManager(t, runner, "Etc/UTC", "Europe/Vienna")
 
 	status, err := manager.Status(context.Background())
@@ -51,8 +43,9 @@ func TestStatusAndSetUpdateSystemAndDatabase(t *testing.T) {
 	if err := manager.Set(context.Background(), "Europe/Vienna"); err != nil {
 		t.Fatal(err)
 	}
-	if runner.timezone != "Europe/Vienna" {
-		t.Fatalf("system timezone=%q, want Europe/Vienna", runner.timezone)
+	status, err = manager.Status(context.Background())
+	if err != nil || status != "Europe/Vienna" {
+		t.Fatalf("system timezone=%q, want Europe/Vienna: %v", status, err)
 	}
 	if !slices.ContainsFunc(runner.calls, func(call call) bool {
 		arguments := strings.Join(call.args, " ")
@@ -68,7 +61,7 @@ func TestStatusAndSetUpdateSystemAndDatabase(t *testing.T) {
 }
 
 func TestSetRejectsUnknownOrUnsafeTimezone(t *testing.T) {
-	runner := &fakeRunner{timezone: "Etc/UTC"}
+	runner := &fakeRunner{}
 	manager := testManager(t, runner, "Etc/UTC")
 	for _, value := range []string{"", "Europe/Unknown", "../Etc/UTC", "Europe/Vienna'"} {
 		t.Run(value, func(t *testing.T) {
@@ -83,15 +76,16 @@ func TestSetRejectsUnknownOrUnsafeTimezone(t *testing.T) {
 }
 
 func TestDatabaseFailureRollsBackSystemAndDatabase(t *testing.T) {
-	runner := &fakeRunner{timezone: "Etc/UTC", databaseErr: errors.New("database unavailable")}
+	runner := &fakeRunner{databaseErr: errors.New("database unavailable")}
 	manager := testManager(t, runner, "Etc/UTC", "Europe/Vienna")
 
 	err := manager.Set(context.Background(), "Europe/Vienna")
 	if err == nil || !strings.Contains(err.Error(), "set database timezone") {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if runner.timezone != "Etc/UTC" || runner.databaseRuns != 2 {
-		t.Fatalf("rollback incomplete: timezone=%q database runs=%d", runner.timezone, runner.databaseRuns)
+	status, statusErr := manager.Status(context.Background())
+	if statusErr != nil || status != "Etc/UTC" || runner.databaseRuns != 2 {
+		t.Fatalf("rollback incomplete: timezone=%q database runs=%d error=%v", status, runner.databaseRuns, statusErr)
 	}
 }
 
@@ -107,5 +101,10 @@ func testManager(t *testing.T, runner *fakeRunner, zones ...string) *Manager {
 			t.Fatal(err)
 		}
 	}
-	return &Manager{runner: runner, zoneinfoRoot: root}
+	stateDir := t.TempDir()
+	statePath := filepath.Join(stateDir, stateName)
+	if err := os.Symlink(filepath.Join(root, filepath.FromSlash(zones[0])), statePath); err != nil {
+		t.Fatal(err)
+	}
+	return &Manager{runner: runner, zoneinfoRoot: root, statePath: statePath}
 }
