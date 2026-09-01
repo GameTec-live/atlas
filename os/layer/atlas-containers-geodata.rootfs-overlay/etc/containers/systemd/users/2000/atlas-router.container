@@ -2,6 +2,8 @@
 Description=Atlas routing engine
 Requires=atlas-container-init.service
 After=atlas-container-init.service
+# Missing geodata is expected until setup completes. Keep retrying indefinitely.
+StartLimitIntervalSec=0
 
 [Container]
 Image=ghcr.io/gametec-live/atlas-router:latest
@@ -16,6 +18,7 @@ Notify=healthy
 
 [Service]
 Restart=always
+RestartSec=5s
 TimeoutStartSec=12h
 
 [Install]

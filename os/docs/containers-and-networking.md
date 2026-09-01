@@ -101,7 +101,10 @@ reloader. The geodata API also joins `atlas.network`; the reloader does not.
 
 The router, geocoder and map use a 12-hour systemd start timeout because first
 data processing/health checks can be genuinely long. Do not replace these with
-short generic service timeouts.
+short generic service timeouts. Router and geocoder also retry every 5 seconds
+without systemd start-rate limiting: missing geodata is an expected state until
+the setup wizard downloads it, and must not leave either unit permanently
+failed.
 
 ## Published ports
 
