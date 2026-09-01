@@ -25,7 +25,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -42,12 +41,10 @@ import org.gtlv.core.geoservice.RouteResult
 import org.gtlv.core.job.JobActionResult
 import org.gtlv.core.job.AssignedJobNotification
 import org.gtlv.core.job.JobNotification
-import org.gtlv.core.job.JobNotificationResolution
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
 import org.gtlv.core.job.UnassignedJobNotification
 import org.gtlv.core.job.UnassignedJobsResult
-import org.gtlv.core.job.matches
 import org.gtlv.core.job.hasSameIdentity
 import org.gtlv.core.location.LocationProvider
 import org.gtlv.core.location.LocationState
@@ -76,7 +73,6 @@ class MainScreen(
     private val telemetryProvider: TelemetryProvider?,
     private val liveMapUsers: StateFlow<Map<String, LiveMapUser>>?,
     private val jobNotifications: StateFlow<List<JobNotification>>?,
-    private val resolvedJobNotifications: Flow<JobNotificationResolution>?,
     private val resolveJobNotification: ((JobNotification) -> Unit)?,
 ) : RoleAwareScreen(carContext, role, getRole, onRoleLost) {
     private val screenScope = CoroutineScope(
@@ -95,7 +91,6 @@ class MainScreen(
     private var jobLifecycleJob: Job? = null
     private var liveMapUsersJob: Job? = null
     private var jobNotificationsJob: Job? = null
-    private var resolvedJobNotificationsJob: Job? = null
     private var jobNotificationTimeoutJob: Job? = null
     private var routeRequestJob: Job? = null
     private var observedCollectedUserId: String? = null
@@ -125,6 +120,8 @@ class MainScreen(
     private var isDecliningJobNotification = false
     private var knownQueuedJobIds: Set<String>? = null
     private var knownUnassignedJobIds: Set<String>? = null
+    private var synchronizedJobNotifications: List<JobNotification> =
+        emptyList()
 
     init {
         carContext
@@ -140,7 +137,6 @@ class MainScreen(
         observeJobLifecycle()
         observeLiveMapUsers()
         observeJobNotifications()
-        observeResolvedJobNotifications()
         startJobPolling()
     }
 
@@ -159,14 +155,13 @@ class MainScreen(
         liveMapUsersJob = null
         jobNotificationsJob?.cancel()
         jobNotificationsJob = null
-        resolvedJobNotificationsJob?.cancel()
-        resolvedJobNotificationsJob = null
         jobNotificationTimeoutJob?.cancel()
         jobNotificationTimeoutJob = null
         pendingJobNotifications.clear()
         currentJobNotification = null
         currentJobNotificationExpiresAt = 0L
         isDecliningJobNotification = false
+        synchronizedJobNotifications = emptyList()
         mapRenderer.hideJobNotification()
         routeRequestJob?.cancel()
         routeRequestJob = null
@@ -957,32 +952,25 @@ class MainScreen(
 
         jobNotificationsJob = screenScope.launch {
             notifications.collect { activeNotifications ->
-                activeNotifications.forEach(::enqueueJobNotification)
+                reconcileSynchronizedJobNotifications(activeNotifications)
                 refreshJobs()
             }
         }
     }
 
-    private fun observeResolvedJobNotifications() {
-        if (resolvedJobNotificationsJob != null) return
-        val resolutions = resolvedJobNotifications ?: return
-
-        resolvedJobNotificationsJob = screenScope.launch {
-            resolutions.collect(::applyJobNotificationResolution)
-        }
-    }
-
-    private fun applyJobNotificationResolution(
-        resolution: JobNotificationResolution,
+    private fun reconcileSynchronizedJobNotifications(
+        activeNotifications: List<JobNotification>,
     ) {
-        pendingJobNotifications.removeAll { notification ->
-            notification.matches(resolution)
-        }
-        currentJobNotification
-            ?.takeIf { notification -> notification.matches(resolution) }
-            ?.let { notification ->
-                dismissJobNotification(notification)
+        val resolvedNotifications =
+            synchronizedJobNotifications.filter { previous ->
+                activeNotifications.none { active ->
+                    active.hasSameIdentity(previous)
+                }
             }
+        synchronizedJobNotifications = activeNotifications
+
+        resolvedNotifications.forEach(::dismissJobNotification)
+        activeNotifications.forEach(::enqueueJobNotification)
     }
 
     private fun removeStaleJobNotifications() {

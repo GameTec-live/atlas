@@ -20,6 +20,22 @@ class JobNotificationSyncTest {
     }
 
     @Test
+    fun resolvedNotificationIsAbsentForCollectorThatStartsLater() =
+        runBlocking {
+            val inbox = JobNotificationInbox()
+            val notification = assignedNotification()
+            inbox.add(notification)
+            inbox.resolve(
+                JobNotificationResolution(
+                    jobId = notification.jobId,
+                    type = notification.type
+                )
+            )
+
+            assertTrue(inbox.notifications.first().isEmpty())
+        }
+
+    @Test
     fun assignedResolutionDoesNotResolveUnassignedFollowUp() {
         val assigned = assignedNotification()
         val unassigned = UnassignedJobNotification(

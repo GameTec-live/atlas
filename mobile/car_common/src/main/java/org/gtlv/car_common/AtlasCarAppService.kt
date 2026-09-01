@@ -110,8 +110,6 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                     telemetryProvider = telemetryProvider,
                     liveMapUsers = liveMapUsers,
                     jobNotifications = jobNotificationSync?.jobNotifications,
-                    resolvedJobNotifications =
-                        jobNotificationSync?.resolvedJobNotifications,
                     resolveJobNotification =
                         jobNotificationSync?.let { sync ->
                             sync::resolveJobNotification
