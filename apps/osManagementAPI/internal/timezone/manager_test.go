@@ -16,15 +16,24 @@ type call struct {
 }
 
 type fakeRunner struct {
-	databaseErr  error
-	calls        []call
-	databaseRuns int
+	databaseErr           error
+	cancelOnFirstDatabase func()
+	calls                 []call
+	databaseContextErrors []error
+	databaseHasDeadlines  []bool
+	databaseRuns          int
 }
 
-func (r *fakeRunner) Run(_ context.Context, _ string, name string, args ...string) (string, error) {
+func (r *fakeRunner) Run(ctx context.Context, _ string, name string, args ...string) (string, error) {
 	r.calls = append(r.calls, call{name: name, args: slices.Clone(args)})
 	if name == "/usr/sbin/runuser" {
 		r.databaseRuns++
+		if r.databaseRuns == 1 && r.cancelOnFirstDatabase != nil {
+			r.cancelOnFirstDatabase()
+		}
+		r.databaseContextErrors = append(r.databaseContextErrors, ctx.Err())
+		_, hasDeadline := ctx.Deadline()
+		r.databaseHasDeadlines = append(r.databaseHasDeadlines, hasDeadline)
 		if r.databaseRuns == 1 && r.databaseErr != nil {
 			return "", r.databaseErr
 		}
@@ -76,16 +85,24 @@ func TestSetRejectsUnknownOrUnsafeTimezone(t *testing.T) {
 }
 
 func TestDatabaseFailureRollsBackSystemAndDatabase(t *testing.T) {
-	runner := &fakeRunner{databaseErr: errors.New("database unavailable")}
+	databaseErr := errors.New("database unavailable")
+	requestCtx, cancelRequest := context.WithCancel(context.Background())
+	runner := &fakeRunner{databaseErr: databaseErr, cancelOnFirstDatabase: cancelRequest}
 	manager := testManager(t, runner, "Etc/UTC", "Europe/Vienna")
 
-	err := manager.Set(context.Background(), "Europe/Vienna")
-	if err == nil || !strings.Contains(err.Error(), "set database timezone") {
+	err := manager.Set(requestCtx, "Europe/Vienna")
+	if err == nil || !strings.Contains(err.Error(), "set database timezone") || !errors.Is(err, databaseErr) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	status, statusErr := manager.Status(context.Background())
 	if statusErr != nil || status != "Etc/UTC" || runner.databaseRuns != 2 {
 		t.Fatalf("rollback incomplete: timezone=%q database runs=%d error=%v", status, runner.databaseRuns, statusErr)
+	}
+	if !errors.Is(runner.databaseContextErrors[0], context.Canceled) {
+		t.Fatalf("initial database context error=%v, want canceled", runner.databaseContextErrors[0])
+	}
+	if runner.databaseContextErrors[1] != nil || !runner.databaseHasDeadlines[1] {
+		t.Fatalf("rollback reused canceled context: error=%v has deadline=%v", runner.databaseContextErrors[1], runner.databaseHasDeadlines[1])
 	}
 }
 

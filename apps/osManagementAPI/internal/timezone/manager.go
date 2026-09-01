@@ -7,12 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/command"
 )
 
 const (
-	zoneinfoRoot = "/usr/share/zoneinfo"
+	zoneinfoRoot   = "/usr/share/zoneinfo"
+	rollbackWindow = 30 * time.Second
 )
 
 type Manager struct {
@@ -56,18 +58,19 @@ func (m *Manager) Set(ctx context.Context, value string) error {
 	if err := m.setSystem(value); err != nil {
 		return fmt.Errorf("set system timezone: %w", err)
 	}
-	if err := m.setDatabase(ctx, value); err == nil {
+	setErr := m.setDatabase(ctx, value)
+	if setErr == nil {
 		return nil
-	} else {
-		setErr := err
-		systemRollbackErr := m.setSystem(previous)
-		databaseRollbackErr := m.setDatabase(ctx, previous)
-		return errors.Join(
-			fmt.Errorf("set database timezone: %w", setErr),
-			wrapRollbackError("system", systemRollbackErr),
-			wrapRollbackError("database", databaseRollbackErr),
-		)
 	}
+	systemRollbackErr := m.setSystem(previous)
+	rollbackCtx, cancel := context.WithTimeout(context.Background(), rollbackWindow)
+	defer cancel()
+	databaseRollbackErr := m.setDatabase(rollbackCtx, previous)
+	return errors.Join(
+		fmt.Errorf("set database timezone: %w", setErr),
+		wrapRollbackError("system", systemRollbackErr),
+		wrapRollbackError("database", databaseRollbackErr),
+	)
 }
 
 // /etc/localtime is immutable on Atlas OS and points at this persistent
