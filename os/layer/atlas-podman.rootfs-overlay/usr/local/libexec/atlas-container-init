@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+
+config_dir="${HOME}/.config/atlas"
+install -d -m 0700 "$config_dir"
+/usr/local/libexec/atlas-auth-origins
+
+image_archive="${HOME}/.cache/atlas/images.tar"
+if [ -s "$image_archive" ]; then
+    podman load --input "$image_archive"
+    rm -f "$image_archive"
+fi
+
+db_password_file="$config_dir/database-password"
+if [ ! -s "$db_password_file" ]; then
+    umask 077
+    openssl rand -hex 32 > "$db_password_file"
+fi
+db_password=$(cat "$db_password_file")
+
+management_token_file="$config_dir/management-token"
+if [ ! -s "$management_token_file" ]; then
+    umask 027
+    openssl rand -hex 32 > "$management_token_file"
+fi
+
+write_if_missing() {
+    target=$1
+    shift
+    if [ ! -s "$target" ]; then
+        umask 077
+        printf '%s\n' "$@" > "$target"
+    fi
+}
+
+write_if_missing "$config_dir/db.env" \
+    'POSTGRES_USER=atlas' \
+    "POSTGRES_PASSWORD=$db_password" \
+    'POSTGRES_DB=atlas'
+
+if [ ! -s "$config_dir/api.env" ]; then
+    umask 077
+    auth_secret=$(openssl rand -hex 32)
+    job_token=$(openssl rand -hex 32)
+    cat > "$config_dir/api.env" <<EOF
+BETTER_AUTH_SECRET=$auth_secret
+DATABASE_URL=postgres://atlas:$db_password@db:5432/atlas
+GEODATA_URL=http://geodata-api:8080
+GEOCODER_URL=http://geocoder:8080
+ROUTER_URL=http://router:8002
+JOBTOKEN=$job_token
+EOF
+fi
+
+chmod 0600 "$config_dir"/*.env "$db_password_file"
+chmod 0640 "$management_token_file"

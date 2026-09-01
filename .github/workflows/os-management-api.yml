@@ -1,0 +1,57 @@
+name: OS Management API
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/osManagementAPI/**"
+      - ".github/workflows/os-management-api.yml"
+  push:
+    paths:
+      - "apps/osManagementAPI/**"
+      - ".github/workflows/os-management-api.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: os-management-api-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/osManagementAPI
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: apps/osManagementAPI/go.mod
+          cache-dependency-path: apps/osManagementAPI/go.mod
+
+      - name: Run tests
+        run: go test -race ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Build ARM64 service
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: arm64
+        run: go build -buildvcs=false -trimpath -ldflags="-s -w" -o atlas-management .
+
+      - name: Upload ARM64 service
+        uses: actions/upload-artifact@v6
+        with:
+          name: atlas-management-linux-arm64
+          path: apps/osManagementAPI/atlas-management
+          if-no-files-found: error

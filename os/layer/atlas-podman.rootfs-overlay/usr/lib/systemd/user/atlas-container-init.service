@@ -1,0 +1,12 @@
+[Unit]
+Description=Initialize persistent Atlas container configuration
+Wants=podman-auto-update.timer
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/atlas-container-init
+RemainAfterExit=yes
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=default.target

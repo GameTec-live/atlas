@@ -1,0 +1,29 @@
+# METABEGIN
+# X-Env-Layer-Name: atlas-users
+# X-Env-Layer-Category: atlas
+# X-Env-Layer-Desc: Locked rootless container runtime account and subordinate IDs.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: device-user-admin,systemd-min
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - passwd
+  customize-hooks:
+    - |-
+      set -eu
+      if ! chroot "$1" id atlas-containers >/dev/null 2>&1; then
+        chroot "$1" useradd \
+          --uid 2000 \
+          --user-group \
+          --create-home \
+          --home-dir /home/atlas-containers \
+          --shell /usr/sbin/nologin \
+          atlas-containers
+      fi
+      chroot "$1" passwd --lock atlas-containers
+      printf '%s\n' 'atlas-containers:100000:65536' > "$1/etc/subuid"
+      printf '%s\n' 'atlas-containers:100000:65536' > "$1/etc/subgid"
+      install -d -m 0755 "$1/var/lib/systemd/linger"
+      install -m 0644 /dev/null "$1/var/lib/systemd/linger/atlas-containers"
+      install -d -m 0700 "$1/persistent/atlas/system"
