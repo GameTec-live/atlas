@@ -96,7 +96,7 @@ func (m *Manager) RemoveTailscale(ctx context.Context) error {
 	if _, err := m.systemctl(ctx, "stop", tailscaleVolume); err != nil {
 		return fmt.Errorf("stop Tailscale state volume: %w", err)
 	}
-	if _, err := m.podman(ctx, "volume", "rm", "--force", "--ignore", "atlas-tailscale-state"); err != nil {
+	if _, err := m.podman(ctx, "volume", "rm", "--force", "atlas-tailscale-state"); err != nil {
 		return fmt.Errorf("remove Tailscale state: %w", err)
 	}
 	return nil

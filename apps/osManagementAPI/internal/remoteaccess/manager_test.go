@@ -84,7 +84,7 @@ func TestProvisionAndRemoveProviders(t *testing.T) {
 	}
 	if !slices.ContainsFunc(runner.calls, func(call call) bool {
 		arguments := strings.Join(call.args, " ")
-		return call.name == "/usr/sbin/runuser" && strings.Contains(arguments, "/usr/bin/systemd-run --user --wait --collect") && strings.HasSuffix(arguments, "/usr/bin/podman volume rm --force --ignore atlas-tailscale-state")
+		return call.name == "/usr/sbin/runuser" && strings.Contains(arguments, "/usr/bin/systemd-run --user --wait --collect") && strings.HasSuffix(arguments, "/usr/bin/podman volume rm --force atlas-tailscale-state")
 	}) {
 		t.Fatalf("Tailscale state was not removed: %#v", runner.calls)
 	}
