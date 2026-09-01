@@ -7,6 +7,9 @@ interface TelemetryProvider {
     /** Null until a valid location has been received. */
     val telemetry: StateFlow<TelemetryData?>
 
+    /** Vehicle odometer in kilometres, independent of location availability. */
+    val odometerKilometers: StateFlow<Double?>
+
     fun start()
 
     fun stop()

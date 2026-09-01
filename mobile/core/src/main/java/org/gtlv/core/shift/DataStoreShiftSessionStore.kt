@@ -1,6 +1,7 @@
 package org.gtlv.core.shift
 
 import android.content.Context
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -36,7 +37,8 @@ class DataStoreShiftSessionStore(
 
         return ShiftSession(
             role = role,
-            startTimeUtc = startTime
+            startTimeUtc = startTime,
+            startKilometer = preferences[START_KILOMETER_KEY]
         )
     }
 
@@ -47,6 +49,13 @@ class DataStoreShiftSessionStore(
 
             preferences[START_TIME_KEY] =
                 session.startTimeUtc.toString()
+
+            if (session.startKilometer == null) {
+                preferences.remove(START_KILOMETER_KEY)
+            } else {
+                preferences[START_KILOMETER_KEY] =
+                    session.startKilometer
+            }
         }
     }
 
@@ -54,6 +63,7 @@ class DataStoreShiftSessionStore(
         dataStore.edit { preferences ->
             preferences.remove(ROLE_KEY)
             preferences.remove(START_TIME_KEY)
+            preferences.remove(START_KILOMETER_KEY)
         }
     }
 
@@ -63,5 +73,8 @@ class DataStoreShiftSessionStore(
 
         val START_TIME_KEY =
             stringPreferencesKey("shift_start_time_utc")
+
+        val START_KILOMETER_KEY =
+            doublePreferencesKey("shift_start_kilometer")
     }
 }

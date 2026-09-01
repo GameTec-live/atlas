@@ -37,6 +37,11 @@ class Telemetry(
     override val telemetry: StateFlow<TelemetryData?> =
         _telemetry.asStateFlow()
 
+    private val _odometerKilometers = MutableStateFlow<Double?>(null)
+
+    override val odometerKilometers: StateFlow<Double?> =
+        _odometerKilometers.asStateFlow()
+
     private var vehicleState = initialState
     private var vehicleId: String? = null
     private var location: AtlasLocation? = null
@@ -60,6 +65,8 @@ class Telemetry(
                 .successfulValue()
                 ?.toDouble()
                 ?.takeIf { it >= 0.0 }
+
+            _odometerKilometers.value = odometer
 
             publishTelemetry()
         }
@@ -142,6 +149,7 @@ class Telemetry(
         vehicleId = null
         fuelLevel = null
         odometer = null
+        _odometerKilometers.value = null
         stopCarTelemetry()
         connectedCarContext = null
         bluetoothMacProvider = null

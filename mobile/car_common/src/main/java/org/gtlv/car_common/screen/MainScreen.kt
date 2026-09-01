@@ -72,6 +72,7 @@ class MainScreen(
     private val pricingRepository: PricingRepository?,
     private val geoServiceRepository: GeoServiceRepository?,
     private val getUserId: () -> String?,
+    private val getStartKilometer: () -> Double?,
     private val telemetryProvider: TelemetryProvider?,
     private val liveMapUsers: StateFlow<Map<String, LiveMapUser>>?,
 ) : RoleAwareScreen(carContext, role, getRole, onRoleLost) {
@@ -404,6 +405,8 @@ class MainScreen(
                 isPreparingFinishConfirmation -> return
             currentJob != null -> showToast(R.string.driver_job_already_active)
             queuedJobs.isEmpty() -> showToast(R.string.driver_no_next_job)
+            getStartKilometer() == null ->
+                showToast(R.string.driver_enter_odometer_on_phone)
             jobRepository == null -> showToast(R.string.driver_start_job_error)
             else -> {
                 val nextJob = queuedJobs.first()
@@ -881,8 +884,7 @@ class MainScreen(
     }
 
     private fun currentOdometerKilometers(): Double? {
-        return telemetryProvider?.telemetry?.value
-            ?.odometer
+        return telemetryProvider?.odometerKilometers?.value
             ?.takeIf { it.isFinite() && it >= 0.0 }
     }
 

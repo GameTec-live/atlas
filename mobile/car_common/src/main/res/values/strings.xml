@@ -14,6 +14,7 @@
     <string name="driver_job_pickup">Pickup: %1$s</string>
     <string name="driver_job_destination">Destination: %1$s</string>
     <string name="driver_next_job">Next job</string>
+    <string name="driver_enter_odometer_on_phone">Enter the odometer on your phone</string>
     <plurals name="driver_jobs_in_queue">
         <item quantity="one">%1$d in queue</item>
         <item quantity="other">%1$d in queue</item>

@@ -47,6 +47,7 @@ import org.gtlv.atlas.main.composable.FinishJobConfirmationDialog
 import org.gtlv.atlas.main.composable.NavigationPanel
 import org.gtlv.atlas.main.composable.ProfileButton
 import org.gtlv.atlas.main.composable.ProfileSidebar
+import org.gtlv.atlas.main.composable.StartKilometerDialog
 import org.gtlv.atlas.map.AtlasMap
 import org.gtlv.atlas.map.MapConfiguration
 import org.gtlv.atlas.notification.JobNotificationUiState
@@ -74,6 +75,9 @@ internal fun MainScreen(
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
+    onStartKilometerChanged: (String) -> Unit,
+    onDismissStartKilometerDialog: () -> Unit,
+    onConfirmStartKilometer: () -> Unit,
     onCancelCurrentJob: () -> Unit,
     onDismissCancelConfirmation: () -> Unit,
     onConfirmCancel: () -> Unit,
@@ -92,6 +96,17 @@ internal fun MainScreen(
     onCloseAddressEditor: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    if (jobState.isStartKilometerDialogVisible) {
+        StartKilometerDialog(
+            value = jobState.startKilometerInput,
+            isInvalid = jobState.isStartKilometerInputInvalid,
+            isSaving = jobState.isStartingNextJob,
+            onValueChanged = onStartKilometerChanged,
+            onConfirm = onConfirmStartKilometer,
+            onDismiss = onDismissStartKilometerDialog
+        )
+    }
+
     if (jobState.isCancelConfirmationVisible) {
         CancelJobConfirmationDialog(
             isCancelling =
