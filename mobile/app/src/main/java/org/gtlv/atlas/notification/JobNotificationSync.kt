@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import org.gtlv.core.job.JobNotification
+import org.gtlv.core.job.JobNotificationInbox
 import org.gtlv.core.job.JobNotificationResolution
 import org.gtlv.core.job.JobNotificationSyncProvider
 import org.gtlv.core.job.type
@@ -20,11 +21,8 @@ class JobNotificationSync(
     )
     val events: SharedFlow<JobNotificationEvent> = _events.asSharedFlow()
 
-    private val _jobNotifications = MutableSharedFlow<JobNotification>(
-        extraBufferCapacity = EVENT_BUFFER_CAPACITY
-    )
-    override val jobNotifications: SharedFlow<JobNotification> =
-        _jobNotifications.asSharedFlow()
+    private val inbox = JobNotificationInbox()
+    override val jobNotifications = inbox.notifications
 
     private val _resolvedJobNotifications =
         MutableSharedFlow<JobNotificationResolution>(
@@ -37,22 +35,22 @@ class JobNotificationSync(
     init {
         scope.launch {
             webSocket.events.collect { event ->
-                _events.emit(event)
                 if (event is JobNotificationEvent.Received) {
-                    _jobNotifications.emit(event.notification)
+                    inbox.add(event.notification)
                 }
+                _events.emit(event)
             }
         }
     }
 
     override fun resolveJobNotification(notification: JobNotification) {
         dismissSystemNotification(notification.jobId)
-        _resolvedJobNotifications.tryEmit(
-            JobNotificationResolution(
-                jobId = notification.jobId,
-                type = notification.type
-            )
+        val resolution = JobNotificationResolution(
+            jobId = notification.jobId,
+            type = notification.type
         )
+        inbox.resolve(resolution)
+        _resolvedJobNotifications.tryEmit(resolution)
     }
 
     fun dismissSystemNotification(jobId: String) {
@@ -60,6 +58,7 @@ class JobNotificationSync(
     }
 
     fun clearSystemNotifications() {
+        inbox.clear()
         webSocket.clearSystemNotifications()
     }
 

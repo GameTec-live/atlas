@@ -75,7 +75,7 @@ class MainScreen(
     private val getUserId: () -> String?,
     private val telemetryProvider: TelemetryProvider?,
     private val liveMapUsers: StateFlow<Map<String, LiveMapUser>>?,
-    private val jobNotifications: Flow<JobNotification>?,
+    private val jobNotifications: StateFlow<List<JobNotification>>?,
     private val resolvedJobNotifications: Flow<JobNotificationResolution>?,
     private val resolveJobNotification: ((JobNotification) -> Unit)?,
 ) : RoleAwareScreen(carContext, role, getRole, onRoleLost) {
@@ -956,8 +956,8 @@ class MainScreen(
         val notifications = jobNotifications ?: return
 
         jobNotificationsJob = screenScope.launch {
-            notifications.collect { notification ->
-                enqueueJobNotification(notification)
+            notifications.collect { activeNotifications ->
+                activeNotifications.forEach(::enqueueJobNotification)
                 refreshJobs()
             }
         }
