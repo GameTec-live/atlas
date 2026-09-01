@@ -864,6 +864,7 @@ internal class MapLibreSurfaceRenderer(
                 color = Color.argb(242, 32, 33, 36),
                 radiusDp = JOB_NOTIFICATION_RADIUS_DP,
             )
+            clipToOutline = true
             elevation = dp(14).toFloat()
             visibility = View.GONE
         }
@@ -905,7 +906,10 @@ internal class MapLibreSurfaceRenderer(
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(JOB_NOTIFICATION_PROGRESS_HEIGHT_DP),
-            ),
+            ).apply {
+                marginStart = dp(JOB_NOTIFICATION_PROGRESS_HORIZONTAL_MARGIN_DP)
+                marginEnd = dp(JOB_NOTIFICATION_PROGRESS_HORIZONTAL_MARGIN_DP)
+            },
         )
         return card
     }
@@ -1019,8 +1023,9 @@ internal class MapLibreSurfaceRenderer(
         return bounds.left + ((bounds.width() - width) / 2).coerceAtLeast(0)
     }
 
+    /** Intentionally places the popup in the host action-strip area. */
     private fun jobNotificationTopMargin(): Int =
-        jobNotificationBounds().top + dp(OVERLAY_MARGIN_DP)
+        dp(JOB_NOTIFICATION_TOP_MARGIN_DP)
 
     private fun jobNotificationBounds(): Rect = when {
         !stableArea.isEmpty && stableArea.width() > 0 -> Rect(stableArea)
@@ -1730,8 +1735,10 @@ internal class MapLibreSurfaceRenderer(
         const val JOB_CARD_ANIMATION_DURATION_MILLIS = 240L
         const val OVERLAY_MARGIN_DP = 8
         const val JOB_NOTIFICATION_WIDTH_DP = 520
+        const val JOB_NOTIFICATION_TOP_MARGIN_DP = 12
         const val JOB_NOTIFICATION_RADIUS_DP = 16
         const val JOB_NOTIFICATION_PROGRESS_HEIGHT_DP = 6
+        const val JOB_NOTIFICATION_PROGRESS_HORIZONTAL_MARGIN_DP = 12
         const val JOB_NOTIFICATION_PROGRESS_MAX = 1_000
         const val JOB_NOTIFICATION_DURATION_MILLIS = 10_000L
         const val BASE_DENSITY_DPI = 160
