@@ -57,6 +57,7 @@ rg -q -F 'Volume=/run/atlas-management:/run/atlas-management:ro' \
 rg -q -F 'management-token:/run/secrets/atlas-management-token:ro' \
     "$quadlet_dir/atlas-api.container"
 rg -q -F 'PodmanArgs=--group-add=keep-groups' "$quadlet_dir/atlas-api.container"
+rg -q -F 'Timezone=local' "$quadlet_dir/atlas-db.container"
 [[ "$(rg -l '/run/atlas-management' "$quadlet_dir" | wc -l)" -eq 1 ]]
 rg -q -F 'ConditionPathExists=%h/.config/atlas/cloudflare-tunnel.env' \
     "$quadlet_dir/atlas-cloudflare-tunnel.container"
@@ -87,6 +88,8 @@ rg -q -F 'request POST /api/v1/factory-reset' "$management_cli"
 rg -q -F 'request GET /api/v1/ssh' "$management_cli"
 rg -q -F 'request POST /api/v1/ssh/enable' "$management_cli"
 rg -q -F 'request POST /api/v1/ssh/disable' "$management_cli"
+rg -q -F 'request GET /api/v1/timezone' "$management_cli"
+rg -q -F 'request_json PUT /api/v1/timezone' "$management_cli"
 rg -q -F 'request GET /api/v1/connections/remote-access' "$management_cli"
 rg -q -F 'request_json PUT /api/v1/connections/remote-access/cloudflare-tunnel' "$management_cli"
 rg -q -F 'request DELETE /api/v1/connections/remote-access/cloudflare-tunnel' "$management_cli"

@@ -210,6 +210,8 @@ sudo atlas-sys poweroff
 sudo atlas-sys ssh status
 sudo atlas-sys ssh enable
 sudo atlas-sys ssh disable
+sudo atlas-sys timezone status
+sudo atlas-sys timezone set Europe/Vienna
 sudo atlas-sys remote-access status
 sudo atlas-sys cloudflare-tunnel provision /path/to/cloudflare-token
 sudo atlas-sys cloudflare-tunnel remove
@@ -243,6 +245,13 @@ update is pending.
 
 The complete endpoint contract and local curl examples are in the
 [management API README](../../apps/osManagementAPI/README.md).
+
+Timezone changes use IANA names and update both the host and PostgreSQL:
+
+```text
+GET /api/v1/timezone
+PUT /api/v1/timezone  {"timezone":"Europe/Vienna"}
+```
 
 Remote access is managed directly through that authenticated Unix socket:
 

@@ -13,6 +13,7 @@ rootfs=$(find "$work_root" -mindepth 2 -maxdepth 2 -type d \
 [[ -x "$rootfs/usr/local/libexec/atlas-auth-origins" ]]
 [[ -x "$rootfs/usr/local/libexec/atlas-management" ]]
 [[ -x "$rootfs/usr/local/sbin/atlas-sys" ]]
+[[ -f "$rootfs/usr/share/zoneinfo/Etc/UTC" ]]
 [[ -r "$rootfs/usr/share/atlas/tailscale-serve.json" ]]
 grep -q -F 'Wants=podman-auto-update.timer' \
     "$rootfs/usr/lib/systemd/user/atlas-container-init.service"

@@ -147,7 +147,8 @@ workload receives either. Updates are streamed over this socket rather than
 downloaded by the root daemon. Trial boots are committed after all eight
 containers remain healthy for five minutes. Power, NetworkManager,
 trusted-origin, Cloudflare Tunnel, Tailscale and factory-reset operations use
-the same narrow API. See the
+the same narrow API. Timezone changes also synchronize PostgreSQL's default
+and log timezones. See the
 [management API contract](../apps/osManagementAPI/README.md).
 
 Host administrators can use the authenticated Unix-socket client directly:
@@ -155,6 +156,7 @@ Host administrators can use the authenticated Unix-socket client directly:
 ```sh
 sudo atlas-sys status
 sudo atlas-sys update apply /path/to/atlas-rpi5-update.tar.zst
+sudo atlas-sys timezone set Europe/Vienna
 sudo atlas-sys cloudflare-tunnel provision /path/to/cloudflare-token
 sudo atlas-sys tailscale provision /path/to/tailscale-auth-key atlas-1
 sudo atlas-sys factory-reset

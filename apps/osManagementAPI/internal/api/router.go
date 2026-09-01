@@ -21,6 +21,7 @@ import (
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/health"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/networkmanager"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/remoteaccess"
+	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/timezone"
 	"github.com/GameTec-live/atlas/apps/osManagementAPI/internal/update"
 )
 
@@ -52,6 +53,11 @@ type SSHManager interface {
 	Status(context.Context) (bool, error)
 	Enable(context.Context) error
 	Disable(context.Context) error
+}
+
+type TimezoneManager interface {
+	Status(context.Context) (string, error)
+	Set(context.Context, string) error
 }
 
 type NetworkManager interface {
@@ -95,6 +101,7 @@ type Dependencies struct {
 	Power          PowerManager
 	Reset          ResetRequester
 	SSH            SSHManager
+	Timezone       TimezoneManager
 	Network        NetworkManager
 	Origins        OriginsManager
 	RemoteAccess   RemoteAccessManager
@@ -121,6 +128,8 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	router.HandleFunc("GET /api/v1/ssh", h.sshStatus)
 	router.HandleFunc("POST /api/v1/ssh/enable", h.enableSSH)
 	router.HandleFunc("POST /api/v1/ssh/disable", h.disableSSH)
+	router.HandleFunc("GET /api/v1/timezone", h.timezoneStatus)
+	router.HandleFunc("PUT /api/v1/timezone", h.setTimezone)
 	router.HandleFunc("GET /api/v1/connections/adapters", h.adapters)
 	router.HandleFunc("GET /api/v1/connections/network-manager", h.connections)
 	router.HandleFunc("GET /api/v1/connections/network-manager/devices", h.devices)
@@ -321,6 +330,31 @@ func (h *handler) enableSSH(writer http.ResponseWriter, request *http.Request) {
 
 func (h *handler) disableSSH(writer http.ResponseWriter, request *http.Request) {
 	h.mutate(writer, request, "ssh_disable_failed", h.dependencies.SSH.Disable)
+}
+
+func (h *handler) timezoneStatus(writer http.ResponseWriter, request *http.Request) {
+	value, err := h.dependencies.Timezone.Status(request.Context())
+	if err != nil {
+		fail(writer, http.StatusInternalServerError, "timezone_status_failed", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, timezone.Request{Timezone: value})
+}
+
+func (h *handler) setTimezone(writer http.ResponseWriter, request *http.Request) {
+	var body timezone.Request
+	if !decodeJSON(writer, request, &body) {
+		return
+	}
+	if !h.beginMutation(writer) {
+		return
+	}
+	defer h.mutations.Unlock()
+	if err := h.dependencies.Timezone.Set(request.Context(), body.Timezone); err != nil {
+		fail(writer, http.StatusBadRequest, "timezone_update_failed", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, body)
 }
 
 func (h *handler) adapters(writer http.ResponseWriter, _ *http.Request) {
