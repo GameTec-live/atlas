@@ -1,0 +1,26 @@
+[Unit]
+Description=Apply a pending Atlas factory reset before workloads start
+After=local-fs.target user-runtime-dir@2000.service
+Before=multi-user.target NetworkManager.service user@2000.service atlas-management.service
+Wants=user-runtime-dir@2000.service
+RequiresMountsFor=/persistent /home
+ConditionPathExists=/persistent/atlas/system/factory-reset-pending
+SuccessAction=reboot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/atlas-management factory-reset
+TimeoutStartSec=30min
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths=/persistent
+ReadWritePaths=/home
+ReadWritePaths=/run/user/2000
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

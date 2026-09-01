@@ -1,0 +1,11 @@
+# METABEGIN
+# X-Env-Layer-Name: atlas-containers-core
+# X-Env-Layer-Category: atlas
+# X-Env-Layer-Desc: Rootless database, API and web Quadlets.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: atlas-podman
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - find "$1/etc/containers/systemd/users/2000" -type f -exec chmod 0644 {} +

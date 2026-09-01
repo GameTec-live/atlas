@@ -1,0 +1,126 @@
+#!/bin/sh
+set -eu
+
+socket=${ATLAS_SYS_SOCKET:-/run/atlas-management/api.sock}
+token_file=${ATLAS_SYS_TOKEN_FILE:-/home/atlas-containers/.config/atlas/management-token}
+curl_command=${ATLAS_SYS_CURL:-/usr/bin/curl}
+
+die() {
+    echo "atlas-sys: $*" >&2
+    exit 1
+}
+
+usage() {
+    cat >&2 <<'EOF'
+usage: atlas-sys COMMAND
+
+Commands:
+  status                         Show service, A/B update and trial health state
+  update apply BUNDLE            Upload, install and tryboot an update bundle
+  update rollback                Roll back or clear the pending update
+  reboot                         Reboot the device
+  poweroff                       Power off the device
+  ssh status                     Show persistent SSH policy
+  ssh enable                     Persistently enable SSH
+  ssh disable                    Persistently disable SSH
+  factory-reset [--yes]          Erase mutable data and configuration
+EOF
+    exit 2
+}
+
+require_root() {
+    [ "$(id -u)" -eq 0 ] || die "must run as root (use sudo atlas-sys ...)"
+}
+
+token() {
+    [ -r "$token_file" ] || die "management token is unavailable: $token_file"
+    value=$(tr -d '\r\n' < "$token_file")
+    [ -n "$value" ] || die "management token is empty"
+    printf '%s' "$value"
+}
+
+request() {
+    method=$1
+    path=$2
+    shift 2
+    [ -S "$socket" ] || die "management socket is unavailable: $socket"
+    "$curl_command" \
+        --silent \
+        --show-error \
+        --fail-with-body \
+        --unix-socket "$socket" \
+        --header "Authorization: Bearer $(token)" \
+        --request "$method" \
+        "$@" \
+        "http://localhost$path"
+    printf '\n'
+}
+
+confirm_factory_reset() {
+    if [ "${1:-}" = --yes ]; then
+        [ "$#" -eq 1 ] || usage
+        return
+    fi
+    [ "$#" -eq 0 ] || usage
+    [ -t 0 ] || die "factory reset requires an interactive terminal or --yes"
+    echo "This erases all Atlas data, credentials and network configuration." >&2
+    printf 'Type RESET to continue: ' >&2
+    IFS= read -r confirmation
+    [ "$confirmation" = RESET ] || die "factory reset cancelled"
+}
+
+require_root
+
+case "${1:-}" in
+    status)
+        [ "$#" -eq 1 ] || usage
+        printf 'management=%s\n' "$(systemctl is-active atlas-management.service 2>/dev/null || true)"
+        request GET /api/v1/update
+        ;;
+    update)
+        case "${2:-}" in
+            apply)
+                [ "$#" -eq 3 ] || usage
+                bundle=$3
+                [ -f "$bundle" ] || die "update bundle does not exist: $bundle"
+                request POST /api/v1/update --form "bundle=@$bundle"
+                ;;
+            rollback)
+                [ "$#" -eq 2 ] || usage
+                request POST /api/v1/update/rollback
+                ;;
+            *) usage ;;
+        esac
+        ;;
+    reboot)
+        [ "$#" -eq 1 ] || usage
+        request POST /api/v1/power/reboot
+        ;;
+    poweroff)
+        [ "$#" -eq 1 ] || usage
+        request POST /api/v1/power/poweroff
+        ;;
+    ssh)
+        case "${2:-}" in
+            status)
+                [ "$#" -eq 2 ] || usage
+                request GET /api/v1/ssh
+                ;;
+            enable)
+                [ "$#" -eq 2 ] || usage
+                request POST /api/v1/ssh/enable
+                ;;
+            disable)
+                [ "$#" -eq 2 ] || usage
+                request POST /api/v1/ssh/disable
+                ;;
+            *) usage ;;
+        esac
+        ;;
+    factory-reset)
+        shift
+        confirm_factory_reset "$@"
+        request POST /api/v1/factory-reset
+        ;;
+    *) usage ;;
+esac

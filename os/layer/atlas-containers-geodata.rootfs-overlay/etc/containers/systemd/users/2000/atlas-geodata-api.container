@@ -1,0 +1,28 @@
+[Unit]
+Description=Atlas geodata API
+Requires=atlas-container-init.service atlas-geodata-reloader.service
+After=atlas-container-init.service atlas-geodata-reloader.service
+
+[Container]
+Image=ghcr.io/gametec-live/atlas-geodata-api:latest
+Pull=missing
+AutoUpdate=registry
+ContainerName=atlas-geodata-api
+Network=atlas.network:alias=geodata-api
+Network=geodata-control.network:alias=geodata-api
+User=65532
+Group=65532
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+Tmpfs=/tmp:rw,noexec,nosuid,size=64m
+Environment=GEODATA_RELOADER_URL=http://geodata-reloader:8080
+Volume=atlas-geodata.volume:/data
+Notify=healthy
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

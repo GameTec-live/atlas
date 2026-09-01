@@ -1,0 +1,13 @@
+# METABEGIN
+# X-Env-Layer-Name: atlas-base
+# X-Env-Layer-Category: atlas
+# X-Env-Layer-Desc: Minimal single-architecture Debian and Raspberry Pi base.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: debian-trixie-arm64-minbase-rolling,
+#  rpi-debian-trixie,
+#  rpi-misc-utils,
+#  rpi-essential-base,
+#  rpi-misc-skel,
+#  embedded-svelte
+# METAEND
+---

@@ -1,0 +1,43 @@
+device:
+  layer: rpi5
+  hostname: atlas
+  user1: atlas
+  user1uid: 1000
+  user1passhash: '$6$atlas-image$sBxS6RRDfe.QTPcRnlondN1ru4DddEyeE6bnozuWM6zKXoFzwWssUSZ9z9yUTyVMc1//bKv43rPLEaOGC4hXR1'
+  user1sudo: passwd
+  user1groups: adm,dialout,users,plugdev,input,spi,i2c,gpio
+
+image:
+  layer: image-rota
+  name: atlas-rpi5
+  boot_part_size: 256M
+  system_part_size: 2G
+  # Holds the preloaded OCI archive and the imported rootless image store during
+  # first boot. Provisioning expands it to consume the remaining device space.
+  data_part_size: 8G
+  rootfs_type: erofs
+  # Encryption is applied per-device by the IDP provisioning flow. The raw
+  # whole-disk image remains an unencrypted development artifact.
+  pmap: crypt
+
+layer:
+  base: atlas-base
+  networking: atlas-networking
+  users: atlas-users
+  containers: atlas-podman
+  core_workload: atlas-containers-core
+  geodata_workload: atlas-containers-geodata
+  updates: atlas-ab-update
+  device_policy: atlas-device-policy
+  ssh: atlas-ssh
+  management: atlas-management
+  branding: atlas-branding
+
+abupdate:
+  # Public project default. Customers can override this at build time with
+  # IGconf_abupdate_public_key and ATLAS_UPDATE_SIGNING_KEY.
+  public_key: ${@SRCROOT}/keys/atlas-update.pub
+
+rpisec:
+  # Keep firmware changes explicit except for the one-time USB boot-order unit.
+  eepromupd: n

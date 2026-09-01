@@ -1,0 +1,14 @@
+# METABEGIN
+# X-Env-Layer-Name: atlas-ssh
+# X-Env-Layer-Category: atlas
+# X-Env-Layer-Desc: Persistently controlled, disabled-by-default hardened SSH.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: openssh-server
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - chmod 0755 "$1/usr/local/sbin/atlas-ssh"
+    - chmod 0644 "$1/usr/lib/systemd/system/atlas-ssh-state.service"
+    - $BDEBSTRAP_HOOKS/disable-units "$1" ssh.service ssh.socket
+    - $BDEBSTRAP_HOOKS/enable-units "$1" atlas-ssh-state.service

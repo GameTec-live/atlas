@@ -1,0 +1,21 @@
+[Unit]
+Description=Atlas vector map server
+Requires=atlas-container-init.service
+After=atlas-container-init.service
+
+[Container]
+Image=ghcr.io/gametec-live/atlas-map:latest
+Pull=missing
+AutoUpdate=registry
+ContainerName=atlas-map
+Network=atlas.network:alias=map
+Volume=atlas-map-data.volume:/data
+Volume=atlas-geodata.volume:/data/pmtiles:ro
+Notify=healthy
+
+[Service]
+Restart=always
+TimeoutStartSec=12h
+
+[Install]
+WantedBy=default.target

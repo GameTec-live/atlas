@@ -1,0 +1,8 @@
+docker.io/library/postgres:18-alpine
+ghcr.io/gametec-live/atlas-router:latest
+ghcr.io/gametec-live/atlas-map:latest
+ghcr.io/gametec-live/geocoder-go:latest
+ghcr.io/gametec-live/atlas-geodata-api:latest
+ghcr.io/gametec-live/atlas-geodata-reloader:latest
+ghcr.io/gametec-live/atlas-api:latest
+ghcr.io/gametec-live/atlas-web:latest

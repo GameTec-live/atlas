@@ -1,0 +1,30 @@
+# METABEGIN
+# X-Env-Layer-Name: atlas-branding
+# X-Env-Layer-Category: atlas
+# X-Env-Layer-Desc: Atlas console, SSH banner and login branding.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: systemd-min
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      set -eu
+      os_release="$1/usr/lib/os-release"
+      debian_version=$(sed -n 's/^VERSION_ID=//p' "$os_release" | tr -d '"')
+      sed -i \
+        -e 's/^NAME=.*/NAME="Atlas OS"/' \
+        -e "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Atlas OS (Debian GNU\/Linux $debian_version)\"/" \
+        -e '/^VARIANT=/d' \
+        -e '/^VARIANT_ID=/d' \
+        -e '/^IMAGE_ID=/d' \
+        -e '/^IMAGE_VERSION=/d' \
+        "$os_release"
+      cat >> "$os_release" << EOF
+      VARIANT="Raspberry Pi appliance"
+      VARIANT_ID=atlas
+      IMAGE_ID=atlas
+      IMAGE_VERSION="${IGconf_artefact_version:-development}"
+      EOF
+      ln -sfn ../usr/lib/os-release "$1/etc/os-release"
+      chmod 0644 "$os_release" "$1/etc/issue" "$1/etc/issue.net" "$1/etc/motd"

@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+echo "root=$(findmnt -n -o SOURCE / 2>/dev/null || echo unknown)"
+echo "persistent=$(findmnt -n -o SOURCE /persistent 2>/dev/null || echo unknown)"
+if [ -e /dev/disk/by-slot/osdata_crypt ]; then
+    echo "full_disk_encryption=active"
+else
+    echo "full_disk_encryption=not-detected"
+fi

@@ -1,0 +1,30 @@
+[Unit]
+Description=Atlas web application
+Requires=atlas-container-init.service
+Wants=atlas-api.service atlas-map.service
+After=atlas-container-init.service atlas-api.service atlas-map.service
+
+[Container]
+Image=ghcr.io/gametec-live/atlas-web:latest
+Pull=missing
+AutoUpdate=registry
+ContainerName=atlas-web
+Network=atlas.network:alias=web
+User=10001
+Group=10001
+PublishPort=80:80
+PublishPort=443:443
+PublishPort=443:443/udp
+Volume=atlas-caddy-data.volume:/data
+Volume=atlas-caddy-config.volume:/config
+NoNewPrivileges=true
+DropCapability=all
+AddCapability=NET_BIND_SERVICE
+Notify=healthy
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

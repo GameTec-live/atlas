@@ -1,0 +1,27 @@
+[Unit]
+Description=Atlas system management service
+After=local-fs.target atlas-factory-reset.service
+RequiresMountsFor=/persistent /home
+
+[Service]
+Type=simple
+ExecStart=/usr/local/libexec/atlas-management
+Restart=on-failure
+RestartSec=5s
+UMask=0007
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/persistent/atlas/system
+ReadWritePaths=/home/atlas-containers/.config/atlas
+ReadWritePaths=/bootfs
+ReadWritePaths=/run/atlas-management
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target
