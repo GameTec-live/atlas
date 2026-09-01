@@ -264,7 +264,7 @@ class MainScreenViewModel(
         }
 
         val nextJob = state.queuedJobs.first()
-        val startedOdometer = currentOdometerMeters()
+        val startedOdometer = currentOdometerKilometers()
 
         refreshJob?.cancel()
         jobActionTask?.cancel()
@@ -282,7 +282,7 @@ class MainScreenViewModel(
             jobMileageStore.recordJobStarted(
                 userId = userId,
                 jobId = nextJob.id,
-                odometerMeters = startedOdometer
+                odometerKilometers = startedOdometer
             )
 
             val result = jobRepository.startJob(
@@ -435,13 +435,13 @@ class MainScreenViewModel(
 
         jobActionTask?.cancel()
 
-        val finishedOdometer = currentOdometerMeters()
+        val finishedOdometer = currentOdometerKilometers()
         val snapshots = jobMileageStore
             .getSnapshots(userId)
             ?.takeIf { it.jobId == currentJob.id }
         val hasCompleteMileage = calculateJobFareQuote(
             snapshots = snapshots,
-            finishedOdometerMeters = finishedOdometer,
+            finishedOdometerKilometers = finishedOdometer,
             pricePerKilometer = 0.0
         ) != null
 
@@ -483,7 +483,7 @@ class MainScreenViewModel(
                 ?.pricePerKilometer
             val quote = calculateJobFareQuote(
                 snapshots = snapshots,
-                finishedOdometerMeters = finishedOdometer,
+                finishedOdometerKilometers = finishedOdometer,
                 pricePerKilometer = price
             )
 
@@ -599,7 +599,7 @@ class MainScreenViewModel(
         jobMileageStore.recordPersonCollected(
             userId = userId,
             jobId = currentJob.id,
-            odometerMeters = currentOdometerMeters()
+            odometerKilometers = currentOdometerKilometers()
         )
 
         telemetryProvider.setVehicleState(
@@ -1507,7 +1507,7 @@ class MainScreenViewModel(
         clearNavigationRequest()
     }
 
-    private fun currentOdometerMeters(): Double? {
+    private fun currentOdometerKilometers(): Double? {
         return telemetryProvider.telemetry.value
             ?.odometer
             ?.takeIf { it.isFinite() && it >= 0.0 }

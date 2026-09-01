@@ -10,14 +10,14 @@ data class JobFareQuote(
 
 fun calculateJobFareQuote(
     snapshots: JobMileageSnapshots?,
-    finishedOdometerMeters: Double?,
+    finishedOdometerKilometers: Double?,
     pricePerKilometer: Double?
 ): JobFareQuote? {
     val jobSnapshots = snapshots ?: return null
     val values = listOf(
-        jobSnapshots.startedOdometerMeters,
-        jobSnapshots.passengerOdometerMeters,
-        finishedOdometerMeters,
+        jobSnapshots.startedOdometerKilometers,
+        jobSnapshots.passengerOdometerKilometers,
+        finishedOdometerKilometers,
         pricePerKilometer
     )
     if (values.any { it == null || !it.isFinite() || it < 0.0 }) {
@@ -25,21 +25,22 @@ fun calculateJobFareQuote(
     }
 
     val started = requireNotNull(
-        jobSnapshots.startedOdometerMeters
+        jobSnapshots.startedOdometerKilometers
     )
     val passenger = requireNotNull(
-        jobSnapshots.passengerOdometerMeters
+        jobSnapshots.passengerOdometerKilometers
     )
-    val finished = requireNotNull(finishedOdometerMeters)
+    val finished = requireNotNull(
+        finishedOdometerKilometers
+    )
     val rate = requireNotNull(pricePerKilometer)
 
-    if (passenger < started || finished < passenger) {
+    if (passenger !in started..finished) {
         return null
     }
 
-    val totalDistance = (finished - started) / METERS_PER_KILOMETER
-    val passengerDistance =
-        (finished - passenger) / METERS_PER_KILOMETER
+    val totalDistance = finished - started
+    val passengerDistance = finished - passenger
 
     return JobFareQuote(
         totalDistanceKilometers = totalDistance,
@@ -49,5 +50,3 @@ fun calculateJobFareQuote(
         passengerPrice = passengerDistance * rate
     )
 }
-
-private const val METERS_PER_KILOMETER = 1_000.0

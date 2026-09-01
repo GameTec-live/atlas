@@ -408,7 +408,7 @@ class MainScreen(
             else -> {
                 val nextJob = queuedJobs.first()
                 val userId = getUserId()
-                val startedOdometer = currentOdometerMeters()
+                val startedOdometer = currentOdometerKilometers()
                 isStartingNextJob = true
                 showToast(R.string.driver_starting_job)
 
@@ -417,7 +417,7 @@ class MainScreen(
                         jobMileageStore?.recordJobStarted(
                             userId = userId,
                             jobId = nextJob.id,
-                            odometerMeters = startedOdometer
+                            odometerKilometers = startedOdometer
                         )
                     }
                     val result = jobRequestMutex.withLock {
@@ -463,7 +463,7 @@ class MainScreen(
         jobMileageStore?.recordPersonCollected(
             userId = userId,
             jobId = job.id,
-            odometerMeters = currentOdometerMeters()
+            odometerKilometers = currentOdometerKilometers()
         )
         isPersonCollected = true
         telemetryProvider?.setVehicleState(TelemetryVehicleState.OCCUPIED)
@@ -488,18 +488,21 @@ class MainScreen(
             isPreparingFinishConfirmation
         ) return
 
-        val finishedOdometer = currentOdometerMeters()
+        val finishedOdometer = currentOdometerKilometers()
         val snapshots = userId
             ?.let { jobMileageStore?.getSnapshots(it) }
             ?.takeIf { it.jobId == job.id }
         val hasCompleteMileage = calculateJobFareQuote(
             snapshots = snapshots,
-            finishedOdometerMeters = finishedOdometer,
+            finishedOdometerKilometers = finishedOdometer,
             pricePerKilometer = 0.0
         ) != null
 
         if (!hasCompleteMileage || pricingRepository == null) {
-            showFinishConfirmation(quote = null)
+            showFinishConfirmation(
+                jobId = job.id,
+                quote = null
+            )
             return
         }
 
@@ -513,7 +516,7 @@ class MainScreen(
                 ?.pricePerKilometer
             val quote = calculateJobFareQuote(
                 snapshots = snapshots,
-                finishedOdometerMeters = finishedOdometer,
+                finishedOdometerKilometers = finishedOdometer,
                 pricePerKilometer = price
             )
 
@@ -521,12 +524,16 @@ class MainScreen(
             invalidateSafely()
 
             if (currentJob?.id == job.id) {
-                showFinishConfirmation(quote)
+                showFinishConfirmation(
+                    jobId = job.id,
+                    quote = quote
+                )
             }
         }
     }
 
     private fun showFinishConfirmation(
+        jobId: String,
         quote: JobFareQuote?
     ) {
         carContext.getCarService(
@@ -536,16 +543,31 @@ class MainScreen(
                 carContext = carContext,
                 quote = quote,
                 onConfirm = {
-                    endCurrentJob(complete = true)
+                    endCurrentJob(
+                        complete = true,
+                        expectedJobId = jobId
+                    )
                 }
             )
         )
     }
 
     private fun endCurrentJob(
-        complete: Boolean
+        complete: Boolean,
+        expectedJobId: String? = null
     ) {
-        val job = currentJob ?: return
+        val job = currentJob
+        if (
+            expectedJobId != null &&
+            job?.id != expectedJobId
+        ) {
+            showToast(
+                R.string.driver_finish_job_changed
+            )
+            return
+        }
+        job ?: return
+
         val repository = jobRepository
         if (
             isStartingNextJob ||
@@ -858,7 +880,7 @@ class MainScreen(
         )
     }
 
-    private fun currentOdometerMeters(): Double? {
+    private fun currentOdometerKilometers(): Double? {
         return telemetryProvider?.telemetry?.value
             ?.odometer
             ?.takeIf { it.isFinite() && it >= 0.0 }

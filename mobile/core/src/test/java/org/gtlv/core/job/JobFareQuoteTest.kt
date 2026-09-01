@@ -12,10 +12,10 @@ class JobFareQuoteTest {
         val quote = calculateJobFareQuote(
             snapshots = JobMileageSnapshots(
                 jobId = "job-1",
-                startedOdometerMeters = 100_000.0,
-                passengerOdometerMeters = 102_000.0
+                startedOdometerKilometers = 100.0,
+                passengerOdometerKilometers = 102.0
             ),
-            finishedOdometerMeters = 110_000.0,
+            finishedOdometerKilometers = 110.0,
             pricePerKilometer = 1.5
         )
 
@@ -38,14 +38,14 @@ class JobFareQuoteTest {
     fun missingAnyReadingUsesFallback() {
         val snapshots = JobMileageSnapshots(
             jobId = "job-1",
-            startedOdometerMeters = 100_000.0,
-            passengerOdometerMeters = null
+            startedOdometerKilometers = 100.0,
+            passengerOdometerKilometers = null
         )
 
         assertNull(
             calculateJobFareQuote(
                 snapshots = snapshots,
-                finishedOdometerMeters = 110_000.0,
+                finishedOdometerKilometers = 110.0,
                 pricePerKilometer = 1.0
             )
         )
@@ -55,14 +55,14 @@ class JobFareQuoteTest {
     fun decreasingOdometerUsesFallback() {
         val snapshots = JobMileageSnapshots(
             jobId = "job-1",
-            startedOdometerMeters = 100_000.0,
-            passengerOdometerMeters = 99_000.0
+            startedOdometerKilometers = 100.0,
+            passengerOdometerKilometers = 99.0
         )
 
         assertNull(
             calculateJobFareQuote(
                 snapshots = snapshots,
-                finishedOdometerMeters = 110_000.0,
+                finishedOdometerKilometers = 110.0,
                 pricePerKilometer = 1.0
             )
         )

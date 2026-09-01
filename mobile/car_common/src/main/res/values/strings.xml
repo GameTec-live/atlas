@@ -22,6 +22,7 @@
     <string name="driver_job_finished">Job finished</string>
     <string name="driver_cancel_job_error">Could not cancel the current job</string>
     <string name="driver_finish_job_error">Could not finish the current job</string>
+    <string name="driver_finish_job_changed">The current job changed. Review it before finishing.</string>
     <string name="driver_finish_confirmation_title">Finish job?</string>
     <string name="driver_finish_total_label">Total driven</string>
     <string name="driver_finish_passenger_label">With passenger</string>

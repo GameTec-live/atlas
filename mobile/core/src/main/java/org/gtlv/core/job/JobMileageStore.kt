@@ -6,8 +6,8 @@ import androidx.core.content.edit
 
 data class JobMileageSnapshots(
     val jobId: String,
-    val startedOdometerMeters: Double?,
-    val passengerOdometerMeters: Double?
+    val startedOdometerKilometers: Double?,
+    val passengerOdometerKilometers: Double?
 )
 
 interface JobMileageStateStore {
@@ -16,13 +16,13 @@ interface JobMileageStateStore {
     fun recordJobStarted(
         userId: String,
         jobId: String,
-        odometerMeters: Double?
+        odometerKilometers: Double?
     )
 
     fun recordPersonCollected(
         userId: String,
         jobId: String,
-        odometerMeters: Double?
+        odometerKilometers: Double?
     )
 
     fun clear(userId: String)
@@ -52,9 +52,9 @@ class JobMileageStore(
 
         return JobMileageSnapshots(
             jobId = jobId,
-            startedOdometerMeters =
+            startedOdometerKilometers =
                 readOdometer(startedKey(userId)),
-            passengerOdometerMeters =
+            passengerOdometerKilometers =
                 readOdometer(passengerKey(userId))
         )
     }
@@ -62,11 +62,14 @@ class JobMileageStore(
     override fun recordJobStarted(
         userId: String,
         jobId: String,
-        odometerMeters: Double?
+        odometerKilometers: Double?
     ) {
         preferences.edit {
             putString(jobKey(userId), jobId)
-            putOdometer(startedKey(userId), odometerMeters)
+            putOdometer(
+                startedKey(userId),
+                odometerKilometers
+            )
             remove(passengerKey(userId))
         }
     }
@@ -74,7 +77,7 @@ class JobMileageStore(
     override fun recordPersonCollected(
         userId: String,
         jobId: String,
-        odometerMeters: Double?
+        odometerKilometers: Double?
     ) {
         val existing = getSnapshots(userId)
 
@@ -85,7 +88,7 @@ class JobMileageStore(
             }
             putOdometer(
                 passengerKey(userId),
-                odometerMeters
+                odometerKilometers
             )
         }
     }

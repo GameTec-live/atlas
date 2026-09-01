@@ -55,6 +55,7 @@ class Telemetry(
 
     private val mileageListener =
         OnCarDataAvailableListener<Mileage> { mileage ->
+            // Despite its legacy name, AndroidX returns this in kilometres.
             odometer = mileage.odometerMeters
                 .successfulValue()
                 ?.toDouble()
