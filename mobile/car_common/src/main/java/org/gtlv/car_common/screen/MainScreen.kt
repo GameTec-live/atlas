@@ -2,6 +2,7 @@ package org.gtlv.car_common.screen
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.SystemClock
 import androidx.car.app.AppManager
 import androidx.car.app.CarContext
 import androidx.car.app.CarToast
@@ -42,8 +43,13 @@ import org.gtlv.core.geoservice.RouteProgress
 import org.gtlv.core.geoservice.RouteProgressCalculator
 import org.gtlv.core.geoservice.RouteResult
 import org.gtlv.core.job.JobActionResult
+import org.gtlv.core.job.AssignedJobNotification
+import org.gtlv.core.job.JobNotification
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
+import org.gtlv.core.job.UnassignedJobNotification
+import org.gtlv.core.job.UnassignedJobsResult
+import org.gtlv.core.job.hasSameIdentity
 import org.gtlv.core.location.LocationProvider
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.location.AtlasLocation
@@ -74,6 +80,8 @@ class MainScreen(
     private val getUserId: () -> String?,
     private val telemetryProvider: TelemetryProvider?,
     private val liveMapUsers: StateFlow<Map<String, LiveMapUser>>?,
+    private val jobNotifications: StateFlow<List<JobNotification>>?,
+    private val resolveJobNotification: ((JobNotification) -> Unit)?,
 ) : RoleAwareScreen(carContext, role, getRole, onRoleLost) {
     private val screenScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate,
@@ -90,6 +98,8 @@ class MainScreen(
     private var collectedStateJob: Job? = null
     private var jobLifecycleJob: Job? = null
     private var liveMapUsersJob: Job? = null
+    private var jobNotificationsJob: Job? = null
+    private var jobNotificationTimeoutJob: Job? = null
     private var routeRequestJob: Job? = null
     private var observedCollectedUserId: String? = null
     private var currentJob: AtlasJob? = null
@@ -113,6 +123,14 @@ class MainScreen(
     private var lastAutomaticRerouteAtMillis = 0L
     private var failedRouteTarget: AutomotiveRouteTarget? = null
     private var lastRouteFailureAtMillis = 0L
+    private val pendingJobNotifications = mutableListOf<JobNotification>()
+    private var currentJobNotification: JobNotification? = null
+    private var currentJobNotificationExpiresAt = 0L
+    private var isDecliningJobNotification = false
+    private var knownQueuedJobIds: Set<String>? = null
+    private var knownUnassignedJobIds: Set<String>? = null
+    private var synchronizedJobNotifications: List<JobNotification> =
+        emptyList()
 
     init {
         carContext
@@ -127,6 +145,7 @@ class MainScreen(
         observeCollectedJobState()
         observeJobLifecycle()
         observeLiveMapUsers()
+        observeJobNotifications()
         startJobPolling()
     }
 
@@ -143,6 +162,16 @@ class MainScreen(
         jobLifecycleJob = null
         liveMapUsersJob?.cancel()
         liveMapUsersJob = null
+        jobNotificationsJob?.cancel()
+        jobNotificationsJob = null
+        jobNotificationTimeoutJob?.cancel()
+        jobNotificationTimeoutJob = null
+        pendingJobNotifications.clear()
+        currentJobNotification = null
+        currentJobNotificationExpiresAt = 0L
+        isDecliningJobNotification = false
+        synchronizedJobNotifications = emptyList()
+        mapRenderer.hideJobNotification()
         routeRequestJob?.cancel()
         routeRequestJob = null
         observedCollectedUserId = null
@@ -244,14 +273,77 @@ class MainScreen(
         actionStripBuilder.addAction(recenterActionBuilder.build())
         actionStripBuilder.addAction(jobAction)
 
+        val actionStrip = if (currentJobNotification == null) {
+            actionStripBuilder.build()
+        } else {
+            buildJobNotificationActionStrip()
+        }
+
         val builder = NavigationTemplate.Builder()
-            .setActionStrip(actionStripBuilder.build())
+            .setActionStrip(actionStrip)
 
         if (carContext.carAppApiLevel >= 2) {
             addInteractiveMapControls(builder)
         }
 
         return builder.build()
+    }
+
+    private fun buildJobNotificationActionStrip(): ActionStrip {
+        val notification = currentJobNotification
+            ?: return ActionStrip.Builder().build()
+        if (notification is UnassignedJobNotification) {
+            val assignActionBuilder = Action.Builder()
+                .setTitle(carContext.getString(R.string.job_notification_assign_now))
+                .setOnClickListener {
+                    // Assignment flow will be added in a follow-up PBI.
+                }
+
+            if (carContext.carAppApiLevel >= 4) {
+                val flags = if (carContext.carAppApiLevel >= 5) {
+                    Action.FLAG_PRIMARY or Action.FLAG_IS_PERSISTENT
+                } else {
+                    Action.FLAG_PRIMARY
+                }
+                assignActionBuilder
+                    .setFlags(flags)
+                    .setBackgroundColor(CarColor.BLUE)
+            }
+
+            return ActionStrip.Builder()
+                .addAction(assignActionBuilder.build())
+                .build()
+        }
+
+        val declineActionBuilder = Action.Builder()
+            .setTitle(
+                carContext.getString(
+                    if (isDecliningJobNotification) {
+                        R.string.job_notification_declining
+                    } else {
+                        R.string.job_notification_decline
+                    },
+                ),
+            )
+            .setOnClickListener(::declineJobNotification)
+
+        if (carContext.carAppApiLevel >= 4) {
+            val flags = if (carContext.carAppApiLevel >= 5) {
+                Action.FLAG_PRIMARY or Action.FLAG_IS_PERSISTENT
+            } else {
+                Action.FLAG_PRIMARY
+            }
+            declineActionBuilder
+                .setFlags(flags)
+                .setBackgroundColor(CarColor.RED)
+        }
+        if (carContext.carAppApiLevel >= 5) {
+            declineActionBuilder.setEnabled(!isDecliningJobNotification)
+        }
+
+        return ActionStrip.Builder()
+            .addAction(declineActionBuilder.build())
+            .build()
     }
 
     @RequiresCarApi(2)
@@ -380,6 +472,7 @@ class MainScreen(
         jobRequestMutex.withLock {
             when (val result = repository.getJobs()) {
                 is JobsResult.Success -> {
+                    detectNewQueuedJobs(result.queuedJobs)
                     currentJob = result.currentJob
                     queuedJobs = result.queuedJobs
                     mapRenderer.updateQueuedJobCount(queuedJobs.size)
@@ -390,6 +483,10 @@ class MainScreen(
 
                 else -> hasLoadError = true
             }
+            if (role == ShiftRole.DISPATCHER) {
+                detectNewUnassignedJobs(repository)
+            }
+            removeStaleJobNotifications()
             isLoading = false
             updateJobOverlay()
             invalidateSafely()
@@ -917,6 +1014,223 @@ class MainScreen(
         ?: to?.let { "${it.latitude}, ${it.longitude}" }
         ?: carContext.getString(R.string.driver_unknown_address)
 
+    private fun AtlasJob.toNotificationAddress(): String? = toAddress
+        ?: to?.let { "${it.latitude}, ${it.longitude}" }
+
+    private fun detectNewQueuedJobs(jobs: List<AtlasJob>) {
+        val previousIds = knownQueuedJobIds
+        knownQueuedJobIds = jobs.mapTo(mutableSetOf(), AtlasJob::id)
+        if (previousIds == null) return
+
+        jobs.asSequence()
+            .filter { job -> job.id !in previousIds }
+            .forEach { job ->
+                enqueueJobNotification(
+                    AssignedJobNotification(
+                        jobId = job.id,
+                        from = job.fromDisplayAddress(),
+                        to = job.toNotificationAddress(),
+                        note = job.note,
+                    ),
+                )
+            }
+    }
+
+    private suspend fun detectNewUnassignedJobs(repository: JobRepository) {
+        val result = repository.getUnassignedJobs()
+        if (result !is UnassignedJobsResult.Success) return
+
+        val previousIds = knownUnassignedJobIds
+        knownUnassignedJobIds = result.jobs.mapTo(mutableSetOf(), AtlasJob::id)
+        if (previousIds == null) return
+
+        result.jobs.asSequence()
+            .filter { job -> job.id !in previousIds }
+            .forEach { job ->
+                enqueueJobNotification(
+                    UnassignedJobNotification(
+                        jobId = job.id,
+                        from = job.fromDisplayAddress(),
+                        to = job.toNotificationAddress(),
+                        note = job.note,
+                    ),
+                )
+            }
+    }
+
+    private fun enqueueJobNotification(notification: JobNotification) {
+        val isAlreadyShown = currentJobNotification
+            ?.hasSameIdentity(notification) == true
+        val isAlreadyPending = pendingJobNotifications.any { pending ->
+            pending.hasSameIdentity(notification)
+        }
+        if (isAlreadyShown || isAlreadyPending) return
+
+        pendingJobNotifications += notification
+        showNextJobNotification()
+    }
+
+    private fun observeJobNotifications() {
+        if (jobNotificationsJob != null) return
+        val notifications = jobNotifications ?: return
+
+        jobNotificationsJob = screenScope.launch {
+            notifications.collect { activeNotifications ->
+                reconcileSynchronizedJobNotifications(activeNotifications)
+                refreshJobs()
+            }
+        }
+    }
+
+    private fun reconcileSynchronizedJobNotifications(
+        activeNotifications: List<JobNotification>,
+    ) {
+        val resolvedNotifications =
+            synchronizedJobNotifications.filter { previous ->
+                activeNotifications.none { active ->
+                    active.hasSameIdentity(previous)
+                }
+            }
+        synchronizedJobNotifications = activeNotifications
+
+        resolvedNotifications.forEach(::dismissJobNotification)
+        activeNotifications.forEach(::enqueueJobNotification)
+    }
+
+    private fun removeStaleJobNotifications() {
+        fun isStillAvailable(notification: JobNotification): Boolean =
+            when (notification) {
+                is AssignedJobNotification ->
+                    knownQueuedJobIds?.contains(notification.jobId) != false
+
+                is UnassignedJobNotification ->
+                    knownUnassignedJobIds?.contains(notification.jobId) != false
+            }
+
+        pendingJobNotifications.removeAll { notification ->
+            !isStillAvailable(notification)
+        }
+        currentJobNotification
+            ?.takeUnless(::isStillAvailable)
+            ?.let { notification ->
+                dismissJobNotification(notification)
+            }
+    }
+
+    private fun showNextJobNotification() {
+        if (currentJobNotification != null) return
+
+        val notification = pendingJobNotifications.firstOrNull() ?: return
+        pendingJobNotifications.removeAt(0)
+        currentJobNotification = notification
+        currentJobNotificationExpiresAt =
+            SystemClock.elapsedRealtime() + JOB_NOTIFICATION_DURATION_MILLIS
+        isDecliningJobNotification = false
+
+        mapRenderer.showJobNotification(
+            notification = notification,
+            expiresAtElapsedRealtime = currentJobNotificationExpiresAt,
+        )
+        invalidateSafely()
+        scheduleAutomaticJobAcceptance(notification.jobId)
+    }
+
+    private fun scheduleAutomaticJobAcceptance(jobId: String) {
+        jobNotificationTimeoutJob?.cancel()
+        val remainingMillis = (
+            currentJobNotificationExpiresAt - SystemClock.elapsedRealtime()
+            ).coerceAtLeast(0L)
+
+        jobNotificationTimeoutJob = screenScope.launch {
+            delay(remainingMillis.milliseconds)
+            if (
+                currentJobNotification?.jobId == jobId &&
+                !isDecliningJobNotification
+            ) {
+                acceptJobNotification(jobId)
+            }
+        }
+    }
+
+    /**
+     * The server-side job state is already valid when the notification arrives.
+     * Expiry accepts it by retaining that state and closing the popup.
+     */
+    private fun acceptJobNotification(jobId: String) {
+        val notification = currentJobNotification
+            ?.takeIf { current -> current.jobId == jobId }
+            ?: return
+        resolveJobNotification?.invoke(notification)
+        dismissJobNotification(notification)
+        screenScope.launch { refreshJobs() }
+    }
+
+    private fun declineJobNotification() {
+        val notification = currentJobNotification ?: return
+        val repository = jobRepository
+        if (isDecliningJobNotification) return
+        if (repository == null) {
+            showToast(R.string.job_notification_decline_failed)
+            return
+        }
+
+        isDecliningJobNotification = true
+        jobNotificationTimeoutJob?.cancel()
+        jobNotificationTimeoutJob = null
+        mapRenderer.setJobNotificationDeclining(true)
+        invalidateSafely()
+
+        screenScope.launch {
+            val result = jobRequestMutex.withLock {
+                when (notification) {
+                    is AssignedJobNotification ->
+                        repository.cancelJob(notification.jobId)
+
+                    is UnassignedJobNotification ->
+                        repository.deleteUnassignedJob(notification.jobId)
+                }
+            }
+
+            if (result == JobActionResult.Success) {
+                resolveJobNotification?.invoke(notification)
+                dismissJobNotification(notification)
+                refreshJobs()
+            } else {
+                if (
+                    currentJobNotification
+                        ?.hasSameIdentity(notification) != true
+                ) {
+                    return@launch
+                }
+                isDecliningJobNotification = false
+                mapRenderer.setJobNotificationDeclining(false)
+                invalidateSafely()
+                showToast(R.string.job_notification_decline_failed)
+                scheduleAutomaticJobAcceptance(notification.jobId)
+            }
+        }
+    }
+
+    private fun dismissJobNotification(notification: JobNotification) {
+        pendingJobNotifications.removeAll { pending ->
+            pending.hasSameIdentity(notification)
+        }
+        if (
+            currentJobNotification?.hasSameIdentity(notification) != true
+        ) {
+            return
+        }
+
+        jobNotificationTimeoutJob?.cancel()
+        jobNotificationTimeoutJob = null
+        currentJobNotification = null
+        currentJobNotificationExpiresAt = 0L
+        isDecliningJobNotification = false
+        mapRenderer.hideJobNotification()
+        showNextJobNotification()
+        invalidateSafely()
+    }
+
     private fun showToast(messageResource: Int) {
         CarToast.makeText(
             carContext,
@@ -953,7 +1267,8 @@ class MainScreen(
     }
 
     private companion object {
-        const val JOB_REFRESH_INTERVAL_MILLIS = 15_000L
+        const val JOB_REFRESH_INTERVAL_MILLIS = 5_000L
+        const val JOB_NOTIFICATION_DURATION_MILLIS = 10_000L
         const val ROUTE_RETRY_INTERVAL_MILLIS = 15_000L
         const val AUTOMATIC_REROUTE_COOLDOWN_MILLIS = 15_000L
         const val MINIMUM_OFF_ROUTE_DISTANCE_KILOMETERS = 0.03

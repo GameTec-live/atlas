@@ -6,8 +6,7 @@ import org.gtlv.core.job.JobRepository
 
 class JobNotificationViewModelFactory(
     private val jobRepository: JobRepository,
-    private val webSocket:
-    JobNotificationWebSocket
+    private val notificationSync: JobNotificationSync
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -21,7 +20,7 @@ class JobNotificationViewModelFactory(
         ) {
             return JobNotificationViewModel(
                 jobRepository = jobRepository,
-                webSocket = webSocket
+                notificationSync = notificationSync
             ) as T
         }
 
