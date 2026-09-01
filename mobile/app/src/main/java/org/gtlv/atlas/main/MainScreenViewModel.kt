@@ -67,6 +67,7 @@ class MainScreenViewModel(
     private var collectedStateTask: Job? = null
     private var jobLifecycleTask: Job? = null
     private var routeRequestTask: Job? = null
+    private var pendingStartJobId: String? = null
     private var collectedJobId: String? = null
     private var latestLocation: AtlasLocation? = null
     private var latestVehicleHeadingDegrees: Int? = null
@@ -114,7 +115,7 @@ class MainScreenViewModel(
                     }
 
                     if (shouldStartNextJob) {
-                        startNextJob()
+                        startPendingNextJob()
                     }
                 }
             }
@@ -308,6 +309,8 @@ class MainScreenViewModel(
                 ?: return
 
         if (activeShift.session.startKilometer == null) {
+            pendingStartJobId = state.queuedJobs.first().id
+
             _uiState.update {
                 it.copy(
                     isStartKilometerDialogVisible = true,
@@ -320,6 +323,7 @@ class MainScreenViewModel(
         }
 
         val nextJob = state.queuedJobs.first()
+        pendingStartJobId = null
 
         launchNextJob(
             userId = userId,
@@ -345,6 +349,8 @@ class MainScreenViewModel(
             return
         }
 
+        pendingStartJobId = null
+
         _uiState.update {
             it.copy(
                 isStartKilometerDialogVisible = false,
@@ -356,7 +362,6 @@ class MainScreenViewModel(
 
     fun confirmStartKilometer() {
         val state = _uiState.value
-        val userId = activeUserId
         val startKilometer = state.startKilometerInput
             .trim()
             .replace(',', '.')
@@ -370,11 +375,28 @@ class MainScreenViewModel(
             return
         }
 
+        startPendingNextJob(
+            startKilometerToSave = startKilometer
+        )
+    }
+
+    private fun startPendingNextJob(
+        startKilometerToSave: Double? = null
+    ) {
+        val state = _uiState.value
+        val userId = activeUserId ?: return
+        val pendingJobId = pendingStartJobId ?: return
+        val pendingJob = state.queuedJobs.firstOrNull {
+            it.id == pendingJobId
+        }
+
+        if (pendingJob == null) {
+            cancelPendingNextJob()
+            return
+        }
+
         if (
-            userId == null ||
             state.currentJob != null ||
-            state.queuedJobs.isEmpty() ||
-            state.isLoading ||
             state.isStartingNextJob ||
             state.isCancellingCurrentJob ||
             state.isFinishingCurrentJob ||
@@ -388,9 +410,22 @@ class MainScreenViewModel(
 
         launchNextJob(
             userId = userId,
-            nextJob = state.queuedJobs.first(),
-            startKilometerToSave = startKilometer
+            nextJob = pendingJob,
+            startKilometerToSave = startKilometerToSave
         )
+    }
+
+    private fun cancelPendingNextJob() {
+        pendingStartJobId = null
+
+        _uiState.update {
+            it.copy(
+                isStartKilometerDialogVisible = false,
+                startKilometerInput = "",
+                isStartKilometerInputInvalid = false,
+                startNextJobFailed = true
+            )
+        }
     }
 
     private fun launchNextJob(
@@ -431,6 +466,8 @@ class MainScreenViewModel(
                     return@launch
                 }
             }
+
+            pendingStartJobId = null
 
             val startedOdometer =
                 currentOdometerKilometers()
@@ -864,6 +901,21 @@ class MainScreenViewModel(
             currentJob != null &&
                     currentJob.id == collectedJobId
 
+        val pendingJobId = pendingStartJobId
+        val pendingJobStarted =
+            pendingJobId != null && currentJob?.id == pendingJobId
+        val pendingJobUnavailable =
+            pendingJobId != null &&
+                !pendingJobStarted &&
+                (
+                    currentJob != null ||
+                        result.queuedJobs.none { it.id == pendingJobId }
+                    )
+
+        if (pendingJobStarted || pendingJobUnavailable) {
+            pendingStartJobId = null
+        }
+
         if (jobChanged) {
             pickupRouteOrigin = null
             destinationRouteOrigin = null
@@ -923,7 +975,21 @@ class MainScreenViewModel(
                             result.queuedJobs.isNotEmpty(),
                 hasError = false,
                 isStartingNextJob = false,
-                startNextJobFailed = false,
+                startNextJobFailed = pendingJobUnavailable,
+                isStartKilometerDialogVisible =
+                    it.isStartKilometerDialogVisible &&
+                        !pendingJobStarted &&
+                        !pendingJobUnavailable,
+                startKilometerInput =
+                    if (pendingJobStarted || pendingJobUnavailable) {
+                        ""
+                    } else {
+                        it.startKilometerInput
+                    },
+                isStartKilometerInputInvalid =
+                    it.isStartKilometerInputInvalid &&
+                        !pendingJobStarted &&
+                        !pendingJobUnavailable,
                 isCancellingCurrentJob = false,
                 cancelCurrentJobFailed = false,
                 isCancelConfirmationVisible =
@@ -1643,6 +1709,8 @@ class MainScreenViewModel(
     )
 
     private fun cancelAllTasks() {
+        pendingStartJobId = null
+
         refreshJob?.cancel()
         refreshJob = null
 
