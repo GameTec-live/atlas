@@ -1,0 +1,29 @@
+[Unit]
+Description=Atlas Cloudflare Tunnel
+Requires=atlas-container-init.service
+After=atlas-container-init.service network-online.target
+Wants=network-online.target
+ConditionPathExists=%h/.config/atlas/cloudflare-tunnel.env
+
+[Container]
+Image=docker.io/cloudflare/cloudflared:latest
+Pull=missing
+AutoUpdate=registry
+ContainerName=atlas-cloudflare-tunnel
+Network=host
+User=65532
+Group=65532
+EnvironmentFile=%h/.config/atlas/cloudflare-tunnel.env
+Exec=tunnel --no-autoupdate run
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+Tmpfs=/tmp:rw,noexec,nosuid,size=16m
+
+[Service]
+Restart=always
+RestartSec=5s
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

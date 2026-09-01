@@ -41,8 +41,12 @@ internal fun AuthenticatedNavHost(
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
     onCancelCurrentJob: () -> Unit,
+    onDismissCancelConfirmation: () -> Unit,
+    onConfirmCancel: () -> Unit,
     onPersonCollected: () -> Unit,
     onJobFinished: () -> Unit,
+    onDismissFinishConfirmation: () -> Unit,
+    onConfirmFinish: () -> Unit,
     onLoadNewJob: () -> Unit,
     onClearNewJob: () -> Unit,
     onEditNewJobAddress: (org.gtlv.core.job.JobLocationField) -> Unit,
@@ -126,8 +130,14 @@ internal fun AuthenticatedNavHost(
                 onRetryJobs = onRetryJobs,
                 onStartNextJob = onStartNextJob,
                 onCancelCurrentJob = onCancelCurrentJob,
+                onDismissCancelConfirmation =
+                    onDismissCancelConfirmation,
+                onConfirmCancel = onConfirmCancel,
                 onPersonCollected = onPersonCollected,
                 onJobFinished = onJobFinished,
+                onDismissFinishConfirmation =
+                    onDismissFinishConfirmation,
+                onConfirmFinish = onConfirmFinish,
                 unassignedJobCount =
                     unassignedJobsState.loadedJobCount,
                 onUnassignedJobsClick = {

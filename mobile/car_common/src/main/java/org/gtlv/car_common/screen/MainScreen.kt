@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.car.app.AppManager
 import androidx.car.app.CarContext
 import androidx.car.app.CarToast
+import androidx.car.app.ScreenManager
 import androidx.car.app.annotations.RequiresCarApi
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
@@ -32,6 +33,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.gtlv.car_common.R
 import org.gtlv.core.job.CollectedJobStore
+import org.gtlv.core.job.JobMileageStore
+import org.gtlv.core.job.JobFareQuote
+import org.gtlv.core.job.calculateJobFareQuote
 import org.gtlv.core.geoservice.GeoServiceRepository
 import org.gtlv.core.geoservice.Route
 import org.gtlv.core.geoservice.RoutePoint
@@ -55,6 +59,8 @@ import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryVehicleState
 import org.gtlv.core.telemetry.LiveMapUser
+import org.gtlv.core.pricing.PriceResult
+import org.gtlv.core.pricing.PricingRepository
 import kotlin.time.Duration.Companion.milliseconds
 import org.gtlv.core.job.Job as AtlasJob
 import androidx.core.graphics.createBitmap
@@ -68,6 +74,8 @@ class MainScreen(
     private val locationProvider: LocationProvider?,
     private val serverSettingsRepository: ServerSettingsRepository?,
     private val collectedJobStore: CollectedJobStore?,
+    private val jobMileageStore: JobMileageStore?,
+    private val pricingRepository: PricingRepository?,
     private val geoServiceRepository: GeoServiceRepository?,
     private val getUserId: () -> String?,
     private val telemetryProvider: TelemetryProvider?,
@@ -101,6 +109,7 @@ class MainScreen(
     private var isStartingNextJob = false
     private var isCancellingCurrentJob = false
     private var isFinishingCurrentJob = false
+    private var isPreparingFinishConfirmation = false
     private var isPersonCollected = false
     private var latestLocation: AtlasLocation? = null
     private var latestHeadingDegrees: Int? = null
@@ -182,7 +191,8 @@ class MainScreen(
         val isJobActionInProgress =
             isStartingNextJob ||
                 isCancellingCurrentJob ||
-                isFinishingCurrentJob
+                isFinishingCurrentJob ||
+                isPreparingFinishConfirmation
         val jobActionBuilder = Action.Builder()
         when {
             currentJob == null -> {
@@ -487,16 +497,26 @@ class MainScreen(
         when {
             isStartingNextJob ||
                 isCancellingCurrentJob ||
-                isFinishingCurrentJob -> return
+                isFinishingCurrentJob ||
+                isPreparingFinishConfirmation -> return
             currentJob != null -> showToast(R.string.driver_job_already_active)
             queuedJobs.isEmpty() -> showToast(R.string.driver_no_next_job)
             jobRepository == null -> showToast(R.string.driver_start_job_error)
             else -> {
                 val nextJob = queuedJobs.first()
+                val userId = getUserId()
+                val startedOdometer = currentOdometerKilometers()
                 isStartingNextJob = true
                 showToast(R.string.driver_starting_job)
 
                 screenScope.launch {
+                    if (userId != null) {
+                        jobMileageStore?.recordJobStarted(
+                            userId = userId,
+                            jobId = nextJob.id,
+                            odometerKilometers = startedOdometer
+                        )
+                    }
                     val result = jobRequestMutex.withLock {
                         jobRepository.startJob(nextJob.id)
                     }
@@ -505,6 +525,12 @@ class MainScreen(
                     if (result == JobActionResult.Success) {
                         refreshJobs()
                     } else {
+                        if (userId != null) {
+                            jobMileageStore?.clearIfJobMatches(
+                                userId = userId,
+                                jobId = nextJob.id
+                            )
+                        }
                         showToast(R.string.driver_start_job_error)
                         invalidateSafely()
                     }
@@ -519,7 +545,8 @@ class MainScreen(
             isPersonCollected ||
             isStartingNextJob ||
             isCancellingCurrentJob ||
-            isFinishingCurrentJob
+            isFinishingCurrentJob ||
+            isPreparingFinishConfirmation
         ) return
 
         val userId = getUserId()
@@ -530,6 +557,11 @@ class MainScreen(
         }
 
         store.setCollectedJobId(userId, job.id)
+        jobMileageStore?.recordPersonCollected(
+            userId = userId,
+            jobId = job.id,
+            odometerKilometers = currentOdometerKilometers()
+        )
         isPersonCollected = true
         telemetryProvider?.setVehicleState(TelemetryVehicleState.OCCUPIED)
         updateJobOverlay()
@@ -542,18 +574,103 @@ class MainScreen(
     }
 
     private fun finishCurrentJob() {
-        endCurrentJob(complete = true)
+        val job = currentJob ?: return
+        val userId = getUserId()
+
+        if (
+            !isPersonCollected ||
+            isStartingNextJob ||
+            isCancellingCurrentJob ||
+            isFinishingCurrentJob ||
+            isPreparingFinishConfirmation
+        ) return
+
+        val finishedOdometer = currentOdometerKilometers()
+        val snapshots = userId
+            ?.let { jobMileageStore?.getSnapshots(it) }
+            ?.takeIf { it.jobId == job.id }
+        val hasCompleteMileage = calculateJobFareQuote(
+            snapshots = snapshots,
+            finishedOdometerKilometers = finishedOdometer,
+            pricePerKilometer = 0.0
+        ) != null
+
+        if (!hasCompleteMileage || pricingRepository == null) {
+            showFinishConfirmation(
+                jobId = job.id,
+                quote = null
+            )
+            return
+        }
+
+        isPreparingFinishConfirmation = true
+        invalidateSafely()
+
+        screenScope.launch {
+            val priceResult =
+                pricingRepository.getPricePerKilometer()
+            val price = (priceResult as? PriceResult.Success)
+                ?.pricePerKilometer
+            val quote = calculateJobFareQuote(
+                snapshots = snapshots,
+                finishedOdometerKilometers = finishedOdometer,
+                pricePerKilometer = price
+            )
+
+            isPreparingFinishConfirmation = false
+            invalidateSafely()
+
+            if (currentJob?.id == job.id) {
+                showFinishConfirmation(
+                    jobId = job.id,
+                    quote = quote
+                )
+            }
+        }
+    }
+
+    private fun showFinishConfirmation(
+        jobId: String,
+        quote: JobFareQuote?
+    ) {
+        carContext.getCarService(
+            ScreenManager::class.java
+        ).push(
+            FinishJobConfirmationScreen(
+                carContext = carContext,
+                quote = quote,
+                onConfirm = {
+                    endCurrentJob(
+                        complete = true,
+                        expectedJobId = jobId
+                    )
+                }
+            )
+        )
     }
 
     private fun endCurrentJob(
-        complete: Boolean
+        complete: Boolean,
+        expectedJobId: String? = null
     ) {
-        val job = currentJob ?: return
+        val job = currentJob
+        if (
+            expectedJobId != null &&
+            job?.id != expectedJobId
+        ) {
+            showToast(
+                R.string.driver_finish_job_changed
+            )
+            return
+        }
+        job ?: return
+
         val repository = jobRepository
         if (
             isStartingNextJob ||
             isCancellingCurrentJob ||
             isFinishingCurrentJob ||
+            isPreparingFinishConfirmation ||
             (complete && !isPersonCollected)
         ) return
 
@@ -591,6 +708,7 @@ class MainScreen(
                 getUserId()?.let { userId ->
                     collectedJobStore
                         ?.clearCollectedJobId(userId)
+                    jobMileageStore?.clear(userId)
                 }
                 currentJob = null
                 isPersonCollected = false
@@ -857,6 +975,12 @@ class MainScreen(
                 else -> TelemetryVehicleState.ON_THE_WAY
             },
         )
+    }
+
+    private fun currentOdometerKilometers(): Double? {
+        return telemetryProvider?.telemetry?.value
+            ?.odometer
+            ?.takeIf { it.isFinite() && it >= 0.0 }
     }
 
     private fun currentJobText(): String = when {

@@ -26,7 +26,7 @@ All routes are below `/api/v1`:
 | `GET /ssh` | Read the persistent SSH policy |
 | `POST /ssh/enable` | Persistently enable and start SSH |
 | `POST /ssh/disable` | Persistently disable and stop SSH |
-| `GET /connections/adapters` | Available and placeholder connection adapters |
+| `GET /connections/adapters` | Available connection adapters |
 | `GET /connections/network-manager` | List NetworkManager connections |
 | `GET /connections/network-manager/devices` | List connected and disconnected network devices |
 | `GET /connections/network-manager/wifi` | Scan Wi-Fi; optional `device` query |
@@ -35,11 +35,50 @@ All routes are below `/api/v1`:
 | `POST /connections/network-manager/{uuid}/disconnect` | Disconnect a connection |
 | `DELETE /connections/network-manager/{uuid}` | Forget a connection |
 | `GET/POST/DELETE /connections/auth-origins` | List, add, or remove an external HTTPS origin |
+| `GET /connections/remote-access` | Provisioning and runtime state for Cloudflare Tunnel and Tailscale |
+| `PUT/DELETE /connections/remote-access/cloudflare-tunnel` | Provision and start, or stop and remove, a Cloudflare Tunnel token |
+| `PUT/DELETE /connections/remote-access/tailscale` | Provision and start, or stop and remove, Tailscale |
 
 IPv4 and IPv6 settings use `method` (`auto`, `manual`, or `disabled`), CIDR
 `addresses`, an optional `gateway`, and `dns` addresses. Values are validated
 before they are passed to `nmcli`, and commands are executed directly without a
 shell. Wi-Fi passwords go through stdin rather than process arguments.
+
+Remote access is deliberately one-call provisioning. `PUT` writes a mode-0600
+credential file and starts (or restarts) the immutable rootless Quadlet. The
+aggregate `GET` never returns credentials; each provider reports
+`provisioned`, its systemd `state`, and a `detail` substate. `DELETE` stops the
+connector and removes its local credentials. Removing Tailscale also removes
+its local node state; revoke Cloudflare and Tailscale access in their control
+planes when retiring a device.
+
+```sh
+# Gather both providers in one request.
+curl --unix-socket /run/atlas-management/api.sock \
+  -H "Authorization: Bearer $(cat /home/atlas-containers/.config/atlas/management-token)" \
+  http://localhost/api/v1/connections/remote-access
+
+# Each provider takes one provisioning request and starts immediately.
+curl --unix-socket /run/atlas-management/api.sock \
+  -H "Authorization: Bearer $(cat /home/atlas-containers/.config/atlas/management-token)" \
+  -H 'Content-Type: application/json' \
+  -X PUT -d '{"token":"<CLOUDFLARE_TUNNEL_TOKEN>"}' \
+  http://localhost/api/v1/connections/remote-access/cloudflare-tunnel
+
+curl --unix-socket /run/atlas-management/api.sock \
+  -H "Authorization: Bearer $(cat /home/atlas-containers/.config/atlas/management-token)" \
+  -H 'Content-Type: application/json' \
+  -X PUT -d '{"authKey":"<TAILSCALE_AUTH_KEY>","hostname":"atlas-1"}' \
+  http://localhost/api/v1/connections/remote-access/tailscale
+```
+
+The optional Tailscale `hostname` must be a DNS name. Its userspace connector
+serves the Atlas HTTPS endpoint on the node's Tailscale HTTPS name. The
+Cloudflare Tunnel uses the remotely managed ingress associated with its token;
+point that ingress at `https://127.0.0.1:443` and disable origin TLS validation
+for Atlas's device-local certificate. Add the public Cloudflare or Tailscale
+HTTPS URL through `/connections/auth-origins` as a second call so browser login
+requests from that URL are trusted by Atlas.
 
 Example update from the host for diagnostics:
 
@@ -62,8 +101,16 @@ sudo atlas-sys poweroff
 sudo atlas-sys ssh status
 sudo atlas-sys ssh enable
 sudo atlas-sys ssh disable
+sudo atlas-sys remote-access status
+sudo atlas-sys cloudflare-tunnel provision /path/to/cloudflare-token
+sudo atlas-sys cloudflare-tunnel remove
+sudo atlas-sys tailscale provision /path/to/tailscale-auth-key atlas-1
+sudo atlas-sys tailscale remove
 sudo atlas-sys factory-reset
 ```
+
+Credential arguments are file paths, not literal secrets. Use `-` to pipe a
+credential from a secret manager through stdin.
 
 The reset command requires typing `RESET` on an interactive terminal. The
 explicit `factory-reset --yes` form is available for automation. The client is

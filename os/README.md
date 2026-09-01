@@ -3,7 +3,8 @@
 This directory is an out-of-tree `rpi-image-gen` source tree. In the Atlas
 repository build it also compiles the sibling `apps/osManagementAPI` module. It
 builds a minimal Raspberry Pi 5 appliance with an immutable A/B root, persistent
-data, rootless Podman Quadlets, NetworkManager, optional SSH and text branding.
+data, rootless Podman Quadlets, NetworkManager, optional Cloudflare Tunnel,
+Tailscale and SSH, and text branding.
 
 Detailed design, build, provisioning, operation and troubleshooting guidance is
 in [the documentation index](docs/README.md). Start there before flashing,
@@ -77,6 +78,11 @@ socket is mounted only into the reloader. The reloader can consequently control
 all containers owned by this account if compromised, although its application
 API filters operations to the labeled router and geocoder consumers.
 
+Cloudflare Tunnel and Tailscale are optional rootless Quadlets. They remain
+stopped until provisioned through the management API, use outbound connections
+only, drop all Linux capabilities and share the host network solely to proxy
+the local Atlas HTTPS listener.
+
 ## SSH
 
 SSH is disabled by default. Its state and host keys persist across A/B updates.
@@ -139,8 +145,9 @@ The root service listens only on `/run/atlas-management/api.sock`. The API
 container receives that socket plus a per-device bearer-token file; no other
 workload receives either. Updates are streamed over this socket rather than
 downloaded by the root daemon. Trial boots are committed after all eight
-containers remain healthy for five minutes. Power, NetworkManager, trusted
-origin and factory-reset operations use the same narrow API. See the
+containers remain healthy for five minutes. Power, NetworkManager,
+trusted-origin, Cloudflare Tunnel, Tailscale and factory-reset operations use
+the same narrow API. See the
 [management API contract](../apps/osManagementAPI/README.md).
 
 Host administrators can use the authenticated Unix-socket client directly:
@@ -148,6 +155,8 @@ Host administrators can use the authenticated Unix-socket client directly:
 ```sh
 sudo atlas-sys status
 sudo atlas-sys update apply /path/to/atlas-rpi5-update.tar.zst
+sudo atlas-sys cloudflare-tunnel provision /path/to/cloudflare-token
+sudo atlas-sys tailscale provision /path/to/tailscale-auth-key atlas-1
 sudo atlas-sys factory-reset
 ```
 

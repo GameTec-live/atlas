@@ -58,6 +58,16 @@ rg -q -F 'management-token:/run/secrets/atlas-management-token:ro' \
     "$quadlet_dir/atlas-api.container"
 rg -q -F 'PodmanArgs=--group-add=keep-groups' "$quadlet_dir/atlas-api.container"
 [[ "$(rg -l '/run/atlas-management' "$quadlet_dir" | wc -l)" -eq 1 ]]
+rg -q -F 'ConditionPathExists=%h/.config/atlas/cloudflare-tunnel.env' \
+    "$quadlet_dir/atlas-cloudflare-tunnel.container"
+rg -q -F 'ConditionPathExists=%h/.config/atlas/tailscale.env' \
+    "$quadlet_dir/atlas-tailscale.container"
+rg -q -F 'Environment=TS_USERSPACE=true' "$quadlet_dir/atlas-tailscale.container"
+rg -q -F 'DropCapability=all' "$quadlet_dir/atlas-cloudflare-tunnel.container"
+rg -q -F 'DropCapability=all' "$quadlet_dir/atlas-tailscale.container"
+tailscale_serve="$source_root/layer/atlas-containers-core.rootfs-overlay/usr/share/atlas/tailscale-serve.json"
+python3 -m json.tool "$tailscale_serve" >/dev/null
+rg -q -F 'https+insecure://127.0.0.1:443' "$tailscale_serve"
 
 management_unit="$source_root/layer/atlas-management.rootfs-overlay/usr/lib/systemd/system/atlas-management.service"
 reset_unit="$source_root/layer/atlas-management.rootfs-overlay/usr/lib/systemd/system/atlas-factory-reset.service"
@@ -77,6 +87,11 @@ rg -q -F 'request POST /api/v1/factory-reset' "$management_cli"
 rg -q -F 'request GET /api/v1/ssh' "$management_cli"
 rg -q -F 'request POST /api/v1/ssh/enable' "$management_cli"
 rg -q -F 'request POST /api/v1/ssh/disable' "$management_cli"
+rg -q -F 'request GET /api/v1/connections/remote-access' "$management_cli"
+rg -q -F 'request_json PUT /api/v1/connections/remote-access/cloudflare-tunnel' "$management_cli"
+rg -q -F 'request DELETE /api/v1/connections/remote-access/cloudflare-tunnel' "$management_cli"
+rg -q -F 'request_json PUT /api/v1/connections/remote-access/tailscale' "$management_cli"
+rg -q -F 'request DELETE /api/v1/connections/remote-access/tailscale' "$management_cli"
 rg -q -F 'Path=/etc/NetworkManager/system-connections' \
     "$source_root/layer/atlas-networking.rootfs-overlay/etc/rpi-image-gen/slot-shared.d/atlas-networkmanager.conf"
 rg -q -F 'Path=/var/lib/NetworkManager' \

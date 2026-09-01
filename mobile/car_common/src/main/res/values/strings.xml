@@ -22,6 +22,15 @@
     <string name="driver_job_finished">Job finished</string>
     <string name="driver_cancel_job_error">Could not cancel the current job</string>
     <string name="driver_finish_job_error">Could not finish the current job</string>
+    <string name="driver_finish_job_changed">The current job changed. Review it before finishing.</string>
+    <string name="driver_finish_confirmation_title">Finish job?</string>
+    <string name="driver_finish_total_label">Total driven</string>
+    <string name="driver_finish_passenger_label">With passenger</string>
+    <string name="driver_finish_distance_and_price">%1$s km — %2$s</string>
+    <string name="driver_finish_rate_label">Rate</string>
+    <string name="driver_finish_rate_value">%1$s/km</string>
+    <string name="driver_finish_no">No</string>
+    <string name="driver_finish_yes">Yes</string>
     <string name="driver_person_collected_error">Could not mark the person as collected</string>
     <string name="driver_no_next_job">No assigned job is waiting</string>
     <string name="driver_job_already_active">Finish the current job first</string>

@@ -9,3 +9,4 @@
 mmdebstrap:
   customize-hooks:
     - find "$1/etc/containers/systemd/users/2000" -type f -exec chmod 0644 {} +
+    - chmod 0644 "$1/usr/share/atlas/tailscale-serve.json"

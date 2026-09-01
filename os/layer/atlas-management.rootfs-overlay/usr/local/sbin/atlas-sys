@@ -23,7 +23,16 @@ Commands:
   ssh status                     Show persistent SSH policy
   ssh enable                     Persistently enable SSH
   ssh disable                    Persistently disable SSH
+  remote-access status           Show Cloudflare Tunnel and Tailscale state
+  cloudflare-tunnel provision TOKEN_FILE
+                                 Provision and start a Cloudflare Tunnel
+  cloudflare-tunnel remove       Stop and remove the Cloudflare Tunnel
+  tailscale provision AUTH_KEY_FILE [HOSTNAME]
+                                 Provision and start Tailscale
+  tailscale remove               Stop and remove Tailscale
   factory-reset [--yes]          Erase mutable data and configuration
+
+Use - as a credential file to read the token or auth key from stdin.
 EOF
     exit 2
 }
@@ -56,6 +65,36 @@ request() {
     printf '\n'
 }
 
+request_json() {
+    method=$1
+    path=$2
+    request "$method" "$path" \
+        --header 'Content-Type: application/json' \
+        --data-binary @-
+}
+
+read_credential() {
+    path=$1
+    label=$2
+    if [ "$path" = - ]; then
+        value=$(tr -d '\r')
+    else
+        [ -f "$path" ] || die "$label file does not exist: $path"
+        [ -r "$path" ] || die "$label file is not readable: $path"
+        value=$(tr -d '\r' < "$path")
+    fi
+    case "$value" in
+        ''|*[!A-Za-z0-9._=+/-]*) die "$label contains invalid characters" ;;
+    esac
+    printf '%s' "$value"
+}
+
+validate_hostname() {
+    case "$1" in
+        ''|*[!A-Za-z0-9.-]*) die "hostname must be a DNS name" ;;
+    esac
+}
+
 confirm_factory_reset() {
     if [ "${1:-}" = --yes ]; then
         [ "$#" -eq 1 ] || usage
@@ -76,6 +115,7 @@ case "${1:-}" in
         [ "$#" -eq 1 ] || usage
         printf 'management=%s\n' "$(systemctl is-active atlas-management.service 2>/dev/null || true)"
         request GET /api/v1/update
+        request GET /api/v1/connections/remote-access
         ;;
     update)
         case "${2:-}" in
@@ -113,6 +153,49 @@ case "${1:-}" in
             disable)
                 [ "$#" -eq 2 ] || usage
                 request POST /api/v1/ssh/disable
+                ;;
+            *) usage ;;
+        esac
+        ;;
+    remote-access)
+        if [ "${2:-}" != status ] || [ "$#" -ne 2 ]; then
+            usage
+        fi
+        request GET /api/v1/connections/remote-access
+        ;;
+    cloudflare-tunnel)
+        case "${2:-}" in
+            provision)
+                [ "$#" -eq 3 ] || usage
+                credential=$(read_credential "$3" "Cloudflare Tunnel token")
+                printf '{"token":"%s"}' "$credential" | \
+                    request_json PUT /api/v1/connections/remote-access/cloudflare-tunnel
+                ;;
+            remove)
+                [ "$#" -eq 2 ] || usage
+                request DELETE /api/v1/connections/remote-access/cloudflare-tunnel
+                ;;
+            *) usage ;;
+        esac
+        ;;
+    tailscale)
+        case "${2:-}" in
+            provision)
+                [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || usage
+                credential=$(read_credential "$3" "Tailscale auth key")
+                hostname=${4:-}
+                if [ -n "$hostname" ]; then
+                    validate_hostname "$hostname"
+                    printf '{"authKey":"%s","hostname":"%s"}' "$credential" "$hostname" | \
+                        request_json PUT /api/v1/connections/remote-access/tailscale
+                else
+                    printf '{"authKey":"%s"}' "$credential" | \
+                        request_json PUT /api/v1/connections/remote-access/tailscale
+                fi
+                ;;
+            remove)
+                [ "$#" -eq 2 ] || usage
+                request DELETE /api/v1/connections/remote-access/tailscale
                 ;;
             *) usage ;;
         esac

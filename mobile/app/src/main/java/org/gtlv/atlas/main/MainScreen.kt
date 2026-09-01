@@ -40,8 +40,10 @@ import org.gtlv.atlas.address.AddressSearchField
 import org.gtlv.atlas.main.composable.AssignedJobDeclineDialog
 import org.gtlv.atlas.main.composable.AssignedJobNotificationBanner
 import org.gtlv.atlas.main.composable.DispatcherActionButtons
+import org.gtlv.atlas.main.composable.CancelJobConfirmationDialog
 import org.gtlv.atlas.main.composable.JobActionButtons
 import org.gtlv.atlas.main.composable.JobPanel
+import org.gtlv.atlas.main.composable.FinishJobConfirmationDialog
 import org.gtlv.atlas.main.composable.NavigationPanel
 import org.gtlv.atlas.main.composable.ProfileButton
 import org.gtlv.atlas.main.composable.ProfileSidebar
@@ -73,8 +75,12 @@ internal fun MainScreen(
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
     onCancelCurrentJob: () -> Unit,
+    onDismissCancelConfirmation: () -> Unit,
+    onConfirmCancel: () -> Unit,
     onPersonCollected: () -> Unit,
     onJobFinished: () -> Unit,
+    onDismissFinishConfirmation: () -> Unit,
+    onConfirmFinish: () -> Unit,
     unassignedJobCount: Int?,
     onUnassignedJobsClick: () -> Unit,
     onNewJobClick: () -> Unit,
@@ -86,6 +92,25 @@ internal fun MainScreen(
     onCloseAddressEditor: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    if (jobState.isCancelConfirmationVisible) {
+        CancelJobConfirmationDialog(
+            isCancelling =
+                jobState.isCancellingCurrentJob,
+            onConfirm = onConfirmCancel,
+            onDismiss = onDismissCancelConfirmation
+        )
+    }
+
+    jobState.finishConfirmation?.let { confirmation ->
+        FinishJobConfirmationDialog(
+            confirmation = confirmation,
+            isFinishing =
+                jobState.isFinishingCurrentJob,
+            onConfirm = onConfirmFinish,
+            onDismiss = onDismissFinishConfirmation
+        )
+    }
+
     val styleUrl =
         MapConfiguration.createStyleUrl(
             serverAddress = serverAddress
@@ -271,7 +296,8 @@ internal fun MainScreen(
                     isCancellingCurrentJob =
                         jobState.isCancellingCurrentJob,
                     isFinishingCurrentJob =
-                        jobState.isFinishingCurrentJob,
+                        jobState.isFinishingCurrentJob ||
+                            jobState.isPreparingFinishConfirmation,
                     isPersonCollected =
                         jobState.isPersonCollected,
                     isPrimaryJobActionEnabled =
@@ -279,6 +305,9 @@ internal fun MainScreen(
                                 !jobState.isStartingNextJob &&
                                 !jobState.isCancellingCurrentJob &&
                                 !jobState.isFinishingCurrentJob &&
+                                !jobState.isPreparingFinishConfirmation &&
+                                jobState.finishConfirmation == null &&
+                                !jobState.isCancelConfirmationVisible &&
                                 !jobState.addressSearch.isSaving,
                     onNextJobClick =
                         onStartNextJob,

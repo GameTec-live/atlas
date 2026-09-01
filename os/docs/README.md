@@ -31,8 +31,9 @@ Always verify the artifact against the release `SHA256SUMS` before using it.
 
 ## Non-obvious invariants
 
-- Only `atlas-web` publishes host ports. Every other application is reachable
-  only through Podman networking.
+- Only `atlas-web` publishes host ports. The optional outbound Cloudflare and
+  Tailscale connectors use host networking only to proxy that local listener;
+  every other application is reachable only through Podman networking.
 - All application containers intentionally share one locked rootless account
   and the `atlas.network` bridge. This keeps the Compose service names and
   Caddy routing unchanged, but it makes that account one security boundary.
