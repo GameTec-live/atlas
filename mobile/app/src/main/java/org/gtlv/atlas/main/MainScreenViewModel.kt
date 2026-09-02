@@ -22,6 +22,7 @@ import org.gtlv.core.geoservice.RouteResult
 import org.gtlv.core.geoservice.ResolveAddressResult
 import org.gtlv.core.job.CollectedJobStateStore
 import org.gtlv.core.job.JobActionResult
+import org.gtlv.core.job.JobCoordinates
 import org.gtlv.core.job.JobMileageStateStore
 import org.gtlv.core.job.calculateJobFareQuote
 import org.gtlv.core.job.JobLocationField
@@ -737,8 +738,10 @@ class MainScreenViewModel(
                 )
             }
 
-            val result = jobRepository.completeJob(
-                jobId = currentJob.id
+            val result = completeCurrentJob(
+                jobId = currentJob.id,
+                destinationIsMissing =
+                    currentJob.to == null
             )
 
             currentCoroutineContext()
@@ -762,6 +765,49 @@ class MainScreenViewModel(
                 }
             }
         }
+    }
+
+    private suspend fun completeCurrentJob(
+        jobId: String,
+        destinationIsMissing: Boolean
+    ): JobActionResult {
+        if (destinationIsMissing) {
+            val location = latestLocation
+                ?: return JobActionResult.InvalidResponse
+            val destination = JobCoordinates(
+                latitude = location.latitude,
+                longitude = location.longitude
+            )
+            val updateResult =
+                jobRepository.updateJobLocation(
+                    jobId = jobId,
+                    field = JobLocationField.TO,
+                    latitude = destination.latitude,
+                    longitude = destination.longitude
+                )
+
+            if (updateResult != JobActionResult.Success) {
+                return updateResult
+            }
+
+            _uiState.update { state ->
+                val currentJob = state.currentJob
+                if (
+                    currentJob?.id == jobId &&
+                    currentJob.to == null
+                ) {
+                    state.copy(
+                        currentJob = currentJob.copy(
+                            to = destination
+                        )
+                    )
+                } else {
+                    state
+                }
+            }
+        }
+
+        return jobRepository.completeJob(jobId)
     }
 
     fun personCollected() {
