@@ -137,10 +137,10 @@ local Atlas HTTPS listener. Cloudflare uses a remotely managed tunnel token;
 configure its public hostname's service as `https://127.0.0.1:443` with origin
 TLS verification disabled for Atlas's device-local certificate.
 
-After provisioning, add the connector's external HTTPS URL through the
-management API's `auth-origins` adapter. Trusted origins and DNS/tunnel routing
-are separate policies; provisioning remote transport does not guess a public
-Cloudflare hostname or a tailnet domain.
+When provisioning, pass the connector's external HTTPS URL as the optional
+`origin`. Omit it when that origin is already configured. Trusted origins and
+DNS/tunnel routing remain separate policies; provisioning remote transport does
+not guess a public Cloudflare hostname or a tailnet domain.
 
 Neither connector receives the Podman socket or the OS-management socket.
 Removing local configuration does not revoke provider-side credentials, so

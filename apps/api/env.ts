@@ -12,6 +12,10 @@ export const env = createEnv({
         GEOCODER_URL: v.pipe(v.string(), v.url()),
         ROUTER_URL: v.pipe(v.string(), v.url()),
         JOBTOKEN: v.pipe(v.string(), v.minLength(1)),
+        OS_MANAGEMENT_SOCKET: v.optional(v.pipe(v.string(), v.minLength(1))),
+        OS_MANAGEMENT_TOKEN_FILE: v.optional(
+            v.pipe(v.string(), v.minLength(1)),
+        ),
     },
     runtimeEnv: process.env,
     emptyStringAsUndefined: true,

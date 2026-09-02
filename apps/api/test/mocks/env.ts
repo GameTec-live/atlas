@@ -19,6 +19,8 @@ export const envMock: TestEnv = {
     GEOCODER_URL: "http://geocoder.test",
     ROUTER_URL: "http://router.test",
     JOBTOKEN: undefined,
+    OS_MANAGEMENT_SOCKET: undefined,
+    OS_MANAGEMENT_TOKEN_FILE: undefined,
 };
 
 mock.module("@/env", () => ({ env: envMock }));

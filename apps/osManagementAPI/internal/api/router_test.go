@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -102,13 +103,20 @@ func (fakeOrigins) Remove(context.Context, string) ([]string, error) { return ni
 func (fakeOrigins) RestartAPI(context.Context) error                 { return nil }
 
 type fakeRemoteAccess struct {
-	status remoteaccess.Status
+	status            remoteaccess.Status
+	provisionErr      error
+	cloudflareRequest remoteaccess.CloudflareRequest
+	tailscaleRequest  remoteaccess.TailscaleRequest
 }
 
 func (r *fakeRemoteAccess) Status(context.Context) (remoteaccess.Status, error) {
 	return r.status, nil
 }
-func (r *fakeRemoteAccess) ProvisionCloudflare(_ context.Context, _ remoteaccess.CloudflareRequest) error {
+func (r *fakeRemoteAccess) ProvisionCloudflare(_ context.Context, request remoteaccess.CloudflareRequest) error {
+	r.cloudflareRequest = request
+	if r.provisionErr != nil {
+		return r.provisionErr
+	}
 	r.status.CloudflareTunnel = remoteaccess.ProviderStatus{Provisioned: true, State: "active", Detail: "running"}
 	return nil
 }
@@ -116,12 +124,50 @@ func (r *fakeRemoteAccess) RemoveCloudflare(context.Context) error {
 	r.status.CloudflareTunnel = remoteaccess.ProviderStatus{State: "not_provisioned"}
 	return nil
 }
-func (r *fakeRemoteAccess) ProvisionTailscale(_ context.Context, _ remoteaccess.TailscaleRequest) error {
+func (r *fakeRemoteAccess) ProvisionTailscale(_ context.Context, request remoteaccess.TailscaleRequest) error {
+	r.tailscaleRequest = request
+	if r.provisionErr != nil {
+		return r.provisionErr
+	}
 	r.status.Tailscale = remoteaccess.ProviderStatus{Provisioned: true, State: "active", Detail: "running"}
 	return nil
 }
 func (r *fakeRemoteAccess) RemoveTailscale(context.Context) error {
 	r.status.Tailscale = remoteaccess.ProviderStatus{State: "not_provisioned"}
+	return nil
+}
+
+type trackingOrigins struct {
+	items    []string
+	restarts int
+}
+
+func (o *trackingOrigins) List() ([]string, error) {
+	return append([]string(nil), o.items...), nil
+}
+
+func (o *trackingOrigins) Add(_ context.Context, origin string) ([]string, error) {
+	for _, item := range o.items {
+		if item == origin {
+			return o.List()
+		}
+	}
+	o.items = append(o.items, origin)
+	return o.List()
+}
+
+func (o *trackingOrigins) Remove(_ context.Context, origin string) ([]string, error) {
+	for index, item := range o.items {
+		if item == origin {
+			o.items = append(o.items[:index], o.items[index+1:]...)
+			break
+		}
+	}
+	return o.List()
+}
+
+func (o *trackingOrigins) RestartAPI(context.Context) error {
+	o.restarts++
 	return nil
 }
 
@@ -240,9 +286,10 @@ func TestRunningContainersReturnsCurrentVersions(t *testing.T) {
 
 func TestRemoteAccessCanBeProvisionedAndGathered(t *testing.T) {
 	manager := &fakeRemoteAccess{}
-	router := NewRouter(Dependencies{Token: "secret-token", RemoteAccess: manager})
+	origins := &trackingOrigins{}
+	router := NewRouter(Dependencies{Token: "secret-token", RemoteAccess: manager, Origins: origins, Scheduler: immediateScheduler{}})
 
-	body := bytes.NewBufferString(`{"authKey":"tskey-auth-test","hostname":"atlas-1"}`)
+	body := bytes.NewBufferString(`{"authKey":"tskey-auth-test","hostname":"atlas-1","origin":"https://atlas.example.com"}`)
 	request := httptest.NewRequest(http.MethodPut, "/api/v1/connections/remote-access/tailscale", body)
 	request.Header.Set("Authorization", "Bearer secret-token")
 	request.Header.Set("Content-Type", "application/json")
@@ -251,12 +298,54 @@ func TestRemoteAccessCanBeProvisionedAndGathered(t *testing.T) {
 	if response.Code != http.StatusOK || !manager.status.Tailscale.Provisioned {
 		t.Fatalf("provision failed: code=%d body=%s", response.Code, response.Body.String())
 	}
+	if len(origins.items) != 1 || origins.items[0] != "https://atlas.example.com" || origins.restarts != 1 {
+		t.Fatalf("origin was not applied atomically: %#v restarts=%d", origins.items, origins.restarts)
+	}
 
 	request = authenticatedRequest(http.MethodGet, "/api/v1/connections/remote-access")
 	response = httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"tailscale":{"provisioned":true,"state":"active","detail":"running"}`) {
 		t.Fatalf("unexpected status: code=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestRemoteAccessOriginIsOptionalAndRollsBackOnProvisionFailure(t *testing.T) {
+	manager := &fakeRemoteAccess{provisionErr: errors.New("provision failed")}
+	origins := &trackingOrigins{}
+	router := NewRouter(Dependencies{Token: "secret-token", RemoteAccess: manager, Origins: origins})
+
+	body := bytes.NewBufferString(`{"token":"cloudflare-token","origin":"https://atlas.example.com"}`)
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/connections/remote-access/cloudflare-tunnel", body)
+	request.Header.Set("Authorization", "Bearer secret-token")
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || len(origins.items) != 0 {
+		t.Fatalf("failed provision did not roll back origin: code=%d origins=%#v body=%s", response.Code, origins.items, response.Body.String())
+	}
+
+	origins.items = []string{"https://atlas.example.com"}
+	body = bytes.NewBufferString(`{"token":"cloudflare-token","origin":"https://atlas.example.com"}`)
+	request = httptest.NewRequest(http.MethodPut, "/api/v1/connections/remote-access/cloudflare-tunnel", body)
+	request.Header.Set("Authorization", "Bearer secret-token")
+	request.Header.Set("Content-Type", "application/json")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || len(origins.items) != 1 {
+		t.Fatalf("failed provision removed an existing origin: code=%d origins=%#v body=%s", response.Code, origins.items, response.Body.String())
+	}
+
+	manager.provisionErr = nil
+	origins.items = nil
+	body = bytes.NewBufferString(`{"token":"cloudflare-token"}`)
+	request = httptest.NewRequest(http.MethodPut, "/api/v1/connections/remote-access/cloudflare-tunnel", body)
+	request.Header.Set("Authorization", "Bearer secret-token")
+	request.Header.Set("Content-Type", "application/json")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !manager.status.CloudflareTunnel.Provisioned || len(origins.items) != 0 {
+		t.Fatalf("origin should be optional: code=%d origins=%#v body=%s", response.Code, origins.items, response.Body.String())
 	}
 }
 

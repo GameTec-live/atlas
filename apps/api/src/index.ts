@@ -17,6 +17,7 @@ import { realtime } from "./realtime";
 import { roles } from "./role";
 import { setup } from "./setup";
 import { shortnames } from "./shortnames";
+import { system } from "./system";
 
 console.log("Applying database migrations...");
 await runMigrations();
@@ -117,6 +118,7 @@ export const app = new Elysia()
     .use(jobs)
     .use(logbooks)
     .use(shortnames)
+    .use(system)
     .get("/", () => {
         return {
             message:

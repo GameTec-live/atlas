@@ -5,6 +5,7 @@
     "scripts": {
         "test": "bun test",
         "dev": "bun run --watch src/index.ts",
+        "dev:management": "bun run scripts/management-emulator.ts",
         "dev-sec": "infisical run -- bun run dev",
         "format": "biome format --write .",
         "lint": "biome lint",
