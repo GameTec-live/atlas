@@ -737,8 +737,10 @@ class MainScreenViewModel(
                 )
             }
 
-            val result = jobRepository.completeJob(
-                jobId = currentJob.id
+            val result = completeCurrentJob(
+                jobId = currentJob.id,
+                destinationIsMissing =
+                    currentJob.to == null
             )
 
             currentCoroutineContext()
@@ -762,6 +764,29 @@ class MainScreenViewModel(
                 }
             }
         }
+    }
+
+    private suspend fun completeCurrentJob(
+        jobId: String,
+        destinationIsMissing: Boolean
+    ): JobActionResult {
+        if (destinationIsMissing) {
+            val location = latestLocation
+                ?: return JobActionResult.InvalidResponse
+            val updateResult =
+                jobRepository.updateJobLocation(
+                    jobId = jobId,
+                    field = JobLocationField.TO,
+                    latitude = location.latitude,
+                    longitude = location.longitude
+                )
+
+            if (updateResult != JobActionResult.Success) {
+                return updateResult
+            }
+        }
+
+        return jobRepository.completeJob(jobId)
     }
 
     fun personCollected() {

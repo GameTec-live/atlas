@@ -28,6 +28,9 @@ import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
 import org.gtlv.core.job.NewJobRequest
 import org.gtlv.core.job.UnassignedJobsResult
+import org.gtlv.core.location.AtlasLocation
+import org.gtlv.core.location.LocationSource
+import org.gtlv.core.location.LocationState
 import org.gtlv.core.pricing.PriceResult
 import org.gtlv.core.pricing.PricingRepository
 import org.gtlv.core.shift.ShiftRole
@@ -171,6 +174,133 @@ class MainScreenViewModelStartKilometerTest {
             assertEquals(listOf(firstJob.id), repository.startedJobIds)
         }
 
+    @Test
+    fun `finishing job without destination saves current location first`() =
+        runTest(dispatcher) {
+            val currentJob = testJob("current")
+            val repository = FakeJobRepository(
+                JobsResult.Success(
+                    queuedJobs = emptyList(),
+                    currentJob = currentJob
+                )
+            )
+            val viewModel = createViewModel(
+                repository,
+                FakeJobMileageStore()
+            )
+
+            viewModel.loadJobsForUser(USER_ID)
+            advanceUntilIdle()
+            viewModel.updateLocationState(
+                availableLocation(
+                    latitude = 48.2082,
+                    longitude = 16.3738
+                )
+            )
+            viewModel.personCollected()
+            viewModel.closeAddressEditor()
+            viewModel.requestFinishCurrentJob()
+            viewModel.confirmFinishCurrentJob()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(
+                    LocationUpdate(
+                        jobId = currentJob.id,
+                        field = JobLocationField.TO,
+                        latitude = 48.2082,
+                        longitude = 16.3738
+                    )
+                ),
+                repository.locationUpdates
+            )
+            assertEquals(
+                listOf(currentJob.id),
+                repository.completedJobIds
+            )
+        }
+
+    @Test
+    fun `finishing job with destination does not replace it`() =
+        runTest(dispatcher) {
+            val currentJob = testJob(
+                id = "current",
+                destination = JobCoordinates(
+                    latitude = 48.1,
+                    longitude = 16.2
+                )
+            )
+            val repository = FakeJobRepository(
+                JobsResult.Success(
+                    queuedJobs = emptyList(),
+                    currentJob = currentJob
+                )
+            )
+            val viewModel = createViewModel(
+                repository,
+                FakeJobMileageStore()
+            )
+
+            viewModel.loadJobsForUser(USER_ID)
+            advanceUntilIdle()
+            viewModel.updateLocationState(
+                availableLocation(
+                    latitude = 48.2082,
+                    longitude = 16.3738
+                )
+            )
+            viewModel.personCollected()
+            viewModel.requestFinishCurrentJob()
+            viewModel.confirmFinishCurrentJob()
+            advanceUntilIdle()
+
+            assertTrue(repository.locationUpdates.isEmpty())
+            assertEquals(
+                listOf(currentJob.id),
+                repository.completedJobIds
+            )
+        }
+
+    @Test
+    fun `failed destination update prevents job completion`() =
+        runTest(dispatcher) {
+            val currentJob = testJob("current")
+            val repository = FakeJobRepository(
+                JobsResult.Success(
+                    queuedJobs = emptyList(),
+                    currentJob = currentJob
+                )
+            ).apply {
+                locationUpdateResult =
+                    JobActionResult.NetworkError
+            }
+            val viewModel = createViewModel(
+                repository,
+                FakeJobMileageStore()
+            )
+
+            viewModel.loadJobsForUser(USER_ID)
+            advanceUntilIdle()
+            viewModel.updateLocationState(
+                availableLocation(
+                    latitude = 48.2082,
+                    longitude = 16.3738
+                )
+            )
+            viewModel.personCollected()
+            viewModel.closeAddressEditor()
+            viewModel.requestFinishCurrentJob()
+            viewModel.confirmFinishCurrentJob()
+            advanceUntilIdle()
+
+            assertEquals(1, repository.locationUpdates.size)
+            assertTrue(repository.completedJobIds.isEmpty())
+            assertTrue(
+                viewModel.uiState.value
+                    .finishCurrentJobFailed
+            )
+        }
+
     private suspend fun createViewModel(
         repository: FakeJobRepository,
         mileageStore: FakeJobMileageStore,
@@ -193,12 +323,15 @@ class MainScreenViewModelStartKilometerTest {
         )
     }
 
-    private fun testJob(id: String) = Job(
+    private fun testJob(
+        id: String,
+        destination: JobCoordinates? = null
+    ) = Job(
         id = id,
         assignedDriverId = USER_ID,
         vehicleId = null,
         from = null,
-        to = null,
+        to = destination,
         fromAddress = null,
         toAddress = null,
         dueDate = null,
@@ -211,8 +344,30 @@ class MainScreenViewModelStartKilometerTest {
 
     private companion object {
         const val USER_ID = "driver"
+
+        fun availableLocation(
+            latitude: Double,
+            longitude: Double
+        ) = LocationState.Available(
+            AtlasLocation(
+                latitude = latitude,
+                longitude = longitude,
+                accuracyMeters = 2f,
+                bearingDegrees = null,
+                speedMetersPerSecond = null,
+                timestampMillis = 1L,
+                source = LocationSource.PHONE
+            )
+        )
     }
 }
+
+private data class LocationUpdate(
+    val jobId: String,
+    val field: JobLocationField,
+    val latitude: Double,
+    val longitude: Double
+)
 
 private class FakeJobRepository(
     private var jobs: JobsResult.Success
@@ -220,6 +375,10 @@ private class FakeJobRepository(
     private val changes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     override val jobChanges: Flow<Unit> = changes
     val startedJobIds = mutableListOf<String>()
+    val completedJobIds = mutableListOf<String>()
+    val locationUpdates = mutableListOf<LocationUpdate>()
+    var locationUpdateResult: JobActionResult =
+        JobActionResult.Success
 
     fun publishJobs(result: JobsResult.Success) {
         jobs = result
@@ -262,15 +421,26 @@ private class FakeJobRepository(
     override suspend fun cancelJob(jobId: String) =
         JobActionResult.InvalidResponse
 
-    override suspend fun completeJob(jobId: String) =
-        JobActionResult.InvalidResponse
+    override suspend fun completeJob(jobId: String): JobActionResult {
+        completedJobIds += jobId
+        jobs = jobs.copy(currentJob = null)
+        return JobActionResult.Success
+    }
 
     override suspend fun updateJobLocation(
         jobId: String,
         field: JobLocationField,
         latitude: Double,
         longitude: Double
-    ) = JobActionResult.InvalidResponse
+    ): JobActionResult {
+        locationUpdates += LocationUpdate(
+            jobId = jobId,
+            field = field,
+            latitude = latitude,
+            longitude = longitude
+        )
+        return locationUpdateResult
+    }
 
     override suspend fun updateJobDetails(
         jobId: String,
