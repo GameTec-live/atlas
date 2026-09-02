@@ -20,7 +20,7 @@ export function AdminStep({
                 <p className="mt-1 mb-6 text-sm text-muted-foreground">
                     {m.setup_resume_description()}
                 </p>
-                <LoginForm redirectTo="/setup?step=connection" />
+                <LoginForm redirectTo="/setup?step=timezone" />
             </div>
         );
     }

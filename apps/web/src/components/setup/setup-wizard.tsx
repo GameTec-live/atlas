@@ -13,11 +13,18 @@ import { AppConnectionStep } from "@/components/setup/app-connection-step";
 import { ConnectionStep } from "@/components/setup/connection-step";
 import { GreetingStep } from "@/components/setup/greeting-step";
 import { PreferencesStep } from "@/components/setup/preferences-step";
+import { RemoteAccessStep } from "@/components/setup/remote-access-step";
 import { SetupStepLayout } from "@/components/setup/setup-step-layout";
+import { TimezoneStep } from "@/components/setup/timezone-step";
 import { WizardProgress } from "@/components/setup/wizard-progress";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
-import { type SetupStep, setupSteps } from "@/lib/setup";
+import {
+    getSetupSteps,
+    resolveSetupStep,
+    type SetupStep,
+    setupSteps,
+} from "@/lib/setup";
 import {
     completeSetupMutationOptions,
     setupStatusQueryKey,
@@ -45,14 +52,18 @@ export function SetupWizard() {
         setupQuery.data?.adminRequired === false && sessionQuery.isPending;
     const hasSetupAccess =
         setupQuery.data?.adminRequired === false && Boolean(sessionQuery.data);
-    const step =
+    const availableSteps = getSetupSteps(
+        setupQuery.data?.capabilities.systemManagement === true,
+    );
+    const accessStep =
         requestedIndex > setupSteps.indexOf("admin") &&
         !setupQuery.isPending &&
         !isWaitingForSession &&
         !hasSetupAccess
             ? "admin"
             : requestedStep;
-    const stepIndex = setupSteps.indexOf(step);
+    const step = resolveSetupStep(accessStep, availableSteps);
+    const stepIndex = availableSteps.indexOf(step);
     const goTo = (nextStep: SetupStep) =>
         navigate({ search: { step: nextStep } });
 
@@ -68,8 +79,8 @@ export function SetupWizard() {
         return <Navigate to="/setup" search={{ step }} replace />;
     }
 
-    const previousStep = setupSteps[Math.max(0, stepIndex - 1)];
-    const nextStep = setupSteps[stepIndex + 1];
+    const previousStep = availableSteps[Math.max(0, stepIndex - 1)];
+    const nextStep = availableSteps[stepIndex + 1];
 
     return (
         <main className="relative flex min-h-svh flex-col overflow-hidden bg-muted/35">
@@ -79,6 +90,7 @@ export function SetupWizard() {
             ) : (
                 <SetupStepLayout
                     step={step}
+                    steps={availableSteps}
                     canContinue={step !== "admin" || hasSetupAccess}
                     isFinishing={completeMutation.isPending}
                     onPrevious={() => previousStep && void goTo(previousStep)}
@@ -97,18 +109,28 @@ export function SetupWizard() {
                                 await queryClient.invalidateQueries({
                                     queryKey: setupStatusQueryKey,
                                 });
-                                await goTo("connection");
+                                await goTo(
+                                    resolveSetupStep(
+                                        "timezone",
+                                        availableSteps,
+                                    ),
+                                );
                             }}
                         />
                     )}
+                    {step === "timezone" && <TimezoneStep />}
                     {step === "connection" && <ConnectionStep />}
+                    {step === "remote-access" && <RemoteAccessStep />}
                     {step === "general" && <GeneralSettingsCard />}
                     {step === "app" && <AppConnectionStep />}
                     {step === "users" && <UsersCard />}
                     {step === "map" && <MapDataCard />}
                 </SetupStepLayout>
             )}
-            <WizardProgress stepIndex={stepIndex} />
+            <WizardProgress
+                stepIndex={stepIndex}
+                totalSteps={availableSteps.length}
+            />
         </main>
     );
 }

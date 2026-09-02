@@ -3,6 +3,7 @@ import { Elysia, status } from "elysia";
 import * as v from "valibot";
 import { auth } from "../auth";
 import { authHandler } from "../authHandler";
+import { getDeploymentCapabilities } from "../capabilities";
 import { config } from "../config";
 import { db } from "../db";
 import { user } from "../db/schema";
@@ -19,11 +20,21 @@ const hasUsers = async () => {
 };
 
 const getSetupStatus = async () => {
+    const capabilities = getDeploymentCapabilities();
+
     if (config.setup.complete) {
-        return { complete: true, adminRequired: false } as const;
+        return {
+            complete: true,
+            adminRequired: false,
+            capabilities,
+        } as const;
     }
 
-    return { complete: false, adminRequired: !(await hasUsers()) } as const;
+    return {
+        complete: false,
+        adminRequired: !(await hasUsers()),
+        capabilities,
+    } as const;
 };
 
 let adminCreationQueue = Promise.resolve();

@@ -1,5 +1,5 @@
-import { CableIcon } from "lucide-react";
-import { SystemNetworkSettings } from "@/components/settings/system/system-network-settings";
+import { CloudIcon } from "lucide-react";
+import { SystemRemoteAccess } from "@/components/settings/system/system-remote-access";
 import { m } from "@/paraglide/messages";
 import {
     Card,
@@ -9,20 +9,20 @@ import {
     CardTitle,
 } from "../ui/card";
 
-export function ConnectionStep() {
+export function RemoteAccessStep() {
     return (
         <Card className="mx-auto">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                    <CableIcon className="size-4" />
-                    {m.settings_system_wired_connections()}
+                    <CloudIcon className="size-4" />
+                    {m.settings_system_remote_access()}
                 </CardTitle>
                 <CardDescription>
-                    {m.settings_system_wired_connections_description()}
+                    {m.settings_system_remote_access_description()}
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <SystemNetworkSettings header={false} />
+                <SystemRemoteAccess header={false} />
             </CardContent>
         </Card>
     );
