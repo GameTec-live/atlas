@@ -72,6 +72,7 @@ import kotlin.math.roundToInt
 internal class MapLibreSurfaceRenderer(
     private val carContext: CarContext,
     private val showDispatcherDriverList: Boolean = false,
+    private val showJobCard: Boolean = true,
 ) : SurfaceCallback {
     private val displayManager = carContext.getSystemService(
         Context.DISPLAY_SERVICE,
@@ -115,6 +116,11 @@ internal class MapLibreSurfaceRenderer(
     private var stableArea = Rect()
     private var appliedMapPadding: IntArray? = null
     private var interactionTarget = InteractionTarget.MAP
+    private var areMainMapOverlaysVisible = true
+    private var isDispatcherSidebarAvailable = true
+    private var tiltBeforeAssignJob: Double? = null
+    private var zoomBeforeAssignJob: Double? = null
+    private var wasFollowingBeforeAssignJob: Boolean? = null
     private var isDispatcherSidebarExpanded = false
     private var dispatcherSidebarAnimator: ValueAnimator? = null
     private var isJobCardExpanded = true
@@ -296,6 +302,7 @@ internal class MapLibreSurfaceRenderer(
 
         val target = if (
             showDispatcherDriverList &&
+            isDispatcherSidebarAvailable &&
             isDispatcherSidebarExpanded &&
             isDispatcherSidebarScrollable() &&
             x >= 0f &&
@@ -422,6 +429,118 @@ internal class MapLibreSurfaceRenderer(
         changeZoom(-ZOOM_STEP)
     }
 
+    fun enterAssignJobMode() {
+        if (areMainMapOverlaysVisible) {
+            tiltBeforeAssignJob = selectedFollowTilt
+            zoomBeforeAssignJob = map
+                ?.cameraPosition
+                ?.zoom
+                ?: selectedFollowZoom
+            wasFollowingBeforeAssignJob = isFollowingLocation
+        }
+        setMapOverlayMode(
+            mainOverlaysVisible = false,
+            dispatcherSidebarAvailable = false,
+        )
+        setNorthUpOverview()
+    }
+
+    fun enterMainMapMode() {
+        setMapOverlayMode(
+            mainOverlaysVisible = true,
+            dispatcherSidebarAvailable = true,
+        )
+        val restoredTilt = tiltBeforeAssignJob
+        val restoredZoom = zoomBeforeAssignJob
+        val restoreFollowing = wasFollowingBeforeAssignJob == true
+        tiltBeforeAssignJob = null
+        zoomBeforeAssignJob = null
+        wasFollowingBeforeAssignJob = null
+
+        if (restoredTilt != null) {
+            selectedFollowTilt = restoredTilt
+        }
+        if (restoredZoom != null) {
+            selectedFollowZoom = restoredZoom
+        }
+        if (restoreFollowing) {
+            recenter()
+        } else {
+            restoreOverviewCamera(
+                zoom = restoredZoom,
+                tilt = restoredTilt,
+            )
+        }
+    }
+
+    private fun restoreOverviewCamera(
+        zoom: Double?,
+        tilt: Double?,
+    ) {
+        if (zoom == null && tilt == null) return
+        val readyMap = map ?: return
+
+        readyMap.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder(readyMap.cameraPosition)
+                    .apply {
+                        zoom?.let { restoredZoom ->
+                            this.zoom(restoredZoom)
+                        }
+                        tilt?.let { restoredTilt ->
+                            this.tilt(restoredTilt)
+                        }
+                    }
+                    .build(),
+            ),
+            RECENTER_DURATION_MILLIS.toInt(),
+        )
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun setNorthUpOverview() {
+        selectedFollowTilt = 0.0
+        isNorthUp = true
+        isFollowingLocation = false
+        val readyMap = map ?: return
+
+        runCatching {
+            readyMap.locationComponent.cameraMode = CameraMode.NONE
+        }
+        readyMap.moveCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder(readyMap.cameraPosition)
+                    .bearing(NORTH_BEARING_DEGREES)
+                    .tilt(0.0)
+                    .build(),
+            ),
+        )
+        applyVisibleArea()
+    }
+
+    @SuppressLint("MissingPermission")
+    fun setTilt(tilt: Double) {
+        val targetTilt = tilt.coerceIn(
+            TILT_LEVELS.first(),
+            TILT_LEVELS.last(),
+        )
+        selectedFollowTilt = targetTilt
+        val readyMap = map ?: return
+
+        if (isFollowingLocation && isStyleReady && lastLocation != null) {
+            runCatching {
+                readyMap.locationComponent.tiltWhileTracking(
+                    targetTilt,
+                    TILT_DURATION_MILLIS,
+                )
+            }.onFailure {
+                animateTilt(readyMap, targetTilt)
+            }
+        } else {
+            animateTilt(readyMap, targetTilt)
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private fun changeZoom(change: Double) {
         val readyMap = map ?: return
@@ -456,27 +575,12 @@ internal class MapLibreSurfaceRenderer(
         }
     }
 
-    @SuppressLint("MissingPermission")
     fun cycleTilt() {
-        val readyMap = map ?: return
         val currentIndex = TILT_LEVELS.indices.minByOrNull { index ->
             abs(TILT_LEVELS[index] - selectedFollowTilt)
         } ?: 0
         val targetTilt = TILT_LEVELS[(currentIndex + 1) % TILT_LEVELS.size]
-        selectedFollowTilt = targetTilt
-
-        if (isFollowingLocation && isStyleReady && lastLocation != null) {
-            runCatching {
-                readyMap.locationComponent.tiltWhileTracking(
-                    targetTilt,
-                    TILT_DURATION_MILLIS,
-                )
-            }.onFailure {
-                animateTilt(readyMap, targetTilt)
-            }
-        } else {
-            animateTilt(readyMap, targetTilt)
-        }
+        setTilt(targetTilt)
     }
 
     private fun animateTilt(readyMap: MapLibreMap, targetTilt: Double) {
@@ -528,6 +632,53 @@ internal class MapLibreSurfaceRenderer(
 
     fun release() {
         destroyDisplay()
+    }
+
+    private fun setMapOverlayMode(
+        mainOverlaysVisible: Boolean,
+        dispatcherSidebarAvailable: Boolean,
+    ) {
+        areMainMapOverlaysVisible = mainOverlaysVisible
+        isDispatcherSidebarAvailable = dispatcherSidebarAvailable
+        interactionTarget = InteractionTarget.MAP
+
+        jobCardView?.visibility = if (mainOverlaysVisible && showJobCard) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        jobCardToggleView?.visibility = if (
+            mainOverlaysVisible && showJobCard
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        dispatcherSidebarView?.visibility = if (
+            dispatcherSidebarAvailable && isDispatcherSidebarExpanded
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        dispatcherSidebarToggleView?.visibility = if (
+            dispatcherSidebarAvailable && showDispatcherDriverList
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        updateDispatcherSidebarToggleContent()
+
+        (mapView?.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            params.leftMargin = dispatcherSidebarWidth()
+            mapView?.layoutParams = params
+        }
+
+        renderJobNotification()
+        appliedMapPadding = null
+        applyVisibleArea()
+        applyOverlayInsets()
     }
 
     private fun loadStyle(url: String) {
@@ -700,14 +851,19 @@ internal class MapLibreSurfaceRenderer(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
             ).apply {
-                if (showDispatcherDriverList) {
-                    leftMargin = dispatcherSidebarWidth()
-                }
+                leftMargin = dispatcherSidebarWidth()
             },
         )
 
         val jobCard = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            visibility = if (
+                showJobCard && areMainMapOverlaysVisible
+            ) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
             setPadding(dp(20), dp(14), dp(20), dp(14))
             background = roundedBackground(
                 color = Color.argb(230, 32, 33, 36),
@@ -763,6 +919,13 @@ internal class MapLibreSurfaceRenderer(
         applyResponsiveJobCardLayout()
 
         val jobToggle = createJobCardToggle(context)
+        jobToggle.visibility = if (
+            showJobCard && areMainMapOverlaysVisible
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         jobCardToggleView = jobToggle
         root.addView(
             jobToggle,
@@ -775,7 +938,10 @@ internal class MapLibreSurfaceRenderer(
 
         if (showDispatcherDriverList) {
             val sidebar = createDispatcherSidebar(context).apply {
-                visibility = if (isDispatcherSidebarExpanded) {
+                visibility = if (
+                    isDispatcherSidebarAvailable &&
+                    isDispatcherSidebarExpanded
+                ) {
                     View.VISIBLE
                 } else {
                     View.GONE
@@ -793,6 +959,11 @@ internal class MapLibreSurfaceRenderer(
             )
 
             val toggle = createDispatcherSidebarToggle(context)
+            toggle.visibility = if (isDispatcherSidebarAvailable) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
             dispatcherSidebarToggleView = toggle
             root.addView(
                 toggle,
@@ -926,7 +1097,7 @@ internal class MapLibreSurfaceRenderer(
     private fun renderJobNotification() {
         val notification = jobNotification
         val card = jobNotificationView ?: return
-        if (notification == null) {
+        if (notification == null || !areMainMapOverlaysVisible) {
             card.visibility = View.GONE
             return
         }
@@ -1230,7 +1401,9 @@ internal class MapLibreSurfaceRenderer(
         }
 
     private fun isDispatcherSidebarToggleClick(x: Float, y: Float): Boolean {
-        if (!showDispatcherDriverList) return false
+        if (!showDispatcherDriverList || !isDispatcherSidebarAvailable) {
+            return false
+        }
 
         val toggleWidth = dp(SIDEBAR_TOGGLE_WIDTH_DP)
         val toggleLeft = if (isDispatcherSidebarExpanded) {
@@ -1252,6 +1425,7 @@ internal class MapLibreSurfaceRenderer(
     private fun setDispatcherSidebarExpanded(expanded: Boolean) {
         if (
             !showDispatcherDriverList ||
+            !isDispatcherSidebarAvailable ||
             isDispatcherSidebarExpanded == expanded ||
             dispatcherSidebarAnimator != null
         ) {
@@ -1316,6 +1490,23 @@ internal class MapLibreSurfaceRenderer(
         }
         dispatcherSidebarAnimator = animator
         animator.start()
+    }
+
+    private fun updateDispatcherSidebarToggleContent() {
+        dispatcherSidebarToggleView?.apply {
+            text = if (isDispatcherSidebarExpanded) {
+                SIDEBAR_COLLAPSE_CHEVRON
+            } else {
+                SIDEBAR_EXPAND_CHEVRON
+            }
+            contentDescription = carContext.getString(
+                if (isDispatcherSidebarExpanded) {
+                    org.gtlv.car_common.R.string.dispatcher_hide_sidebar
+                } else {
+                    org.gtlv.car_common.R.string.dispatcher_show_sidebar
+                },
+            )
+        }
     }
 
     private fun updateDispatcherSidebarAnimationFrame(
@@ -1497,7 +1688,11 @@ internal class MapLibreSurfaceRenderer(
     }
 
     private fun dispatcherSidebarWidth(): Int =
-        if (showDispatcherDriverList && isDispatcherSidebarExpanded) {
+        if (
+            showDispatcherDriverList &&
+            isDispatcherSidebarAvailable &&
+            isDispatcherSidebarExpanded
+        ) {
             expandedDispatcherSidebarWidth()
         } else {
             0
@@ -1551,7 +1746,9 @@ internal class MapLibreSurfaceRenderer(
         } else {
             maxOf(stableArea.left, sidebarWidth) + dp(OVERLAY_MARGIN_DP)
         }
-        val driverToggleClearance = if (showDispatcherDriverList) {
+        val driverToggleClearance = if (
+            showDispatcherDriverList && isDispatcherSidebarAvailable
+        ) {
             sidebarWidth +
                 dp(SIDEBAR_TOGGLE_WIDTH_DP + JOB_CARD_DRIVER_TOGGLE_GAP_DP)
         } else {
