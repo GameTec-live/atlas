@@ -5,12 +5,14 @@ import {
     Clock3Icon,
     DownloadIcon,
     NetworkIcon,
+    PowerIcon,
     ServerIcon,
 } from "lucide-react";
 
 import { SystemConnectionsDialog } from "@/components/settings/system/system-connections-dialog";
 import { SystemDetailsDialog } from "@/components/settings/system/system-details-dialog";
 import { SystemFactoryResetDialog } from "@/components/settings/system/system-factory-reset-dialog";
+import { SystemPowerControls } from "@/components/settings/system/system-power-controls";
 import { SystemSSHSettings } from "@/components/settings/system/system-ssh-settings";
 import { SystemTimezoneForm } from "@/components/settings/system/system-timezone-form";
 import { SystemUpdateDialog } from "@/components/settings/system/system-update-dialog";
@@ -109,6 +111,13 @@ export function SystemManagementCard() {
                     ) : (
                         <Skeleton className="h-14" />
                     )}
+                </SystemSummary>
+                <SystemSummary
+                    icon={PowerIcon}
+                    title={m.settings_system_power()}
+                    description={m.settings_system_power_description()}
+                >
+                    <SystemPowerControls />
                 </SystemSummary>
 
                 <Collapsible>

@@ -155,6 +155,14 @@ export const systemFactoryResetMutationOptions = () =>
         mutationFn: () => unwrapEden(api.system["factory-reset"].post()),
     });
 
+export const systemPowerMutationOptions = () =>
+    mutationOptions({
+        mutationFn: async (action: "restart" | "poweroff") =>
+            action === "restart"
+                ? await unwrapEden(api.system.power.reboot.post())
+                : await unwrapEden(api.system.power.poweroff.post()),
+    });
+
 export const systemIpSettingsMutationOptions = () =>
     mutationOptions({
         mutationFn: ({ uuid, ...settings }: SystemIpSettingsInput) =>
