@@ -60,17 +60,18 @@ curl --unix-socket /run/atlas-management/api.sock \
   -H "Authorization: Bearer $(cat /home/atlas-containers/.config/atlas/management-token)" \
   http://localhost/api/v1/connections/remote-access
 
-# Each provider takes one provisioning request and starts immediately.
+# Each provider takes one provisioning request and starts immediately. Include
+# origin when this public URL is not already trusted by Atlas authentication.
 curl --unix-socket /run/atlas-management/api.sock \
   -H "Authorization: Bearer $(cat /home/atlas-containers/.config/atlas/management-token)" \
   -H 'Content-Type: application/json' \
-  -X PUT -d '{"token":"<CLOUDFLARE_TUNNEL_TOKEN>"}' \
+  -X PUT -d '{"token":"<CLOUDFLARE_TUNNEL_TOKEN>","origin":"https://atlas.example.com"}' \
   http://localhost/api/v1/connections/remote-access/cloudflare-tunnel
 
 curl --unix-socket /run/atlas-management/api.sock \
   -H "Authorization: Bearer $(cat /home/atlas-containers/.config/atlas/management-token)" \
   -H 'Content-Type: application/json' \
-  -X PUT -d '{"authKey":"<TAILSCALE_AUTH_KEY>","hostname":"atlas-1"}' \
+  -X PUT -d '{"authKey":"<TAILSCALE_AUTH_KEY>","hostname":"atlas-1","origin":"https://atlas-1.example.ts.net"}' \
   http://localhost/api/v1/connections/remote-access/tailscale
 ```
 
@@ -79,8 +80,14 @@ serves the Atlas HTTPS endpoint on the node's Tailscale HTTPS name. The
 Cloudflare Tunnel uses the remotely managed ingress associated with its token;
 point that ingress at `https://127.0.0.1:443` and disable origin TLS validation
 for Atlas's device-local certificate. Add the public Cloudflare or Tailscale
-HTTPS URL through `/connections/auth-origins` as a second call so browser login
-requests from that URL are trusted by Atlas.
+HTTPS URL as the optional `origin` in the provisioning request so browser login
+requests from that URL are trusted by Atlas. Omit it when the origin is already
+configured. The standalone `/connections/auth-origins` routes remain available
+for managing origins independently.
+
+Origin and connector provisioning run under the same management mutation lock.
+If connector provisioning fails, an origin added by that request is removed;
+an origin that was already configured is never removed.
 
 Example update from the host for diagnostics:
 

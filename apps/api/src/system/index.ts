@@ -30,29 +30,6 @@ const firmwareResponse = async (operation: () => Promise<Response>) => {
     }
 };
 
-const provisionRemoteAccess = async (
-    providerPath: string,
-    providerBody: unknown,
-    origin: string,
-) => {
-    const providerResponse = await management.request(
-        providerPath,
-        jsonRequest("PUT", providerBody),
-    );
-    if (!providerResponse.ok) return providerResponse;
-
-    const originResponse = await management.request(
-        "/api/v1/connections/auth-origins",
-        jsonRequest("POST", { origin }),
-    );
-
-    const [remoteAccess, origins] = await Promise.all([
-        providerResponse.json(),
-        originResponse.json(),
-    ]);
-    return Response.json({ remoteAccess, origins });
-};
-
 export const system = new Elysia({
     prefix: "/system",
     tags: ["system"],
@@ -285,10 +262,9 @@ export const system = new Elysia({
     .put(
         "/connections/remote-access/cloudflare-tunnel",
         ({ body }) =>
-            provisionRemoteAccess(
+            management.request(
                 "/api/v1/connections/remote-access/cloudflare-tunnel",
-                { token: body.token },
-                body.origin,
+                jsonRequest("PUT", body),
             ),
         { admin: true, body: SystemModel.cloudflareTunnel },
     )
@@ -304,10 +280,9 @@ export const system = new Elysia({
     .put(
         "/connections/remote-access/tailscale",
         ({ body }) =>
-            provisionRemoteAccess(
+            management.request(
                 "/api/v1/connections/remote-access/tailscale",
-                { authKey: body.authKey, hostname: body.hostname },
-                body.origin,
+                jsonRequest("PUT", body),
             ),
         { admin: true, body: SystemModel.tailscale },
     )

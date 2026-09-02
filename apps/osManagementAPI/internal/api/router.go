@@ -478,7 +478,7 @@ func (h *handler) provisionCloudflare(writer http.ResponseWriter, request *http.
 	if !decodeJSON(writer, request, &body) {
 		return
 	}
-	h.changeRemoteAccess(writer, request, func(ctx context.Context) error {
+	h.provisionRemoteAccess(writer, request, body.Origin, func(ctx context.Context) error {
 		return h.dependencies.RemoteAccess.ProvisionCloudflare(ctx, body)
 	})
 }
@@ -492,13 +492,59 @@ func (h *handler) provisionTailscale(writer http.ResponseWriter, request *http.R
 	if !decodeJSON(writer, request, &body) {
 		return
 	}
-	h.changeRemoteAccess(writer, request, func(ctx context.Context) error {
+	h.provisionRemoteAccess(writer, request, body.Origin, func(ctx context.Context) error {
 		return h.dependencies.RemoteAccess.ProvisionTailscale(ctx, body)
 	})
 }
 
 func (h *handler) removeTailscale(writer http.ResponseWriter, request *http.Request) {
 	h.changeRemoteAccess(writer, request, h.dependencies.RemoteAccess.RemoveTailscale)
+}
+
+func (h *handler) provisionRemoteAccess(writer http.ResponseWriter, request *http.Request, origin string, provision func(context.Context) error) {
+	if !h.beginMutation(writer) {
+		return
+	}
+	defer h.mutations.Unlock()
+
+	originAdded := false
+	if origin != "" {
+		if h.dependencies.Origins == nil {
+			fail(writer, http.StatusInternalServerError, "origins_failed", "trusted-origin management is unavailable")
+			return
+		}
+		previous, err := h.dependencies.Origins.List()
+		if err != nil {
+			fail(writer, http.StatusInternalServerError, "origins_failed", err.Error())
+			return
+		}
+		origins, err := h.dependencies.Origins.Add(request.Context(), origin)
+		if err != nil {
+			fail(writer, http.StatusBadRequest, "origins_failed", err.Error())
+			return
+		}
+		originAdded = len(origins) > len(previous)
+	}
+
+	if err := provision(request.Context()); err != nil {
+		if originAdded {
+			if _, rollbackErr := h.dependencies.Origins.Remove(request.Context(), origin); rollbackErr != nil {
+				err = fmt.Errorf("%w; roll back trusted origin: %v", err, rollbackErr)
+			}
+		}
+		fail(writer, http.StatusBadRequest, "remote_access_failed", err.Error())
+		return
+	}
+	if originAdded {
+		defer h.schedule("Atlas API restart after trusted-origin change", h.dependencies.Origins.RestartAPI)
+	}
+
+	status, err := h.dependencies.RemoteAccess.Status(request.Context())
+	if err != nil {
+		fail(writer, http.StatusInternalServerError, "remote_access_status_failed", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, status)
 }
 
 func (h *handler) changeRemoteAccess(writer http.ResponseWriter, request *http.Request, change func(context.Context) error) {

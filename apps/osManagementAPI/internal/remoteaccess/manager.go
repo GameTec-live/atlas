@@ -32,12 +32,14 @@ type Status struct {
 }
 
 type CloudflareRequest struct {
-	Token string `json:"token"`
+	Token  string `json:"token"`
+	Origin string `json:"origin,omitempty"`
 }
 
 type TailscaleRequest struct {
 	AuthKey  string `json:"authKey"`
 	Hostname string `json:"hostname,omitempty"`
+	Origin   string `json:"origin,omitempty"`
 }
 
 // Manager persists only provider credentials. Immutable Quadlets define how

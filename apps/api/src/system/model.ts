@@ -40,12 +40,12 @@ export const SystemModel = {
     }),
     cloudflareTunnel: t.Object({
         token: t.String({ minLength: 1 }),
-        origin: httpsOrigin,
+        origin: t.Optional(httpsOrigin),
     }),
     tailscale: t.Object({
         authKey: t.String({ minLength: 1 }),
         hostname: t.Optional(t.String()),
-        origin: httpsOrigin,
+        origin: t.Optional(httpsOrigin),
     }),
     updateURL: t.Object({
         url: t.String({ format: "uri" }),

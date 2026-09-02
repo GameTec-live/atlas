@@ -153,16 +153,11 @@ describe("system management routes", () => {
     });
 
     it("provisions Cloudflare together with its trusted origin", async () => {
-        managementResponder = (path) =>
-            path.endsWith("auth-origins")
-                ? Response.json({
-                      items: ["https://atlas.example.com"],
-                      count: 1,
-                  })
-                : Response.json({
-                      cloudflareTunnel: { provisioned: true, state: "active" },
-                      tailscale: { provisioned: false, state: "inactive" },
-                  });
+        managementResponder = () =>
+            Response.json({
+                cloudflareTunnel: { provisioned: true, state: "active" },
+                tailscale: { provisioned: false, state: "inactive" },
+            });
         getSessionMock.mockResolvedValue(adminSession);
 
         const response = await jsonRequest(
@@ -173,15 +168,29 @@ describe("system management routes", () => {
         );
 
         expect(response.status).toBe(200);
-        expect(managementRequests.map(({ path }) => path)).toEqual([
+        expect(managementRequests).toHaveLength(1);
+        expect(managementRequests[0]?.path).toBe(
             "/api/v1/connections/remote-access/cloudflare-tunnel",
-            "/api/v1/connections/auth-origins",
-        ]);
+        );
         expect(JSON.parse(String(managementRequests[0]?.init?.body))).toEqual({
             token: "secret",
-        });
-        expect(JSON.parse(String(managementRequests[1]?.init?.body))).toEqual({
             origin: "https://atlas.example.com",
+        });
+    });
+
+    it("provisions remote access when no origin change is needed", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const response = await jsonRequest(
+            app,
+            "/connections/remote-access/cloudflare-tunnel",
+            "PUT",
+            { token: "secret" },
+        );
+
+        expect(response.status).toBe(200);
+        expect(JSON.parse(String(managementRequests[0]?.init?.body))).toEqual({
+            token: "secret",
         });
     });
 

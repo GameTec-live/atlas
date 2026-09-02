@@ -78,13 +78,13 @@ describe("management emulator", () => {
         await jsonRequest("/api/v1/timezone", "PUT", {
             timezone: "Europe/Vienna",
         });
-        await jsonRequest("/api/v1/connections/auth-origins", "POST", {
-            origin: "https://atlas.example.com",
-        });
         await jsonRequest(
             "/api/v1/connections/remote-access/cloudflare-tunnel",
             "PUT",
-            { token: "emulated-token" },
+            {
+                token: "emulated-token",
+                origin: "https://atlas.example.com",
+            },
         );
 
         expect(await (await request("/api/v1/ssh")).json()).toEqual({

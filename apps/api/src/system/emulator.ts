@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Elysia, t } from "elysia";
+import { Elysia } from "elysia";
 import { SystemModel } from "./model";
 
 const emulatorEnv = Bun.env as { OS_MANAGEMENT_EMULATOR_TOKEN?: string };
@@ -326,14 +326,15 @@ export const managementEmulator = new Elysia()
     .get("/api/v1/connections/remote-access", () => state.remoteAccess)
     .put(
         "/api/v1/connections/remote-access/cloudflare-tunnel",
-        () => {
+        ({ body }) => {
+            if (body.origin) state.origins.add(body.origin);
             state.remoteAccess.cloudflareTunnel = {
                 provisioned: true,
                 state: "active",
             };
             return state.remoteAccess;
         },
-        { body: t.Object({ token: t.String({ minLength: 1 }) }) },
+        { body: SystemModel.cloudflareTunnel },
     )
     .delete("/api/v1/connections/remote-access/cloudflare-tunnel", () => {
         state.remoteAccess.cloudflareTunnel = {
@@ -344,19 +345,15 @@ export const managementEmulator = new Elysia()
     })
     .put(
         "/api/v1/connections/remote-access/tailscale",
-        () => {
+        ({ body }) => {
+            if (body.origin) state.origins.add(body.origin);
             state.remoteAccess.tailscale = {
                 provisioned: true,
                 state: "active",
             };
             return state.remoteAccess;
         },
-        {
-            body: t.Object({
-                authKey: t.String({ minLength: 1 }),
-                hostname: t.Optional(t.String()),
-            }),
-        },
+        { body: SystemModel.tailscale },
     )
     .delete("/api/v1/connections/remote-access/tailscale", () => {
         state.remoteAccess.tailscale = {
