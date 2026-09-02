@@ -1,5 +1,6 @@
 package org.gtlv.atlas.main
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
@@ -33,6 +35,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
@@ -96,6 +101,10 @@ internal fun MainScreen(
     onCloseAddressEditor: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isLandscape =
+        LocalConfiguration.current.orientation ==
+            Configuration.ORIENTATION_LANDSCAPE
+
     if (jobState.isStartKilometerDialogVisible) {
         StartKilometerDialog(
             value = jobState.startKilometerInput,
@@ -136,6 +145,10 @@ internal fun MainScreen(
     }
 
     var recenterRequestId by remember {
+        mutableIntStateOf(0)
+    }
+
+    var landscapeNavigationPanelHeightPixels by remember {
         mutableIntStateOf(0)
     }
 
@@ -218,6 +231,36 @@ internal fun MainScreen(
         }
     }
 
+    val canShowNavigationPanel =
+        !jobState.isAddressEditorOpen &&
+            jobNotificationState.currentNotification == null
+    val hasVisibleNavigationPanel =
+        canShowNavigationPanel &&
+            jobState.navigation.phase != NavigationPhase.None &&
+            jobState.navigation.status != NavigationStatus.Idle
+    val showRecenterButton =
+        canShowNavigationPanel &&
+            locationState is LocationState.Available &&
+            !isFollowingLocation
+    val useLandscapeNavigationStack =
+        isLandscape && hasVisibleNavigationPanel
+    val density = LocalDensity.current
+    val landscapeCompassTopOffsetPixels =
+        if (useLandscapeNavigationStack) {
+            if (landscapeNavigationPanelHeightPixels > 0) {
+                landscapeNavigationPanelHeightPixels +
+                    with(density) {
+                        28.dp.roundToPx()
+                    }
+            } else {
+                with(density) {
+                    164.dp.roundToPx()
+                }
+            }
+        } else {
+            null
+        }
+
     Box(
         modifier = modifier.fillMaxSize()
     ) {
@@ -240,6 +283,8 @@ internal fun MainScreen(
                 isFollowingLocation = false
             },
             styleUrl = styleUrl,
+            landscapeCompassTopOffsetPixels =
+                landscapeCompassTopOffsetPixels,
             modifier = Modifier.fillMaxSize()
         )
 
@@ -248,39 +293,97 @@ internal fun MainScreen(
                 .fillMaxSize()
                 .safeDrawingPadding()
         ) {
-            if (
-                !jobState.isAddressEditorOpen &&
-                jobNotificationState.currentNotification == null
-            ) {
-                NavigationPanel(
-                    state = jobState.navigation,
+            if (useLandscapeNavigationStack) {
+                Column(
                     modifier = Modifier
-                        .align(Alignment.TopCenter)
+                        .align(Alignment.TopStart)
                         .padding(
-                            horizontal = 80.dp,
-                            vertical = 12.dp
-                        )
-                        .widthIn(max = 520.dp)
-                        .fillMaxWidth()
-                )
-            }
+                            start = 16.dp,
+                            top = 12.dp
+                        ),
+                    verticalArrangement =
+                        Arrangement.spacedBy(12.dp)
+                ) {
+                    NavigationPanel(
+                        state = jobState.navigation,
+                        isExpandable = false,
+                        modifier = Modifier
+                            .widthIn(max = 340.dp)
+                            .fillMaxWidth()
+                            .onSizeChanged { size ->
+                                landscapeNavigationPanelHeightPixels =
+                                    size.height
+                            }
+                    )
 
-            JobPanel(
-                state = jobState,
-                onToggleExpanded =
-                    onToggleJobList,
-                onRetry = onRetryJobs,
-                onEditDestination =
-                    onEditDestination,
-                modifier = Modifier
-                    .align(
-                        Alignment.BottomStart
+                    Box(
+                        modifier = Modifier.height(56.dp)
+                    ) {
+                        if (showRecenterButton) {
+                            MapRecenterButton(
+                                onClick = {
+                                    isFollowingLocation = true
+                                    recenterRequestId += 1
+                                }
+                            )
+                        }
+                    }
+
+                    JobPanel(
+                        state = jobState,
+                        onToggleExpanded =
+                            onToggleJobList,
+                        onRetry = onRetryJobs,
+                        onEditDestination =
+                            onEditDestination,
+                        isExpandable = false
                     )
-                    .padding(
-                        start = 8.dp,
-                        bottom = 8.dp
+                }
+            } else {
+                if (canShowNavigationPanel) {
+                    NavigationPanel(
+                        state = jobState.navigation,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(
+                                horizontal = 80.dp,
+                                vertical = 12.dp
+                            )
+                            .widthIn(max = 520.dp)
+                            .fillMaxWidth()
                     )
-            )
+                }
+
+                JobPanel(
+                    state = jobState,
+                    onToggleExpanded =
+                        onToggleJobList,
+                    onRetry = onRetryJobs,
+                    onEditDestination =
+                        onEditDestination,
+                    isExpandable = !isLandscape,
+                    modifier = Modifier
+                        .align(
+                            Alignment.BottomStart
+                        )
+                        .padding(
+                            start = 8.dp,
+                            bottom = 8.dp
+                        )
+                )
+
+                if (showRecenterButton) {
+                    MapRecenterButton(
+                        onClick = {
+                            isFollowingLocation = true
+                            recenterRequestId += 1
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(16.dp)
+                    )
+                }
+            }
 
             Column(
                 modifier = Modifier
@@ -345,37 +448,6 @@ internal fun MainScreen(
                         }
                     }
                 )
-            }
-
-            if (
-                !jobState.isAddressEditorOpen &&
-                jobNotificationState
-                    .currentNotification == null &&
-                locationState
-                        is LocationState.Available &&
-                !isFollowingLocation
-            ) {
-                FloatingActionButton(
-                    onClick = {
-                        isFollowingLocation = true
-                        recenterRequestId += 1
-                    },
-                    modifier = Modifier
-                        .align(
-                            Alignment.TopStart
-                        )
-                        .padding(16.dp)
-                ) {
-                    Icon(
-                        imageVector =
-                            Icons.Default.MyLocation,
-                        contentDescription =
-                            stringResource(
-                                R.string
-                                    .map_recenter_location
-                            )
-                    )
-                }
             }
 
             jobNotificationState
@@ -542,6 +614,24 @@ internal fun MainScreen(
                         onDismissDeclineConfirmation
                 )
             }
+    }
+}
+
+@Composable
+private fun MapRecenterButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = modifier
+    ) {
+        Icon(
+            imageVector = Icons.Default.MyLocation,
+            contentDescription = stringResource(
+                R.string.map_recenter_location
+            )
+        )
     }
 }
 

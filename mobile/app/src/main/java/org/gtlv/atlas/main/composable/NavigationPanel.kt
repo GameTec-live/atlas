@@ -41,7 +41,8 @@ import org.gtlv.core.geoservice.RouteManeuver
 @Composable
 internal fun NavigationPanel(
     state: NavigationUiState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isExpandable: Boolean = true
 ) {
     if (
         state.phase == NavigationPhase.None ||
@@ -143,7 +144,9 @@ internal fun NavigationPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(
-                        enabled = route.maneuvers.isNotEmpty()
+                        enabled =
+                            isExpandable &&
+                                route.maneuvers.isNotEmpty()
                     ) {
                         expanded = !expanded
                     },
@@ -164,7 +167,10 @@ internal fun NavigationPanel(
                     style = MaterialTheme.typography.titleMedium
                 )
 
-                if (route.maneuvers.isNotEmpty()) {
+                if (
+                    isExpandable &&
+                    route.maneuvers.isNotEmpty()
+                ) {
                     Icon(
                         imageVector = if (expanded) {
                             Icons.Default.KeyboardArrowUp
@@ -183,7 +189,11 @@ internal fun NavigationPanel(
                 }
             }
 
-            if (expanded && route.maneuvers.isNotEmpty()) {
+            if (
+                isExpandable &&
+                expanded &&
+                route.maneuvers.isNotEmpty()
+            ) {
                 HorizontalDivider()
                 val firstRemainingIndex =
                     nextIndex ?: currentIndex ?: 0
