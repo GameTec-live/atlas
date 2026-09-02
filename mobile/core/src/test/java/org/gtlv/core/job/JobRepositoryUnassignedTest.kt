@@ -267,6 +267,41 @@ class JobRepositoryUnassignedTest {
     }
 
     @Test
+    fun assignJobWithDetails_postsCurrentJobDetails() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader(
+                    "Content-Type",
+                    "application/json"
+                )
+                .setBody("{}")
+        )
+
+        val result = repository.assignJob(
+            jobId = "job-1",
+            driverId = "driver-1",
+            destination = JobCoordinates(48.4, 14.5),
+            dueDate = "2026-09-02T12:00:00Z",
+            note = "Side entrance"
+        )
+
+        assertEquals(JobActionResult.Success, result)
+
+        val request = server.takeRequest()
+        assertEquals("/api/jobs/job-1/assign", request.path)
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals("driver-1", body.getString("assignedDriverId"))
+        assertEquals(
+            "2026-09-02T12:00:00Z",
+            body.getString("dueDate")
+        )
+        assertEquals("Side entrance", body.getString("note"))
+        assertEquals(48.4, body.getJSONArray("to").getDouble(0), 0.0)
+        assertEquals(14.5, body.getJSONArray("to").getDouble(1), 0.0)
+    }
+
+    @Test
     fun getDraftJobCandidates_postsLocationsAndDueDate() = runBlocking {
         server.enqueue(
             MockResponse()

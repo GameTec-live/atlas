@@ -41,7 +41,11 @@ import org.gtlv.core.geoservice.RouteResult
 import org.gtlv.core.job.JobCandidate
 import org.gtlv.core.job.JobCandidatesResult
 import org.gtlv.core.job.JobCoordinates
+import org.gtlv.core.job.JobActionResult
+import org.gtlv.core.job.JobCreationResult
+import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.JobRepository
+import org.gtlv.core.job.NewJobRequest
 import org.gtlv.core.job.UnassignedJobsResult
 import org.gtlv.core.location.LocationProvider
 import org.gtlv.core.location.LocationState
@@ -49,7 +53,7 @@ import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.telemetry.LiveMapUser
 
-/** UI-only Android Auto surface for editing and assigning an unassigned job. */
+/** Android Auto surface for creating or assigning a job. */
 @RequiresCarApi(7)
 internal class AssignJobScreen(
     carContext: CarContext,
@@ -84,6 +88,7 @@ internal class AssignJobScreen(
     private var hasRequestedExistingJob = false
     private var isLoadingExistingJob = initialJobId != null
     private var routeWasEdited = false
+    private var fromWasEdited = false
     private var from = initialFrom
     private var to = initialTo
     private var note = initialNote
@@ -95,6 +100,7 @@ internal class AssignJobScreen(
     private var candidatesFailed = false
     private var selectedDriverId: String? = null
     private var createUnassignedSelected = false
+    private var isSubmitting = false
     private var candidateDueDate = Instant.now().toString()
     private var existingPickupTime: String? = null
 
@@ -161,6 +167,7 @@ internal class AssignJobScreen(
                     from = suggestion.displayName
                     fromPoint = suggestion.toRoutePoint()
                     routeWasEdited = true
+                    fromWasEdited = true
                     updateRoutePreview()
                     loadRecommendedDrivers()
                 },
@@ -355,6 +362,7 @@ internal class AssignJobScreen(
         }
 
         if (
+            initialJobId == null &&
             !isLoadingExistingJob &&
             !isLoadingCandidates &&
             fromPoint != null
@@ -392,24 +400,111 @@ internal class AssignJobScreen(
         return Action.Builder()
             .setTitle(
                 carContext.getString(
-                    if (createUnassignedSelected) {
-                        R.string.assign_job_create_unassigned
-                    } else {
-                        R.string.assign_job_assign
+                    when {
+                        isSubmitting && createUnassignedSelected ->
+                            R.string.assign_job_creating
+                        isSubmitting -> R.string.assign_job_assigning
+                        createUnassignedSelected ->
+                            R.string.assign_job_create_unassigned
+                        else -> R.string.assign_job_assign
                     },
                 ),
             )
             .setFlags(Action.FLAG_PRIMARY or Action.FLAG_IS_PERSISTENT)
             .setBackgroundColor(CarColor.BLUE)
-            .setEnabled(canAssign)
-            .setOnClickListener {
-                CarToast.makeText(
-                    carContext,
-                    R.string.assign_job_ui_only_message,
-                    CarToast.LENGTH_SHORT,
-                ).show()
-            }
+            .setEnabled(canAssign && !isSubmitting)
+            .setOnClickListener(::submitJob)
             .build()
+    }
+
+    private fun submitJob() {
+        if (isSubmitting) return
+
+        val repository = jobRepository
+        val pickup = fromPoint
+        val driverId = selectedDriverId
+        if (
+            repository == null ||
+            pickup == null ||
+            (!createUnassignedSelected && driverId == null)
+        ) {
+            showSubmissionToast(R.string.assign_job_submission_failed)
+            return
+        }
+
+        isSubmitting = true
+        invalidate()
+        screenScope.launch {
+            val succeeded = if (initialJobId == null) {
+                repository.createJob(
+                    NewJobRequest(
+                        from = pickup.toJobCoordinates(),
+                        to = toPoint?.toJobCoordinates(),
+                        dueDate = candidateDueDate,
+                        note = note.trim().ifBlank { null },
+                        assignedDriverId = driverId,
+                    ),
+                ) is JobCreationResult.Success
+            } else {
+                driverId != null && assignExistingJob(
+                    repository = repository,
+                    jobId = initialJobId,
+                    driverId = driverId,
+                    pickup = pickup,
+                ) == JobActionResult.Success
+            }
+            currentCoroutineContext().ensureActive()
+
+            isSubmitting = false
+            if (succeeded) {
+                showSubmissionToast(
+                    if (createUnassignedSelected) {
+                        R.string.assign_job_created_unassigned
+                    } else {
+                        R.string.assign_job_assigned
+                    },
+                )
+                carContext
+                    .getCarService(ScreenManager::class.java)
+                    .pop()
+            } else {
+                showSubmissionToast(R.string.assign_job_submission_failed)
+                invalidate()
+            }
+        }
+    }
+
+    private suspend fun assignExistingJob(
+        repository: JobRepository,
+        jobId: String,
+        driverId: String,
+        pickup: RoutePoint,
+    ): JobActionResult {
+        if (fromWasEdited) {
+            val updateResult = repository.updateJobLocation(
+                jobId = jobId,
+                field = JobLocationField.FROM,
+                latitude = pickup.latitude,
+                longitude = pickup.longitude,
+            )
+            if (updateResult != JobActionResult.Success) return updateResult
+        }
+
+        return repository.assignJob(
+            jobId = jobId,
+            driverId = driverId,
+            destination = toPoint?.toJobCoordinates(),
+            dueDate = candidateDueDate,
+            note = note.trim().ifBlank { null },
+        )
+    }
+
+    private fun showSubmissionToast(message: Int) {
+        CarToast.makeText(
+            carContext,
+            message,
+            CarToast.LENGTH_SHORT,
+        ).show()
     }
 
     private fun buildMapController(): MapController = MapController.Builder()
@@ -601,6 +696,7 @@ internal class AssignJobScreen(
                 ?.takeIf(String::isNotBlank)
             candidateDueDate = existingPickupTime ?: candidateDueDate
             routeWasEdited = false
+            fromWasEdited = false
             updateRoutePreview()
             loadRecommendedDrivers()
             invalidate()

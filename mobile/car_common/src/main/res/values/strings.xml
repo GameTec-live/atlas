@@ -76,7 +76,11 @@
     <string name="assign_job_pickup_in_hours">Pick-Up in %1$dh</string>
     <string name="assign_job_pickup_in_hours_minutes">Pick-Up in %1$dh %2$dmin</string>
     <string name="assign_job_assign">Assign Job</string>
-    <string name="assign_job_ui_only_message">Assignment will be connected in the next step</string>
+    <string name="assign_job_assigning">Assigning&#8230;</string>
+    <string name="assign_job_creating">Creating&#8230;</string>
+    <string name="assign_job_assigned">Job assigned</string>
+    <string name="assign_job_created_unassigned">Unassigned job created</string>
+    <string name="assign_job_submission_failed">Could not save the job. Please try again.</string>
     <string name="assign_job_requires_car_api_7">Assign Job requires a newer Android Auto host</string>
     <string name="dispatcher_active_users">Active drivers (%1$d)</string>
     <string name="dispatcher_no_active_users">No other active users</string>
