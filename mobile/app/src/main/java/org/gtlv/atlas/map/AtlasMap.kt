@@ -46,8 +46,10 @@ import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.location.LocationComponent
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.LocationComponentOptions
+import org.maplibre.android.location.OnLocationCameraTransitionListener
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
@@ -65,6 +67,8 @@ internal fun AtlasMap(
     onUserCameraMove: () -> Unit,
     onMapClick: () -> Unit = {},
     styleUrl: String,
+    landscapeCompassLeftOffsetPixels: Int? = null,
+    landscapeCompassTopOffsetPixels: Int? = null,
     cameraFocusPoints: List<RoutePoint> = emptyList(),
     cameraFocusRequestId: Int = 0,
     cameraFocusPadding: Dp = 72.dp,
@@ -93,7 +97,8 @@ internal fun AtlasMap(
 
     val compassLeftMargin = safeLeft + with(density) {
         if (isLandscape) {
-            84.dp.roundToPx()
+            landscapeCompassLeftOffsetPixels
+                ?: 84.dp.roundToPx()
         } else {
             20.dp.roundToPx()
         }
@@ -101,7 +106,8 @@ internal fun AtlasMap(
 
     val compassTopMargin = safeTop + with(density) {
         if (isLandscape) {
-            20.dp.roundToPx()
+            landscapeCompassTopOffsetPixels
+                ?: 20.dp.roundToPx()
         } else {
             84.dp.roundToPx()
         }
@@ -127,6 +133,10 @@ internal fun AtlasMap(
 
     var hasInitiallyCentered by rememberSaveable {
         mutableStateOf(false)
+    }
+
+    var handledRecenterRequestId by remember {
+        mutableIntStateOf(0)
     }
 
     var savedLatitude by rememberSaveable {
@@ -183,6 +193,10 @@ internal fun AtlasMap(
         RouteRenderState()
     }
 
+    var mapWidthPixels by remember {
+        mutableIntStateOf(0)
+    }
+
     var mapHeightPixels by remember {
         mutableIntStateOf(0)
     }
@@ -192,6 +206,13 @@ internal fun AtlasMap(
     val navigationCameraTopPaddingPixels =
         navigationCameraTopPaddingPixels(
             mapHeightPixels = mapHeightPixels,
+            isLandscape = isLandscape,
+            hasActiveRoute = hasActiveNavigationRoute
+        )
+
+    val navigationCameraLeftPaddingPixels =
+        navigationCameraLeftPaddingPixels(
+            mapWidthPixels = mapWidthPixels,
             isLandscape = isLandscape,
             hasActiveRoute = hasActiveNavigationRoute
         )
@@ -211,10 +232,15 @@ internal fun AtlasMap(
         readyMap,
         compassLeftMargin,
         compassTopMargin,
+        landscapeCompassTopOffsetPixels,
         isFollowingLocation
     ) {
         readyMap?.uiSettings?.apply {
             isCompassEnabled = !isFollowingLocation
+            setCompassFadeFacingNorth(
+                !isLandscape ||
+                    landscapeCompassTopOffsetPixels == null
+            )
             compassGravity =
                 Gravity.TOP or Gravity.START
 
@@ -388,56 +414,59 @@ internal fun AtlasMap(
         readyMap,
         isFollowingLocation,
         availableLocation != null,
+        recenterRequestId,
         navigationCameraTopPaddingPixels,
+        navigationCameraLeftPaddingPixels,
         navigationCameraTiltDegrees
     ) {
         val map = readyMap ?: return@LaunchedEffect
+
+        if (
+            hasActiveNavigationRoute &&
+            (mapWidthPixels <= 0 || mapHeightPixels <= 0)
+        ) {
+            return@LaunchedEffect
+        }
 
         runCatching {
             if (
                 isFollowingLocation &&
                 availableLocation != null
             ) {
+                val shouldResetTrackingCamera =
+                    !hasInitiallyCentered ||
+                        recenterRequestId !=
+                            handledRecenterRequestId
                 val trackingZoom =
-                    if (!hasInitiallyCentered) {
+                    if (shouldResetTrackingCamera) {
                         MapConfiguration.USER_LOCATION_ZOOM
                     } else {
                         null
                     }
 
-                if (
-                    map.locationComponent.cameraMode ==
-                    CameraMode.TRACKING_GPS
-                ) {
-                    map.locationComponent.tiltWhileTracking(
-                        navigationCameraTiltDegrees,
-                        CAMERA_TILT_TRANSITION_MILLIS
-                    )
-                    trackingZoom?.let { zoom ->
-                        map.locationComponent.zoomWhileTracking(
-                            zoom,
-                            INITIAL_CAMERA_TRANSITION_MILLIS
+                if (shouldResetTrackingCamera) {
+                    map.locationComponent.forceLocationUpdate(
+                        availableLocation.toAndroidLocation(
+                            cameraHeadingEstimator
+                                .update(availableLocation)
+                                ?.toFloat()
                         )
-                    }
-                } else {
-                    map.locationComponent.setCameraMode(
-                        CameraMode.TRACKING_GPS,
-                        INITIAL_CAMERA_TRANSITION_MILLIS,
-                        trackingZoom,
-                        null,
-                        navigationCameraTiltDegrees,
-                        null
                     )
                 }
-                map.locationComponent.paddingWhileTracking(
-                    navigationCameraPadding(
-                        navigationCameraTopPaddingPixels
-                    ),
-                    CAMERA_PADDING_TRANSITION_MILLIS
+
+                map.locationComponent.followLocation(
+                    zoom = trackingZoom,
+                    tilt = navigationCameraTiltDegrees,
+                    padding = navigationCameraPadding(
+                        topPaddingPixels =
+                            navigationCameraTopPaddingPixels,
+                        leftPaddingPixels =
+                            navigationCameraLeftPaddingPixels
+                    )
                 )
-                if (!hasInitiallyCentered) {
-                    hasInitiallyCentered = true
-                }
+                hasInitiallyCentered = true
+                handledRecenterRequestId =
+                    recenterRequestId
             } else {
                 map.locationComponent.cameraMode =
                     CameraMode.NONE
@@ -446,68 +475,6 @@ internal fun AtlasMap(
             Log.e(
                 TAG,
                 "Failed to update location camera tracking",
-                exception
-            )
-        }
-    }
-
-    LaunchedEffect(
-        readyMap,
-        recenterRequestId
-    ) {
-        if (recenterRequestId == 0) {
-            return@LaunchedEffect
-        }
-
-        val map =
-            readyMap ?: return@LaunchedEffect
-
-        val location =
-            availableLocation
-                ?: return@LaunchedEffect
-        val displayBearingDegrees = cameraHeadingEstimator
-            .update(location)
-            ?.toFloat()
-
-        hasInitiallyCentered = true
-        runCatching {
-            map.locationComponent.forceLocationUpdate(
-                location.toAndroidLocation(
-                    displayBearingDegrees
-                )
-            )
-            if (
-                map.locationComponent.cameraMode ==
-                CameraMode.TRACKING_GPS
-            ) {
-                map.locationComponent.tiltWhileTracking(
-                    navigationCameraTiltDegrees,
-                    CAMERA_TILT_TRANSITION_MILLIS
-                )
-                map.locationComponent.zoomWhileTracking(
-                    MapConfiguration.USER_LOCATION_ZOOM,
-                    INITIAL_CAMERA_TRANSITION_MILLIS
-                )
-            } else {
-                map.locationComponent.setCameraMode(
-                    CameraMode.TRACKING_GPS,
-                    INITIAL_CAMERA_TRANSITION_MILLIS,
-                    MapConfiguration.USER_LOCATION_ZOOM,
-                    null,
-                    navigationCameraTiltDegrees,
-                    null
-                )
-            }
-            map.locationComponent.paddingWhileTracking(
-                navigationCameraPadding(
-                    navigationCameraTopPaddingPixels
-                ),
-                CAMERA_PADDING_TRANSITION_MILLIS
-            )
-        }.onFailure { exception ->
-            Log.e(
-                TAG,
-                "Failed to recenter location camera",
                 exception
             )
         }
@@ -671,6 +638,7 @@ internal fun AtlasMap(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { size ->
+                    mapWidthPixels = size.width
                     mapHeightPixels = size.height
                 }
         )
@@ -733,6 +701,54 @@ private class RouteRenderState(
     var points: List<RoutePoint> = emptyList()
 )
 
+private fun LocationComponent.followLocation(
+    zoom: Double?,
+    tilt: Double,
+    padding: DoubleArray
+) {
+    if (cameraMode == CameraMode.TRACKING_GPS) {
+        tiltWhileTracking(
+            tilt,
+            CAMERA_TILT_TRANSITION_MILLIS
+        )
+        zoom?.let { trackingZoom ->
+            zoomWhileTracking(
+                trackingZoom,
+                INITIAL_CAMERA_TRANSITION_MILLIS
+            )
+        }
+        paddingWhileTracking(
+            padding,
+            CAMERA_PADDING_TRANSITION_MILLIS
+        )
+        return
+    }
+
+    setCameraMode(
+        CameraMode.TRACKING_GPS,
+        INITIAL_CAMERA_TRANSITION_MILLIS,
+        zoom,
+        null,
+        tilt,
+        object : OnLocationCameraTransitionListener {
+            override fun onLocationCameraTransitionFinished(
+                cameraMode: Int
+            ) {
+                if (cameraMode == CameraMode.TRACKING_GPS) {
+                    paddingWhileTracking(
+                        padding,
+                        CAMERA_PADDING_TRANSITION_MILLIS
+                    )
+                }
+            }
+
+            override fun onLocationCameraTransitionCanceled(
+                cameraMode: Int
+            ) = Unit
+        }
+    )
+}
+
 internal fun navigationCameraTopPaddingPixels(
     mapHeightPixels: Int,
     isLandscape: Boolean,
@@ -751,10 +767,28 @@ internal fun navigationCameraTopPaddingPixels(
     return mapHeightPixels * topPaddingFraction
 }
 
-private fun navigationCameraPadding(
-    topPaddingPixels: Double
+internal fun navigationCameraLeftPaddingPixels(
+    mapWidthPixels: Int,
+    isLandscape: Boolean,
+    hasActiveRoute: Boolean
+): Double {
+    if (
+        !hasActiveRoute ||
+        !isLandscape ||
+        mapWidthPixels <= 0
+    ) {
+        return 0.0
+    }
+
+    return mapWidthPixels *
+        LANDSCAPE_NAVIGATION_LEFT_PADDING_FRACTION
+}
+
+internal fun navigationCameraPadding(
+    topPaddingPixels: Double,
+    leftPaddingPixels: Double
 ): DoubleArray = doubleArrayOf(
-    0.0,
+    leftPaddingPixels,
     topPaddingPixels,
     0.0,
     0.0
@@ -770,5 +804,6 @@ private const val ROUTE_TRANSITION_FRAME_MILLIS = 50L
 private const val ROUTE_TRANSITION_FRAME_COUNT = 18
 private const val PORTRAIT_NAVIGATION_TOP_PADDING_FRACTION = 0.42
 private const val LANDSCAPE_NAVIGATION_TOP_PADDING_FRACTION = 0.24
+private const val LANDSCAPE_NAVIGATION_LEFT_PADDING_FRACTION = 0.28
 private const val NAVIGATION_CAMERA_TILT_DEGREES = 50.0
 private const val FLAT_CAMERA_TILT_DEGREES = 0.0

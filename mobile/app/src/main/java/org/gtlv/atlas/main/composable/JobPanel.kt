@@ -41,7 +41,8 @@ internal fun JobPanel(
     onToggleExpanded: () -> Unit,
     onRetry: () -> Unit,
     onEditDestination: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isExpandable: Boolean = true
 ) {
     Surface(
         modifier = modifier.widthIn(
@@ -65,7 +66,8 @@ internal fun JobPanel(
                     )
                 }
 
-                state.isJobListExpanded -> {
+                isExpandable &&
+                    state.isJobListExpanded -> {
                     ExpandedJobs(
                         state = state,
                         onToggleExpanded =
@@ -81,7 +83,9 @@ internal fun JobPanel(
                         onToggleExpanded =
                             onToggleExpanded,
                         onEditDestination =
-                            onEditDestination
+                            onEditDestination,
+                        isExpandable =
+                            isExpandable
                     )
                 }
             }
@@ -119,7 +123,8 @@ private fun JobError(
 private fun CollapsedJobs(
     state: MainScreenUiState,
     onToggleExpanded: () -> Unit,
-    onEditDestination: () -> Unit
+    onEditDestination: () -> Unit,
+    isExpandable: Boolean
 ) {
     val nextJob =
         state.queuedJobs.firstOrNull()
@@ -129,6 +134,7 @@ private fun CollapsedJobs(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(
+                    enabled = isExpandable,
                     onClick = onToggleExpanded
                 )
                 .padding(
@@ -180,15 +186,17 @@ private fun CollapsedJobs(
                 )
             }
 
-            Icon(
-                imageVector =
-                    Icons.Default.ExpandLess,
-                contentDescription =
-                    "Show assigned jobs",
-                tint =
-                    MaterialTheme.colorScheme
-                        .onSurface
-            )
+            if (isExpandable) {
+                Icon(
+                    imageVector =
+                        Icons.Default.ExpandLess,
+                    contentDescription =
+                        "Show assigned jobs",
+                    tint =
+                        MaterialTheme.colorScheme
+                            .onSurface
+                )
+            }
         }
 
         HorizontalDivider()
