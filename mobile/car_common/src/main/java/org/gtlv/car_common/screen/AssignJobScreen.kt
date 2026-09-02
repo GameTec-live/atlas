@@ -18,6 +18,8 @@ import androidx.car.app.navigation.model.MapController
 import androidx.car.app.navigation.model.MapWithContentTemplate
 import androidx.lifecycle.LifecycleOwner
 import androidx.core.graphics.drawable.IconCompat
+import java.time.Duration
+import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,17 +35,22 @@ import org.gtlv.core.geoservice.AddressSuggestion
 import org.gtlv.core.geoservice.GeoServiceRepository
 import org.gtlv.core.geoservice.RoutePoint
 import org.gtlv.core.geoservice.RouteResult
+import org.gtlv.core.job.JobCandidate
+import org.gtlv.core.job.JobCandidatesResult
+import org.gtlv.core.job.JobCoordinates
+import org.gtlv.core.job.JobRepository
+import org.gtlv.core.job.UnassignedJobsResult
 import org.gtlv.core.location.LocationProvider
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.settings.ServerSettingsRepository
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.telemetry.LiveMapUser
-import org.gtlv.core.telemetry.TelemetryVehicleState
 
 /** UI-only Android Auto surface for editing and assigning an unassigned job. */
 @RequiresCarApi(7)
 internal class AssignJobScreen(
     carContext: CarContext,
+    private val initialJobId: String? = null,
     initialFrom: String = "",
     initialTo: String = "",
     initialNote: String = "",
@@ -52,6 +59,7 @@ internal class AssignJobScreen(
     private val locationProvider: LocationProvider?,
     private val serverSettingsRepository: ServerSettingsRepository?,
     private val geoServiceRepository: GeoServiceRepository?,
+    private val jobRepository: JobRepository?,
     private val getUserId: () -> String?,
     private val liveMapUsers: StateFlow<Map<String, LiveMapUser>>?,
     private val mapRenderer: MapLibreSurfaceRenderer,
@@ -68,19 +76,28 @@ internal class AssignJobScreen(
     private var styleJob: Job? = null
     private var liveUsersJob: Job? = null
     private var routeJob: Job? = null
+    private var candidatesJob: Job? = null
+    private var existingJobLoadJob: Job? = null
+    private var hasRequestedExistingJob = false
+    private var isLoadingExistingJob = initialJobId != null
+    private var routeWasEdited = false
     private var from = initialFrom
     private var to = initialTo
     private var note = initialNote
     private var fromPoint: RoutePoint? = null
     private var toPoint: RoutePoint? = null
     private var previewCameraPoints: List<RoutePoint> = emptyList()
-    private var drivers: List<AssignDriver> = emptyList()
+    private var candidates: List<JobCandidate> = emptyList()
+    private var isLoadingCandidates = false
+    private var candidatesFailed = false
     private var selectedDriverId: String? = null
+    private var candidateDueDate = Instant.now().toString()
 
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
         mapRenderer.enterAssignJobMode()
         mapRenderer.focusRoutePoints(previewCameraPoints)
+        loadExistingJobIfNeeded()
         observeMapConfiguration()
         observeLocation()
         observeLiveUsers()
@@ -138,7 +155,9 @@ internal class AssignJobScreen(
                 onSelected = { suggestion ->
                     from = suggestion.displayName
                     fromPoint = suggestion.toRoutePoint()
+                    routeWasEdited = true
                     updateRoutePreview()
+                    loadRecommendedDrivers()
                 },
             ))
             .addItem(addressRow(
@@ -151,7 +170,9 @@ internal class AssignJobScreen(
                 onSelected = { suggestion ->
                     to = suggestion.displayName
                     toPoint = suggestion.toRoutePoint()
+                    routeWasEdited = true
                     updateRoutePreview()
+                    loadRecommendedDrivers()
                 },
             ))
             .addItem(editableRow(
@@ -231,13 +252,46 @@ internal class AssignJobScreen(
         .build()
 
     private fun recommendedDriversSection(): SectionedItemList {
-        val availableDrivers = drivers
-            .filter { driver -> driver.state == TelemetryVehicleState.FREE }
-            .sortedBy { driver -> driver.userName.lowercase() }
         val items = ItemList.Builder()
 
-        if (availableDrivers.isEmpty()) {
-            items.addItem(
+        when {
+            isLoadingExistingJob || isLoadingCandidates -> items.addItem(
+                Row.Builder()
+                    .setTitle(
+                        carContext.getString(
+                            R.string.assign_job_loading_candidates,
+                        ),
+                    )
+                    .build(),
+            )
+
+            candidatesFailed -> items.addItem(
+                Row.Builder()
+                    .setTitle(
+                        carContext.getString(
+                            R.string.assign_job_candidates_error,
+                        ),
+                    )
+                    .addText(
+                        carContext.getString(
+                            R.string.assign_job_retry_candidates,
+                        ),
+                    )
+                    .setOnClickListener(::retryRecommendedDrivers)
+                    .build(),
+            )
+
+            fromPoint == null -> items.addItem(
+                Row.Builder()
+                    .setTitle(
+                        carContext.getString(
+                            R.string.assign_job_pickup_required,
+                        ),
+                    )
+                    .build(),
+            )
+
+            candidates.isEmpty() -> items.addItem(
                 Row.Builder()
                     .setTitle(
                         carContext.getString(
@@ -246,9 +300,9 @@ internal class AssignJobScreen(
                     )
                     .build(),
             )
-        } else {
-            availableDrivers.forEachIndexed { index, driver ->
-                val isSelected = driver.userId == selectedDriverId
+
+            else -> candidates.forEach { candidate ->
+                val isSelected = candidate.driverId == selectedDriverId
                 items.addItem(
                     Row.Builder()
                         .setTitle(
@@ -258,22 +312,17 @@ internal class AssignJobScreen(
                                 } else {
                                     R.string.assign_job_driver_rank
                                 },
-                                index + 1,
-                                driver.userName,
+                                candidate.rank,
+                                candidate.driverName,
                             ),
                         )
-                        .addText(
-                            if (isSelected) {
-                                carContext.getString(
-                                    R.string.assign_job_selected_driver,
-                                    carContext.getString(R.string.driver_status_free),
-                                )
-                            } else {
-                                carContext.getString(R.string.driver_status_free)
-                            },
-                        )
+                        .apply {
+                            candidate.pickupEstimateText()?.let {
+                                pickupEstimate -> addText(pickupEstimate)
+                            }
+                        }
                         .setOnClickListener {
-                            selectedDriverId = driver.userId
+                            selectedDriverId = candidate.driverId
                             invalidate()
                         }
                         .build(),
@@ -395,33 +444,150 @@ internal class AssignJobScreen(
                 val visibleDrivers = usersById.values
                     .filterNot { driver -> driver.userId == currentUserId }
                 mapRenderer.updateLiveUsers(visibleDrivers)
-
-                val updatedDrivers = visibleDrivers
-                    .map { driver ->
-                        AssignDriver(
-                            userId = driver.userId,
-                            userName = driver.userName,
-                            state = driver.state,
-                        )
-                    }
-                    .sortedBy(AssignDriver::userId)
-                val previousSelectedDriverId = selectedDriverId
-                if (updatedDrivers.none { driver ->
-                        driver.userId == selectedDriverId &&
-                            driver.state == TelemetryVehicleState.FREE
-                    }
-                ) {
-                    selectedDriverId = null
-                }
-
-                if (
-                    drivers != updatedDrivers ||
-                    previousSelectedDriverId != selectedDriverId
-                ) {
-                    drivers = updatedDrivers
-                    invalidate()
-                }
             }
+        }
+    }
+
+    private fun loadRecommendedDrivers() {
+        candidatesJob?.cancel()
+        candidatesJob = null
+        selectedDriverId = null
+
+        val pickup = fromPoint
+        if (pickup == null) {
+            candidates = emptyList()
+            isLoadingCandidates = false
+            candidatesFailed = false
+            invalidate()
+            return
+        }
+
+        val repository = jobRepository
+        if (repository == null) {
+            candidates = emptyList()
+            isLoadingCandidates = false
+            candidatesFailed = true
+            invalidate()
+            return
+        }
+
+        val destination = toPoint
+        candidates = emptyList()
+        isLoadingCandidates = true
+        candidatesFailed = false
+        invalidate()
+
+        candidatesJob = screenScope.launch {
+            val result = if (initialJobId != null && !routeWasEdited) {
+                repository.getJobCandidates(initialJobId)
+            } else {
+                repository.getJobCandidates(
+                    from = pickup.toJobCoordinates(),
+                    to = destination?.toJobCoordinates(),
+                    dueDate = candidateDueDate,
+                )
+            }
+            currentCoroutineContext().ensureActive()
+            if (fromPoint != pickup || toPoint != destination) return@launch
+
+            candidates = if (result is JobCandidatesResult.Success) {
+                result.candidates.sortedBy(JobCandidate::rank)
+            } else {
+                emptyList()
+            }
+            isLoadingCandidates = false
+            candidatesFailed = result !is JobCandidatesResult.Success
+            invalidate()
+        }
+    }
+
+    private fun loadExistingJobIfNeeded(force: Boolean = false) {
+        val jobId = initialJobId ?: return
+        if (hasRequestedExistingJob && !force) return
+
+        hasRequestedExistingJob = true
+        existingJobLoadJob?.cancel()
+        val repository = jobRepository
+        if (repository == null) {
+            isLoadingExistingJob = false
+            candidatesFailed = true
+            invalidate()
+            return
+        }
+
+        isLoadingExistingJob = true
+        candidatesFailed = false
+        invalidate()
+        existingJobLoadJob = screenScope.launch {
+            val result = repository.getUnassignedJobs()
+            currentCoroutineContext().ensureActive()
+            val existingJob = (result as? UnassignedJobsResult.Success)
+                ?.jobs
+                ?.firstOrNull { job -> job.id == jobId }
+
+            isLoadingExistingJob = false
+            if (existingJob == null) {
+                candidatesFailed = true
+                invalidate()
+                return@launch
+            }
+
+            from = existingJob.fromAddress
+                ?.takeIf(String::isNotBlank)
+                ?: from
+            to = existingJob.toAddress
+                ?.takeIf(String::isNotBlank)
+                ?: to
+            note = existingJob.note.orEmpty()
+            fromPoint = existingJob.from?.toRoutePoint()
+            toPoint = existingJob.to?.toRoutePoint()
+            candidateDueDate = existingJob.dueDate
+                ?.takeIf(String::isNotBlank)
+                ?: candidateDueDate
+            routeWasEdited = false
+            updateRoutePreview()
+            loadRecommendedDrivers()
+            invalidate()
+        }
+    }
+
+    private fun retryRecommendedDrivers() {
+        if (initialJobId != null && fromPoint == null) {
+            loadExistingJobIfNeeded(force = true)
+        } else {
+            loadRecommendedDrivers()
+        }
+    }
+
+    private fun JobCandidate.pickupEstimateText(): String? {
+        val estimatedPickup = estimatedPickupAt
+            ?.let { value ->
+                runCatching { Instant.parse(value) }.getOrNull()
+            }
+            ?: return null
+        val remainingSeconds = Duration
+            .between(Instant.now(), estimatedPickup)
+            .seconds
+            .coerceAtLeast(0L)
+        val remainingMinutes = remainingSeconds / SECONDS_PER_MINUTE +
+            if (remainingSeconds % SECONDS_PER_MINUTE == 0L) 0L else 1L
+
+        val hours = remainingMinutes / MINUTES_PER_HOUR
+        val minutes = remainingMinutes % MINUTES_PER_HOUR
+        return when {
+            hours == 0L -> carContext.getString(
+                R.string.assign_job_pickup_in_minutes,
+                minutes,
+            )
+            minutes == 0L -> carContext.getString(
+                R.string.assign_job_pickup_in_hours,
+                hours,
+            )
+            else -> carContext.getString(
+                R.string.assign_job_pickup_in_hours_minutes,
+                hours,
+                minutes,
+            )
         }
     }
 
@@ -469,10 +635,19 @@ internal class AssignJobScreen(
         latitude = latitude,
         longitude = longitude,
     )
-}
 
-private data class AssignDriver(
-    val userId: String,
-    val userName: String,
-    val state: TelemetryVehicleState,
-)
+    private fun RoutePoint.toJobCoordinates(): JobCoordinates = JobCoordinates(
+        latitude = latitude,
+        longitude = longitude,
+    )
+
+    private fun JobCoordinates.toRoutePoint(): RoutePoint = RoutePoint(
+        latitude = latitude,
+        longitude = longitude,
+    )
+
+    private companion object {
+        const val SECONDS_PER_MINUTE = 60L
+        const val MINUTES_PER_HOUR = 60L
+    }
+}

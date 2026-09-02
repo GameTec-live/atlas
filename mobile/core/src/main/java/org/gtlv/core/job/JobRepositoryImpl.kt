@@ -1038,7 +1038,9 @@ class JobRepositoryImpl(
                             ?.coerceAtLeast(1)
                             ?: index + 1,
                         summary = rankingTrace
-                            ?.nullableString("summary")
+                            ?.nullableString("summary"),
+                        estimatedPickupAt = json
+                            .nullableString("estimatedPickupAt"),
                     )
                 )
             }

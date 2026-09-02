@@ -194,6 +194,7 @@ class JobRepositoryUnassignedTest {
                           {
                             "driverId": "driver-1",
                             "driverName": "Hermann",
+                            "estimatedPickupAt": "2026-09-02T11:38:00.035Z",
                             "rankingTrace": {
                               "rank": 1,
                               "summary": "Best available driver"
@@ -219,6 +220,10 @@ class JobRepositoryUnassignedTest {
             assertEquals("driver-1", candidate.driverId)
             assertEquals("Hermann", candidate.driverName)
             assertEquals(1, candidate.rank)
+            assertEquals(
+                "2026-09-02T11:38:00.035Z",
+                candidate.estimatedPickupAt
+            )
 
             val request = server.takeRequest()
             assertEquals(

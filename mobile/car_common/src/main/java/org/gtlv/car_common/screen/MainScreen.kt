@@ -1284,6 +1284,7 @@ class MainScreen(
         screenManager.push(
             AssignJobScreen(
                 carContext = carContext,
+                initialJobId = notification?.jobId,
                 initialFrom = notification?.from.orEmpty(),
                 initialTo = notification?.to.orEmpty(),
                 initialNote = notification?.note.orEmpty(),
@@ -1292,6 +1293,7 @@ class MainScreen(
                 locationProvider = locationProvider,
                 serverSettingsRepository = serverSettingsRepository,
                 geoServiceRepository = geoServiceRepository,
+                jobRepository = jobRepository,
                 getUserId = getUserId,
                 liveMapUsers = liveMapUsers,
                 mapRenderer = mapRenderer,

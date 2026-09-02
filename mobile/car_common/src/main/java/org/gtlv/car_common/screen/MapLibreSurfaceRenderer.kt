@@ -363,7 +363,10 @@ internal class MapLibreSurfaceRenderer(
     fun updateRoute(points: List<RoutePoint>) {
         routePoints = points.filter(RoutePoint::isValid)
         if (!isStyleReady) return
-        map?.style?.updateAutomotiveRoute(routePoints)
+        map?.style?.updateAutomotiveRoute(
+            points = routePoints,
+            showEndpoints = !areMainMapOverlaysVisible,
+        )
     }
 
     fun updateJobSummary(summary: String) {
@@ -711,6 +714,12 @@ internal class MapLibreSurfaceRenderer(
         areMainMapOverlaysVisible = mainOverlaysVisible
         isDispatcherSidebarAvailable = dispatcherSidebarAvailable
         interactionTarget = InteractionTarget.MAP
+        if (isStyleReady) {
+            map?.style?.updateAutomotiveRoute(
+                points = routePoints,
+                showEndpoints = !mainOverlaysVisible,
+            )
+        }
 
         jobCardView?.visibility = if (mainOverlaysVisible && showJobCard) {
             View.VISIBLE
@@ -760,7 +769,10 @@ internal class MapLibreSurfaceRenderer(
 
             activateLocationPuck(readyMap, style)
             style.addAutomotiveRouteLayers()
-            style.updateAutomotiveRoute(routePoints)
+            style.updateAutomotiveRoute(
+                points = routePoints,
+                showEndpoints = !areMainMapOverlaysVisible,
+            )
             style.addLiveMapUserLayers()
             style.updateLiveMapUsers(liveMapUsers)
             isStyleReady = true
@@ -2141,7 +2153,10 @@ private fun Style.addAutomotiveRouteLayers() {
     }
 }
 
-private fun Style.updateAutomotiveRoute(points: List<RoutePoint>) {
+private fun Style.updateAutomotiveRoute(
+    points: List<RoutePoint>,
+    showEndpoints: Boolean,
+) {
     val routeFeatures = if (points.size >= 2) {
         FeatureCollection.fromFeature(
             Feature.fromGeometry(
@@ -2159,6 +2174,7 @@ private fun Style.updateAutomotiveRoute(points: List<RoutePoint>) {
         ?.setGeoJson(routeFeatures)
 
     val originFeatures = points.firstOrNull()
+        ?.takeIf { showEndpoints }
         ?.let {
             FeatureCollection.fromFeature(
                 Feature.fromGeometry(
@@ -2170,7 +2186,7 @@ private fun Style.updateAutomotiveRoute(points: List<RoutePoint>) {
         ?.setGeoJson(originFeatures)
 
     val destinationFeatures = points.lastOrNull()
-        ?.takeIf { points.size >= 2 }
+        ?.takeIf { showEndpoints && points.size >= 2 }
         ?.let {
             FeatureCollection.fromFeature(
                 Feature.fromGeometry(

@@ -62,10 +62,16 @@
     <string name="address_search_no_results">No matching addresses found</string>
     <string name="address_search_recent">Recent address</string>
     <string name="assign_job_recommended_drivers">&#8212; Recommended drivers &#8212;</string>
+    <string name="assign_job_pickup_required">Select a pickup address to load recommendations</string>
+    <string name="assign_job_loading_candidates">Loading driver recommendations&#8230;</string>
+    <string name="assign_job_candidates_error">Could not load driver recommendations</string>
+    <string name="assign_job_retry_candidates">Tap to retry</string>
     <string name="assign_job_no_available_drivers">No available drivers</string>
     <string name="assign_job_driver_rank">%1$d. %2$s</string>
     <string name="assign_job_selected_driver_rank">Selected: %1$d. %2$s</string>
-    <string name="assign_job_selected_driver">Selected - %1$s</string>
+    <string name="assign_job_pickup_in_minutes">Pick-Up in %1$dmin</string>
+    <string name="assign_job_pickup_in_hours">Pick-Up in %1$dh</string>
+    <string name="assign_job_pickup_in_hours_minutes">Pick-Up in %1$dh %2$dmin</string>
     <string name="assign_job_assign">Assign Job</string>
     <string name="assign_job_ui_only_message">Assignment will be connected in the next step</string>
     <string name="assign_job_requires_car_api_7">Assign Job requires a newer Android Auto host</string>

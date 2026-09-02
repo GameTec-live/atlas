@@ -4,5 +4,6 @@ data class JobCandidate(
     val driverId: String,
     val driverName: String,
     val rank: Int,
-    val summary: String?
+    val summary: String?,
+    val estimatedPickupAt: String? = null,
 )
