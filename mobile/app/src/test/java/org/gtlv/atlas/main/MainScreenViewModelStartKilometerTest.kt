@@ -301,6 +301,73 @@ class MainScreenViewModelStartKilometerTest {
             )
         }
 
+    @Test
+    fun `completion retry does not replace saved finish location`() =
+        runTest(dispatcher) {
+            val currentJob = testJob("current")
+            val repository = FakeJobRepository(
+                JobsResult.Success(
+                    queuedJobs = emptyList(),
+                    currentJob = currentJob
+                )
+            ).apply {
+                completeJobResult =
+                    JobActionResult.NetworkError
+            }
+            val viewModel = createViewModel(
+                repository,
+                FakeJobMileageStore()
+            )
+
+            viewModel.loadJobsForUser(USER_ID)
+            advanceUntilIdle()
+            viewModel.updateLocationState(
+                availableLocation(
+                    latitude = 48.2082,
+                    longitude = 16.3738
+                )
+            )
+            viewModel.personCollected()
+            viewModel.closeAddressEditor()
+            viewModel.requestFinishCurrentJob()
+            viewModel.confirmFinishCurrentJob()
+            advanceUntilIdle()
+
+            assertEquals(
+                JobCoordinates(
+                    latitude = 48.2082,
+                    longitude = 16.3738
+                ),
+                viewModel.uiState.value.currentJob?.to
+            )
+
+            viewModel.updateLocationState(
+                availableLocation(
+                    latitude = 48.3,
+                    longitude = 16.4
+                )
+            )
+            repository.completeJobResult =
+                JobActionResult.Success
+            viewModel.confirmFinishCurrentJob()
+            advanceUntilIdle()
+
+            assertEquals(1, repository.locationUpdates.size)
+            assertEquals(
+                LocationUpdate(
+                    jobId = currentJob.id,
+                    field = JobLocationField.TO,
+                    latitude = 48.2082,
+                    longitude = 16.3738
+                ),
+                repository.locationUpdates.single()
+            )
+            assertEquals(
+                listOf(currentJob.id, currentJob.id),
+                repository.completedJobIds
+            )
+        }
+
     private suspend fun createViewModel(
         repository: FakeJobRepository,
         mileageStore: FakeJobMileageStore,
@@ -379,6 +446,8 @@ private class FakeJobRepository(
     val locationUpdates = mutableListOf<LocationUpdate>()
     var locationUpdateResult: JobActionResult =
         JobActionResult.Success
+    var completeJobResult: JobActionResult =
+        JobActionResult.Success
 
     fun publishJobs(result: JobsResult.Success) {
         jobs = result
@@ -423,8 +492,10 @@ private class FakeJobRepository(
 
     override suspend fun completeJob(jobId: String): JobActionResult {
         completedJobIds += jobId
-        jobs = jobs.copy(currentJob = null)
-        return JobActionResult.Success
+        if (completeJobResult == JobActionResult.Success) {
+            jobs = jobs.copy(currentJob = null)
+        }
+        return completeJobResult
     }
 
     override suspend fun updateJobLocation(
@@ -439,6 +510,22 @@ private class FakeJobRepository(
             latitude = latitude,
             longitude = longitude
         )
+        if (locationUpdateResult == JobActionResult.Success) {
+            jobs = jobs.copy(
+                currentJob = jobs.currentJob?.let { currentJob ->
+                    if (currentJob.id == jobId) {
+                        currentJob.copy(
+                            to = JobCoordinates(
+                                latitude = latitude,
+                                longitude = longitude
+                            )
+                        )
+                    } else {
+                        currentJob
+                    }
+                }
+            )
+        }
         return locationUpdateResult
     }
 
