@@ -3,6 +3,8 @@ import { authHandler } from "../authHandler";
 import * as firmware from "./firmware";
 import * as management from "./management";
 import { SystemModel } from "./model";
+import { forwardJSON } from "./proxy";
+import { SystemResponse } from "./responses";
 
 const jsonRequest = (method: string, body?: unknown): RequestInit => ({
     method,
@@ -52,6 +54,7 @@ export const system = new Elysia({
         },
         {
             admin: true,
+            response: SystemResponse.availability,
             detail: {
                 summary: "Atlas OS management availability",
                 description:
@@ -61,16 +64,23 @@ export const system = new Elysia({
     )
     .get("/containers", () => management.request("/api/v1/containers"), {
         admin: true,
+        response: SystemResponse.containers,
     })
     .get("/update", () => management.request("/api/v1/update"), {
         admin: true,
+        response: SystemResponse.updateStatus,
     })
     .post(
         "/update/upload",
-        ({ request }) => firmwareResponse(() => firmware.fromUpload(request)),
+        ({ request, status, set }) =>
+            forwardJSON(
+                firmwareResponse(() => firmware.fromUpload(request)),
+                { status, set },
+            ),
         {
             admin: true,
             parse: "none",
+            response: SystemResponse.updateUpload,
             detail: {
                 summary: "Install an uploaded Atlas OS update",
                 description:
@@ -91,20 +101,31 @@ export const system = new Elysia({
     )
     .post(
         "/update/url",
-        ({ body }) => firmwareResponse(() => firmware.fromURL(body.url)),
+        ({ body, status, set }) =>
+            forwardJSON(
+                firmwareResponse(() => firmware.fromURL(body.url)),
+                { status, set },
+            ),
         {
             admin: true,
             body: SystemModel.updateURL,
+            response: SystemResponse.updateDownload,
             detail: { summary: "Download and install an Atlas OS update" },
         },
     )
     .post(
         "/update/github",
-        ({ body }) =>
-            firmwareResponse(() => firmware.fromLatestGitHub(body.repository)),
+        ({ body, status, set }) =>
+            forwardJSON(
+                firmwareResponse(() =>
+                    firmware.fromLatestGitHub(body.repository),
+                ),
+                { status, set },
+            ),
         {
             admin: true,
             body: SystemModel.githubUpdate,
+            response: SystemResponse.updateDownload,
             detail: {
                 summary: "Install the latest GitHub release update",
             },
@@ -114,59 +135,110 @@ export const system = new Elysia({
         "/update/rollback",
         () =>
             management.request("/api/v1/update/rollback", jsonRequest("POST")),
-        { admin: true },
+        {
+            admin: true,
+            response: SystemResponse.mutation,
+        },
     )
     .post(
         "/power/reboot",
-        () => management.request("/api/v1/power/reboot", jsonRequest("POST")),
-        { admin: true },
+        ({ status, set }) =>
+            forwardJSON(
+                management.request("/api/v1/power/reboot", jsonRequest("POST")),
+                { status, set },
+            ),
+        {
+            admin: true,
+            response: SystemResponse.reboot,
+        },
     )
     .post(
         "/power/poweroff",
-        () => management.request("/api/v1/power/poweroff", jsonRequest("POST")),
-        { admin: true },
+        ({ status, set }) =>
+            forwardJSON(
+                management.request(
+                    "/api/v1/power/poweroff",
+                    jsonRequest("POST"),
+                ),
+                { status, set },
+            ),
+        {
+            admin: true,
+            response: SystemResponse.poweroff,
+        },
     )
     .post(
         "/factory-reset",
-        () => management.request("/api/v1/factory-reset", jsonRequest("POST")),
-        { admin: true },
+        ({ status, set }) =>
+            forwardJSON(
+                management.request(
+                    "/api/v1/factory-reset",
+                    jsonRequest("POST"),
+                ),
+                { status, set },
+            ),
+        {
+            admin: true,
+            response: SystemResponse.factoryReset,
+        },
     )
     .get("/ssh", () => management.request("/api/v1/ssh"), {
         admin: true,
+        response: SystemResponse.ssh,
     })
     .post(
         "/ssh/enable",
         () => management.request("/api/v1/ssh/enable", jsonRequest("POST")),
-        { admin: true },
+        {
+            admin: true,
+            response: SystemResponse.mutation,
+        },
     )
     .post(
         "/ssh/disable",
         () => management.request("/api/v1/ssh/disable", jsonRequest("POST")),
-        { admin: true },
+        {
+            admin: true,
+            response: SystemResponse.mutation,
+        },
     )
     .get("/timezone", () => management.request("/api/v1/timezone"), {
         admin: true,
+        response: SystemResponse.timezone,
     })
     .put(
         "/timezone",
         ({ body }) =>
             management.request("/api/v1/timezone", jsonRequest("PUT", body)),
-        { admin: true, body: SystemModel.timezone },
+        {
+            admin: true,
+            body: SystemModel.timezone,
+            response: SystemResponse.timezoneUpdate,
+        },
     )
     .get(
         "/connections/adapters",
         () => management.request("/api/v1/connections/adapters"),
-        { admin: true },
+        {
+            admin: true,
+            response: SystemResponse.adapters,
+        },
     )
     .get(
         "/connections/network-manager",
         () => management.request("/api/v1/connections/network-manager"),
-        { admin: true },
+        {
+            admin: true,
+            response: SystemResponse.connections,
+        },
     )
     .get(
         "/connections/network-manager/devices",
         () => management.request("/api/v1/connections/network-manager/devices"),
-        { admin: true },
+        {
+            admin: true,
+            response: SystemResponse.devices,
+        },
     )
     .get(
         "/connections/network-manager/wifi",
@@ -181,6 +253,7 @@ export const system = new Elysia({
         {
             admin: true,
             query: SystemModel.wifiDevice,
+            response: SystemResponse.accessPoints,
         },
     )
     .post(
@@ -190,7 +263,11 @@ export const system = new Elysia({
                 "/api/v1/connections/network-manager/wifi",
                 jsonRequest("POST", body),
             ),
-        { admin: true, body: SystemModel.wifi },
+        {
+            admin: true,
+            body: SystemModel.wifi,
+            response: SystemResponse.mutation,
+        },
     )
     .get(
         "/connections/network-manager/:uuid/ip",
@@ -198,7 +275,11 @@ export const system = new Elysia({
             management.request(
                 `/api/v1/connections/network-manager/${encodeURIComponent(params.uuid)}/ip`,
             ),
-        { admin: true, params: SystemModel.uuid },
+        {
+            admin: true,
+            params: SystemModel.uuid,
+            response: SystemResponse.ipSettings,
+        },
     )
     .put(
         "/connections/network-manager/:uuid/ip",
@@ -211,6 +292,7 @@ export const system = new Elysia({
             admin: true,
             params: SystemModel.uuid,
             body: SystemModel.ipSettings,
+            response: SystemResponse.mutation,
         },
     )
     .post(
@@ -220,7 +302,11 @@ export const system = new Elysia({
                 `/api/v1/connections/network-manager/${encodeURIComponent(params.uuid)}/disconnect`,
                 jsonRequest("POST"),
             ),
-        { admin: true, params: SystemModel.uuid },
+        {
+            admin: true,
+            params: SystemModel.uuid,
+            response: SystemResponse.mutation,
+        },
     )
     .delete(
         "/connections/network-manager/:uuid",
@@ -229,12 +315,19 @@ export const system = new Elysia({
                 `/api/v1/connections/network-manager/${encodeURIComponent(params.uuid)}`,
                 { method: "DELETE" },
             ),
-        { admin: true, params: SystemModel.uuid },
+        {
+            admin: true,
+            params: SystemModel.uuid,
+            response: SystemResponse.mutation,
+        },
     )
     .get(
         "/connections/auth-origins",
         () => management.request("/api/v1/connections/auth-origins"),
-        { admin: true },
+        {
+            admin: true,
+            response: SystemResponse.origins,
+        },
     )
     .post(
         "/connections/auth-origins",
@@ -243,7 +336,11 @@ export const system = new Elysia({
                 "/api/v1/connections/auth-origins",
                 jsonRequest("POST", body),
             ),
-        { admin: true, body: SystemModel.origin },
+        {
+            admin: true,
+            body: SystemModel.origin,
+            response: SystemResponse.originsMutation,
+        },
     )
     .delete(
         "/connections/auth-origins",
@@ -252,12 +349,19 @@ export const system = new Elysia({
                 "/api/v1/connections/auth-origins",
                 jsonRequest("DELETE", body),
             ),
-        { admin: true, body: SystemModel.origin },
+        {
+            admin: true,
+            body: SystemModel.origin,
+            response: SystemResponse.originsMutation,
+        },
     )
     .get(
         "/connections/remote-access",
         () => management.request("/api/v1/connections/remote-access"),
-        { admin: true },
+        {
+            admin: true,
+            response: SystemResponse.remoteAccess,
+        },
     )
     .put(
         "/connections/remote-access/cloudflare-tunnel",
@@ -266,7 +370,11 @@ export const system = new Elysia({
                 "/api/v1/connections/remote-access/cloudflare-tunnel",
                 jsonRequest("PUT", body),
             ),
-        { admin: true, body: SystemModel.cloudflareTunnel },
+        {
+            admin: true,
+            body: SystemModel.cloudflareTunnel,
+            response: SystemResponse.remoteAccessMutation,
+        },
     )
     .delete(
         "/connections/remote-access/cloudflare-tunnel",
@@ -275,7 +383,10 @@ export const system = new Elysia({
                 "/api/v1/connections/remote-access/cloudflare-tunnel",
                 { method: "DELETE" },
             ),
-        { admin: true },
+        {
+            admin: true,
+            response: SystemResponse.remoteAccessMutation,
+        },
     )
     .put(
         "/connections/remote-access/tailscale",
@@ -284,7 +395,11 @@ export const system = new Elysia({
                 "/api/v1/connections/remote-access/tailscale",
                 jsonRequest("PUT", body),
             ),
-        { admin: true, body: SystemModel.tailscale },
+        {
+            admin: true,
+            body: SystemModel.tailscale,
+            response: SystemResponse.remoteAccessMutation,
+        },
     )
     .delete(
         "/connections/remote-access/tailscale",
@@ -292,5 +407,8 @@ export const system = new Elysia({
             management.request("/api/v1/connections/remote-access/tailscale", {
                 method: "DELETE",
             }),
-        { admin: true },
+        {
+            admin: true,
+            response: SystemResponse.remoteAccessMutation,
+        },
     );
