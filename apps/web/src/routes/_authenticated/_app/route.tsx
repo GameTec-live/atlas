@@ -24,7 +24,7 @@ function RouteComponent() {
             <nav className="flex shrink-0 flex-row flex-wrap items-center justify-between gap-2 border-b p-2">
                 <div className="flex flex-row items-center gap-2">
                     <Link to="/">
-                        <AtlasLogo className="h-8 dark:invert" />
+                        <AtlasLogo className="h-8" />
                     </Link>
                     <NavigationMenu>
                         <NavigationMenuList>
