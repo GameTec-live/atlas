@@ -13,7 +13,9 @@ import { AppConnectionStep } from "@/components/setup/app-connection-step";
 import { ConnectionStep } from "@/components/setup/connection-step";
 import { GreetingStep } from "@/components/setup/greeting-step";
 import { PreferencesStep } from "@/components/setup/preferences-step";
+import { RemoteAccessStep } from "@/components/setup/remote-access-step";
 import { SetupStepLayout } from "@/components/setup/setup-step-layout";
+import { TimezoneStep } from "@/components/setup/timezone-step";
 import { WizardProgress } from "@/components/setup/wizard-progress";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
@@ -97,11 +99,13 @@ export function SetupWizard() {
                                 await queryClient.invalidateQueries({
                                     queryKey: setupStatusQueryKey,
                                 });
-                                await goTo("connection");
+                                await goTo("timezone");
                             }}
                         />
                     )}
+                    {step === "timezone" && <TimezoneStep />}
                     {step === "connection" && <ConnectionStep />}
+                    {step === "remote-access" && <RemoteAccessStep />}
                     {step === "general" && <GeneralSettingsCard />}
                     {step === "app" && <AppConnectionStep />}
                     {step === "users" && <UsersCard />}

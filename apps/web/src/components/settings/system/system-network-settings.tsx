@@ -16,7 +16,7 @@ import {
 const isWired = (connection: SystemConnection) =>
     !/(wifi|wireless|802-11)/i.test(connection.type);
 
-export function SystemNetworkSettings() {
+export function SystemNetworkSettings({ header = true }: { header?: boolean }) {
     const [selected, setSelected] = useState<SystemConnection>();
     const connections = useQuery(systemConnectionsQueryOptions());
     const devices = useQuery(systemDevicesQueryOptions());
@@ -36,14 +36,16 @@ export function SystemNetworkSettings() {
 
     return (
         <div className="grid gap-3">
-            <div>
-                <h3 className="font-medium">
-                    {m.settings_system_wired_connections()}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                    {m.settings_system_wired_connections_description()}
-                </p>
-            </div>
+            {header && (
+                <div>
+                    <h3 className="font-medium">
+                        {m.settings_system_wired_connections()}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                        {m.settings_system_wired_connections_description()}
+                    </p>
+                </div>
+            )}
             {wiredConnections.length ? (
                 wiredConnections.map((connection) => {
                     const device = devices.data?.items.find(

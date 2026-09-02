@@ -12,9 +12,14 @@ const getStepCopy = (step: SetupFormStep) =>
             m.setup_preferences_description(),
         ],
         admin: [m.setup_admin_title(), m.setup_admin_description()],
+        timezone: [m.setup_timezone_title(), m.setup_timezone_description()],
         connection: [
             m.setup_connection_title(),
             m.setup_connection_description(),
+        ],
+        "remote-access": [
+            m.setup_remote_access_title(),
+            m.setup_remote_access_description(),
         ],
         general: [m.setup_general_title(), m.setup_general_description()],
         app: [m.setup_app_title(), m.setup_app_description()],
