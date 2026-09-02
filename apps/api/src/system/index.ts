@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { authHandler } from "../authHandler";
+import { getDeploymentCapabilities } from "../capabilities";
 import * as firmware from "./firmware";
 import * as management from "./management";
 import { SystemModel } from "./model";
@@ -40,6 +41,15 @@ export const system = new Elysia({
     .get(
         "/",
         async () => {
+            if (!getDeploymentCapabilities().systemManagement) {
+                return {
+                    management: {
+                        available: false as const,
+                        reason: management.UNAVAILABLE_MESSAGE,
+                    },
+                };
+            }
+
             const response = await management.request("/healthz", {
                 signal: AbortSignal.timeout(3_000),
             });

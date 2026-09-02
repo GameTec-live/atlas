@@ -12,10 +12,7 @@ import {
     settingsConfigQueryOptions,
     settingsUsersQueryOptions,
 } from "@/queries/settings";
-import {
-    apiInfoQueryOptions,
-    systemAvailabilityQueryOptions,
-} from "@/queries/system";
+import { apiInfoQueryOptions } from "@/queries/system";
 
 export const Route = createFileRoute("/_authenticated/_app/settings/")({
     loader: async ({ context }) => {
@@ -25,7 +22,6 @@ export const Route = createFileRoute("/_authenticated/_app/settings/")({
         ]);
         const deferred = Promise.all([
             context.queryClient.prefetchQuery(apiInfoQueryOptions()),
-            context.queryClient.prefetchQuery(systemAvailabilityQueryOptions()),
             context.queryClient.prefetchQuery(geodataDatasetsQueryOptions()),
             context.queryClient.prefetchQuery(geodataCatalogQueryOptions()),
             context.queryClient.prefetchQuery(geodataJobsQueryOptions()),

@@ -78,6 +78,7 @@ beforeEach(() => {
     managementRequestMock.mockClear();
     applyUpdateMock.mockClear();
     envMock.DATA_STORAGE_PATH = undefined;
+    envMock.OS_MANAGEMENT_SOCKET = undefined;
 });
 
 describe("system availability and authentication", () => {
@@ -87,7 +88,22 @@ describe("system availability and authentication", () => {
         expect((await request(app, "/")).status).toBe(403);
     });
 
-    it("reports unavailable management without failing in Docker Compose", async () => {
+    it("reports unavailable management without probing outside AtlasOS", async () => {
+        getSessionMock.mockResolvedValue(adminSession);
+
+        const statusResponse = await request(app, "/");
+        expect(statusResponse.status).toBe(200);
+        expect(await statusResponse.json()).toEqual({
+            management: {
+                available: false,
+                reason: "Atlas OS management is unavailable",
+            },
+        });
+        expect(managementRequests).toEqual([]);
+    });
+
+    it("reports an unavailable AtlasOS management service", async () => {
+        envMock.OS_MANAGEMENT_SOCKET = "/run/atlas-management/api.sock";
         managementResponder = () =>
             Response.json(
                 {
@@ -108,6 +124,7 @@ describe("system availability and authentication", () => {
                 reason: "Atlas OS management is unavailable",
             },
         });
+        expect(managementRequests[0]?.path).toBe("/healthz");
 
         const operationResponse = await request(app, "/ssh");
         expect(operationResponse.status).toBe(503);

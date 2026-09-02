@@ -5,7 +5,6 @@ import type { SystemIpMethod } from "@/lib/system";
 
 const keys = {
     info: ["api", "info"],
-    availability: ["system", "availability"],
     containers: ["system", "containers"],
     update: ["system", "update"],
     ssh: ["system", "ssh"],
@@ -22,7 +21,6 @@ export const systemTimezoneQueryKey = keys.timezone;
 export const systemRemoteAccessQueryKey = keys.remoteAccess;
 export const systemAuthOriginsQueryKey = keys.authOrigins;
 
-const fetchAvailability = () => unwrapEden(api.system.get());
 const fetchApiInfo = () => unwrapEden(api.get());
 const fetchContainers = () => unwrapEden(api.system.containers.get());
 const fetchUpdate = () => unwrapEden(api.system.update.get());
@@ -53,14 +51,6 @@ export type SystemIpSettings = NonNullable<
 export type SystemRemoteAccess = NonNullable<
     Awaited<ReturnType<typeof fetchRemoteAccess>>
 >;
-
-export const systemAvailabilityQueryOptions = () =>
-    queryOptions({
-        queryKey: keys.availability,
-        queryFn: fetchAvailability,
-        staleTime: Number.POSITIVE_INFINITY,
-        retry: false,
-    });
 
 export const apiInfoQueryOptions = () =>
     queryOptions({

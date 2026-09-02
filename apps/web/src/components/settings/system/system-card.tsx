@@ -5,7 +5,7 @@ import { SystemRuntimeInfoCard } from "@/components/settings/system/system-runti
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { m } from "@/paraglide/messages";
-import { systemAvailabilityQueryOptions } from "@/queries/system";
+import { setupStatusQueryOptions } from "@/queries/setup";
 
 function SystemCardSkeleton() {
     return (
@@ -26,11 +26,11 @@ function SystemCardSkeleton() {
 }
 
 export function SystemCard() {
-    const availability = useQuery(systemAvailabilityQueryOptions());
+    const setup = useQuery(setupStatusQueryOptions());
 
-    if (availability.isPending) return <SystemCardSkeleton />;
+    if (setup.isPending) return <SystemCardSkeleton />;
 
-    return availability.data?.management.available ? (
+    return setup.data?.capabilities.systemManagement ? (
         <SystemManagementCard />
     ) : (
         <SystemRuntimeInfoCard />

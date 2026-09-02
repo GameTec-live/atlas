@@ -2,7 +2,7 @@ import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { type SetupFormStep, setupSteps } from "@/lib/setup";
+import type { SetupFormStep, SetupStep } from "@/lib/setup";
 import { m } from "@/paraglide/messages";
 
 const getStepCopy = (step: SetupFormStep) =>
@@ -30,6 +30,7 @@ const getStepCopy = (step: SetupFormStep) =>
 export function SetupStepLayout({
     step,
     children,
+    steps,
     canContinue,
     isFinishing,
     onPrevious,
@@ -38,6 +39,7 @@ export function SetupStepLayout({
 }: {
     step: SetupFormStep;
     children: ReactNode;
+    steps: readonly SetupStep[];
     canContinue: boolean;
     isFinishing: boolean;
     onPrevious: () => void;
@@ -45,7 +47,7 @@ export function SetupStepLayout({
     onFinish: () => void;
 }) {
     const [title, description] = getStepCopy(step);
-    const currentStep = setupSteps.indexOf(step) + 1;
+    const currentStep = steps.indexOf(step) + 1;
 
     return (
         <>
@@ -53,7 +55,7 @@ export function SetupStepLayout({
                 <p className="mb-2 text-xs font-medium tracking-widest text-muted-foreground uppercase">
                     {m.setup_step_progress({
                         current: currentStep,
-                        total: setupSteps.length,
+                        total: steps.length,
                     })}
                 </p>
                 <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
