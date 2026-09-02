@@ -12,6 +12,7 @@ type Config struct {
 	SocketGID          int
 	TokenPath          string
 	StateDir           string
+	TimezonePath       string
 	TrustedOriginsPath string
 	RemoteAccessDir    string
 	ContainerHome      string
@@ -29,6 +30,7 @@ func Load() (Config, error) {
 		SocketPath:         env("ATLAS_MANAGEMENT_SOCKET", "/run/atlas-management/api.sock"),
 		TokenPath:          env("ATLAS_MANAGEMENT_TOKEN_FILE", "/home/atlas-containers/.config/atlas/management-token"),
 		StateDir:           env("ATLAS_MANAGEMENT_STATE_DIR", "/persistent/atlas/system"),
+		TimezonePath:       env("ATLAS_TIMEZONE_PATH", "/persistent/atlas/timezone/localtime"),
 		TrustedOriginsPath: env("ATLAS_TRUSTED_ORIGINS_FILE", "/home/atlas-containers/.config/atlas/trusted-origins"),
 		RemoteAccessDir:    env("ATLAS_REMOTE_ACCESS_CONFIG_DIR", "/home/atlas-containers/.config/atlas"),
 		ContainerHome:      env("ATLAS_CONTAINER_HOME", "/home/atlas-containers"),

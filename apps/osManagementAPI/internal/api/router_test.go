@@ -67,6 +67,16 @@ func (s *fakeSSH) Status(context.Context) (bool, error) { return s.enabled, nil 
 func (s *fakeSSH) Enable(context.Context) error         { s.enabled = true; return nil }
 func (s *fakeSSH) Disable(context.Context) error        { s.enabled = false; return nil }
 
+type fakeTimezone struct {
+	value string
+}
+
+func (t *fakeTimezone) Status(context.Context) (string, error) { return t.value, nil }
+func (t *fakeTimezone) Set(_ context.Context, value string) error {
+	t.value = value
+	return nil
+}
+
 type fakeNetwork struct{}
 
 func (fakeNetwork) Connections(context.Context) ([]networkmanager.Connection, error) { return nil, nil }
@@ -130,6 +140,7 @@ func testRouter(stateDir string, updateManager *fakeUpdate, powerManager *fakePo
 		Power:          powerManager,
 		Reset:          fakeReset{},
 		SSH:            &fakeSSH{},
+		Timezone:       &fakeTimezone{value: "Etc/UTC"},
 		Network:        fakeNetwork{},
 		Origins:        fakeOrigins{},
 		RemoteAccess:   &fakeRemoteAccess{},
@@ -149,6 +160,7 @@ func TestSSHStatusEnableAndDisable(t *testing.T) {
 		Power:          &fakePower{},
 		Reset:          fakeReset{},
 		SSH:            sshManager,
+		Timezone:       &fakeTimezone{value: "Etc/UTC"},
 		Network:        fakeNetwork{},
 		Origins:        fakeOrigins{},
 		RemoteAccess:   &fakeRemoteAccess{},
@@ -174,6 +186,27 @@ func TestSSHStatusEnableAndDisable(t *testing.T) {
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || sshManager.enabled {
 		t.Fatalf("disable failed: code=%d body=%s enabled=%v", response.Code, response.Body.String(), sshManager.enabled)
+	}
+}
+
+func TestTimezoneStatusAndSet(t *testing.T) {
+	manager := &fakeTimezone{value: "Etc/UTC"}
+	router := NewRouter(Dependencies{Token: "secret-token", Timezone: manager})
+
+	request := authenticatedRequest(http.MethodGet, "/api/v1/timezone")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != "{\"timezone\":\"Etc/UTC\"}\n" {
+		t.Fatalf("unexpected status: code=%d body=%s", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodPut, "/api/v1/timezone", strings.NewReader(`{"timezone":"Europe/Vienna"}`))
+	request.Header.Set("Authorization", "Bearer secret-token")
+	request.Header.Set("Content-Type", "application/json")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || manager.value != "Europe/Vienna" || response.Body.String() != "{\"timezone\":\"Europe/Vienna\"}\n" {
+		t.Fatalf("set failed: code=%d body=%s timezone=%q", response.Code, response.Body.String(), manager.value)
 	}
 }
 

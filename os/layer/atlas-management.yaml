@@ -15,7 +15,13 @@
 # METAEND
 ---
 mmdebstrap:
+  packages:
+    - tzdata
   customize-hooks:
+    - |-
+      install -d -m 0755 "$1/persistent/atlas/timezone"
+      ln -sfn /usr/share/zoneinfo/Etc/UTC "$1/persistent/atlas/timezone/localtime"
+      ln -sfn /persistent/atlas/timezone/localtime "$1/etc/localtime"
     - install -D -m 0755 "$IGconf_atlasmanagement_binary" "$1/usr/local/libexec/atlas-management"
     - chmod 0755 "$1/usr/local/sbin/atlas-sys"
     - chmod 0644 "$1/usr/lib/systemd/system/atlas-management.service" "$1/usr/lib/systemd/system/atlas-factory-reset.service"

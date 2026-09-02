@@ -26,6 +26,8 @@ All routes are below `/api/v1`:
 | `GET /ssh` | Read the persistent SSH policy |
 | `POST /ssh/enable` | Persistently enable and start SSH |
 | `POST /ssh/disable` | Persistently disable and stop SSH |
+| `GET /timezone` | Read the system timezone |
+| `PUT /timezone` | Set the system and PostgreSQL timezone from `{"timezone":"Europe/Vienna"}` |
 | `GET /connections/adapters` | Available connection adapters |
 | `GET /connections/network-manager` | List NetworkManager connections |
 | `GET /connections/network-manager/devices` | List connected and disconnected network devices |
@@ -101,6 +103,8 @@ sudo atlas-sys poweroff
 sudo atlas-sys ssh status
 sudo atlas-sys ssh enable
 sudo atlas-sys ssh disable
+sudo atlas-sys timezone status
+sudo atlas-sys timezone set Europe/Vienna
 sudo atlas-sys remote-access status
 sudo atlas-sys cloudflare-tunnel provision /path/to/cloudflare-token
 sudo atlas-sys cloudflare-tunnel remove
@@ -120,6 +124,13 @@ the Unix socket.
 SSH changes delegate to the host's `atlas-ssh` controller. This keeps the
 persistent policy used during boot as the single source of truth rather than
 directly toggling `ssh.service` only for the current boot.
+
+Timezone names are validated against the host's installed IANA zoneinfo
+database. A change updates the host plus PostgreSQL's default and log
+timezones, then reloads the database configuration without interrupting active
+connections. Because the system slot is read-only, `/etc/localtime` points to
+the atomically replaced `/persistent/atlas/timezone/localtime` symlink.
+The database container also inherits the host timezone whenever it is created.
 
 The upload is staged under `/persistent/atlas/system`, verified and installed
 by `atlas-ab-update`, then the device enters the one-shot candidate slot. On

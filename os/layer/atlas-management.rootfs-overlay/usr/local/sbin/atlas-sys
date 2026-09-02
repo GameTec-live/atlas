@@ -23,6 +23,8 @@ Commands:
   ssh status                     Show persistent SSH policy
   ssh enable                     Persistently enable SSH
   ssh disable                    Persistently disable SSH
+  timezone status                Show the system and database timezone
+  timezone set TIMEZONE          Set an IANA timezone (for example Europe/Vienna)
   remote-access status           Show Cloudflare Tunnel and Tailscale state
   cloudflare-tunnel provision TOKEN_FILE
                                  Provision and start a Cloudflare Tunnel
@@ -95,6 +97,14 @@ validate_hostname() {
     esac
 }
 
+validate_timezone() {
+    case "$1" in
+        ''|/*|.|..|./*|../*|*/.|*/..|*//*|*[!A-Za-z0-9_+/-]*)
+            die "timezone must be an IANA timezone name"
+            ;;
+    esac
+}
+
 confirm_factory_reset() {
     if [ "${1:-}" = --yes ]; then
         [ "$#" -eq 1 ] || usage
@@ -153,6 +163,20 @@ case "${1:-}" in
             disable)
                 [ "$#" -eq 2 ] || usage
                 request POST /api/v1/ssh/disable
+                ;;
+            *) usage ;;
+        esac
+        ;;
+    timezone)
+        case "${2:-}" in
+            status)
+                [ "$#" -eq 2 ] || usage
+                request GET /api/v1/timezone
+                ;;
+            set)
+                [ "$#" -eq 3 ] || usage
+                validate_timezone "$3"
+                printf '{"timezone":"%s"}' "$3" | request_json PUT /api/v1/timezone
                 ;;
             *) usage ;;
         esac

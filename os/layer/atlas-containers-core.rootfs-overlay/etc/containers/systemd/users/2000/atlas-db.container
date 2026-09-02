@@ -9,6 +9,7 @@ Pull=missing
 AutoUpdate=registry
 ContainerName=atlas-db
 Network=atlas.network:alias=db
+Timezone=local
 EnvironmentFile=%h/.config/atlas/db.env
 Volume=atlas-db-data.volume:/var/lib/postgresql/18/docker
 HealthCmd=pg_isready -U atlas

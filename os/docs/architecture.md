@@ -67,6 +67,7 @@ Important persistent paths include:
 | Path | Contents |
 | --- | --- |
 | `/persistent/atlas/system/` | A/B pending state, SSH enablement, USB boot-order marker and EEPROM backup |
+| `/persistent/atlas/timezone/` | Root-owned timezone selection, readable by rootless Podman |
 | `/home/atlas-containers/` | Rootless Podman storage, generated environment files and persistent user configuration |
 | `/persistent/shared/{etc,var}/.../NetworkManager` | Slot-shared IP/Wi-Fi profiles and NetworkManager secret state |
 | Podman named volumes | PostgreSQL, API, Caddy, map, router and shared geodata state |
