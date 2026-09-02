@@ -226,17 +226,25 @@ describe("firmware updates", () => {
                           monitor: { phase: "monitoring" },
                       })
                     : Response.json({ status: "ok" });
-            let cancelled = false;
-
-            const response = await request(app, "/update/upload", {
-                method: "POST",
-                headers: { "content-type": "application/octet-stream" },
-                body: new ReadableStream({
-                    cancel() {
-                        cancelled = true;
+            let bodyAcquired = false;
+            const uploadRequest = new Request(
+                "http://localhost/system/update/upload",
+                {
+                    method: "POST",
+                    headers: {
+                        authorization: "Bearer test-token",
+                        "content-type": "application/octet-stream",
                     },
-                }),
+                },
+            );
+            Object.defineProperty(uploadRequest, "body", {
+                get() {
+                    bodyAcquired = true;
+                    throw new Error("pending update acquired the request body");
+                },
             });
+
+            const response = await app.handle(uploadRequest);
 
             expect(response.status).toBe(409);
             expect(await response.json()).toEqual({
@@ -245,7 +253,7 @@ describe("firmware updates", () => {
                     message: "An Atlas OS update is already pending",
                 },
             });
-            expect(cancelled).toBe(true);
+            expect(bodyAcquired).toBe(false);
             expect(applyUpdateMock).not.toHaveBeenCalled();
             expect(existsSync(join(stagingDirectory, "system-updates"))).toBe(
                 false,

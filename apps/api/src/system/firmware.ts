@@ -14,11 +14,10 @@ function fail(status: number, code: string, message: string): never {
 }
 
 const applyStream = async (
-    stream: ReadableStream<Uint8Array> | null,
+    getStream: () => ReadableStream<Uint8Array> | null,
     declaredLength?: number,
 ) => {
     if (updateReserved) {
-        if (stream) await stream.cancel().catch(() => undefined);
         fail(
             409,
             "operation_in_progress",
@@ -29,30 +28,26 @@ const applyStream = async (
 
     try {
         const management = await request("/api/v1/update");
-        if (!management.ok) {
-            if (stream) await stream.cancel().catch(() => undefined);
-            return management;
-        }
+        if (!management.ok) return management;
         const updateStatus = (await management.json()) as {
             update?: { pending?: string };
         };
         if (updateStatus.update?.pending) {
-            if (stream) await stream.cancel().catch(() => undefined);
             fail(
                 409,
                 "update_pending",
                 "An Atlas OS update is already pending",
             );
         }
-        if (!stream) fail(400, "empty_update", "Update file is empty");
         if (declaredLength !== undefined && declaredLength > MAX_UPDATE_BYTES) {
-            await stream.cancel().catch(() => undefined);
             fail(
                 413,
                 "update_too_large",
                 `Update file exceeds the ${MAX_UPDATE_BYTES}-byte size limit`,
             );
         }
+        const stream = getStream();
+        if (!stream) fail(400, "empty_update", "Update file is empty");
 
         const stagingDirectory = resolve(
             env.DATA_STORAGE_PATH ?? "./data",
@@ -98,10 +93,13 @@ const applyStream = async (
 };
 
 export const fromUpload = async (request: Request) => {
-    const declaredLength = Number(request.headers.get("content-length"));
+    const contentLength = request.headers.get("content-length");
+    const declaredLength = Number(contentLength);
     return applyStream(
-        request.body,
-        Number.isSafeInteger(declaredLength) && declaredLength >= 0
+        () => request.body,
+        contentLength !== null &&
+            Number.isSafeInteger(declaredLength) &&
+            declaredLength >= 0
             ? declaredLength
             : undefined,
     );
@@ -140,8 +138,9 @@ export const fromURL = async (value: string) => {
     }
 
     const length = Number(response.headers.get("content-length"));
+    const stream = response.body;
     return applyStream(
-        response.body,
+        () => stream,
         Number.isSafeInteger(length) && length >= 0 ? length : undefined,
     );
 };
