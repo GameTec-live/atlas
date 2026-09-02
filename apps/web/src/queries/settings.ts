@@ -9,13 +9,11 @@ import type { ValhallaLanguage } from "@/lib/valhalla-languages";
 
 export const settingsUsersQueryKey = ["settings", "users"] as const;
 export const settingsConfigQueryKey = ["settings", "config"] as const;
-export const apiInfoQueryKey = ["api", "info"] as const;
 export const geodataDatasetsQueryKey = ["geodata", "datasets"] as const;
 export const geodataCatalogQueryKey = ["geodata", "catalog"] as const;
 export const geodataJobsQueryKey = ["geodata", "jobs", "active"] as const;
 
 const fetchConfig = () => unwrapEden(api.config.get());
-const fetchApiInfo = () => unwrapEden(api.get());
 const fetchGeodataDatasets = () => unwrapEden(api.geodata.datasets.get());
 const fetchGeodataCatalog = () =>
     unwrapEden(api.geodata.catalog.get({ query: {} }));
@@ -70,13 +68,6 @@ export const settingsConfigQueryOptions = () =>
         queryKey: settingsConfigQueryKey,
         queryFn: fetchConfig,
         staleTime: 30_000,
-    });
-
-export const apiInfoQueryOptions = () =>
-    queryOptions({
-        queryKey: apiInfoQueryKey,
-        queryFn: fetchApiInfo,
-        staleTime: Number.POSITIVE_INFINITY,
     });
 
 export const geodataDatasetsQueryOptions = (isProcessing = false) =>

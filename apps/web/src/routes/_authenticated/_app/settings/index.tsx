@@ -2,17 +2,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { GeneralSettingsCard } from "@/components/settings/general-settings-card";
 import { MapDataCard } from "@/components/settings/map-data-card";
 import { SettingsPageSkeleton } from "@/components/settings/settings-page-skeleton";
-import { SystemCard } from "@/components/settings/system-card";
+import { SystemCard } from "@/components/settings/system/system-card";
 import { UsersCard } from "@/components/settings/users-card";
 import { m } from "@/paraglide/messages";
 import {
-    apiInfoQueryOptions,
     geodataCatalogQueryOptions,
     geodataDatasetsQueryOptions,
     geodataJobsQueryOptions,
     settingsConfigQueryOptions,
     settingsUsersQueryOptions,
 } from "@/queries/settings";
+import {
+    apiInfoQueryOptions,
+    systemAvailabilityQueryOptions,
+} from "@/queries/system";
 
 export const Route = createFileRoute("/_authenticated/_app/settings/")({
     loader: async ({ context }) => {
@@ -22,6 +25,7 @@ export const Route = createFileRoute("/_authenticated/_app/settings/")({
         ]);
         const deferred = Promise.all([
             context.queryClient.prefetchQuery(apiInfoQueryOptions()),
+            context.queryClient.prefetchQuery(systemAvailabilityQueryOptions()),
             context.queryClient.prefetchQuery(geodataDatasetsQueryOptions()),
             context.queryClient.prefetchQuery(geodataCatalogQueryOptions()),
             context.queryClient.prefetchQuery(geodataJobsQueryOptions()),
