@@ -67,6 +67,7 @@ internal fun AtlasMap(
     onUserCameraMove: () -> Unit,
     onMapClick: () -> Unit = {},
     styleUrl: String,
+    landscapeCompassLeftOffsetPixels: Int? = null,
     landscapeCompassTopOffsetPixels: Int? = null,
     cameraFocusPoints: List<RoutePoint> = emptyList(),
     cameraFocusRequestId: Int = 0,
@@ -96,7 +97,8 @@ internal fun AtlasMap(
 
     val compassLeftMargin = safeLeft + with(density) {
         if (isLandscape) {
-            84.dp.roundToPx()
+            landscapeCompassLeftOffsetPixels
+                ?: 84.dp.roundToPx()
         } else {
             20.dp.roundToPx()
         }

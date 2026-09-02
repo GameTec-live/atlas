@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
@@ -152,6 +151,18 @@ internal fun MainScreen(
         mutableIntStateOf(0)
     }
 
+    var landscapeJobPanelHeightPixels by remember {
+        mutableIntStateOf(0)
+    }
+
+    var landscapeViewportWidthPixels by remember {
+        mutableIntStateOf(0)
+    }
+
+    var landscapeViewportHeightPixels by remember {
+        mutableIntStateOf(0)
+    }
+
     LaunchedEffect(jobState.navigation.route) {
         val route = jobState.navigation.route
         if (route != null && route.points.size >= 2) {
@@ -242,20 +253,86 @@ internal fun MainScreen(
         canShowNavigationPanel &&
             locationState is LocationState.Available &&
             !isFollowingLocation
-    val useLandscapeNavigationStack =
+    val useLandscapeNavigationLayout =
         isLandscape && hasVisibleNavigationPanel
     val density = LocalDensity.current
-    val landscapeCompassTopOffsetPixels =
-        if (useLandscapeNavigationStack) {
-            if (landscapeNavigationPanelHeightPixels > 0) {
-                landscapeNavigationPanelHeightPixels +
-                    with(density) {
-                        28.dp.roundToPx()
-                    }
-            } else {
+    val landscapeStartPaddingPixels = with(density) {
+        16.dp.roundToPx()
+    }
+    val landscapeTopPaddingPixels = with(density) {
+        12.dp.roundToPx()
+    }
+    val landscapeGapPixels = with(density) {
+        12.dp.roundToPx()
+    }
+    val landscapeControlSizePixels = with(density) {
+        56.dp.roundToPx()
+    }
+    val landscapeNavigationWidthPixels = with(density) {
+        340.dp.roundToPx()
+    }
+    val landscapeNavigationHeightPixels =
+        landscapeNavigationPanelHeightPixels.takeIf {
+            it > 0
+        } ?: with(density) {
+            136.dp.roundToPx()
+        }
+    val landscapeControlsBelowTopPixels =
+        landscapeTopPaddingPixels +
+            landscapeNavigationHeightPixels +
+            landscapeGapPixels
+    val placeLandscapeControlsBesideNavigation =
+        shouldPlaceLandscapeControlsBesideNavigation(
+            viewportWidthPixels =
+                landscapeViewportWidthPixels,
+            viewportHeightPixels =
+                landscapeViewportHeightPixels,
+            navigationHeightPixels =
+                landscapeNavigationHeightPixels,
+            jobPanelHeightPixels =
+                landscapeJobPanelHeightPixels,
+            verticalPaddingPixels =
+                landscapeTopPaddingPixels,
+            gapPixels = landscapeGapPixels,
+            controlSizePixels =
+                landscapeControlSizePixels,
+            minimumSideLayoutWidthPixels =
                 with(density) {
-                    164.dp.roundToPx()
+                    500.dp.roundToPx()
                 }
+        )
+    val landscapeControlsLeftPixels =
+        if (placeLandscapeControlsBesideNavigation) {
+            landscapeStartPaddingPixels +
+                landscapeNavigationWidthPixels +
+                landscapeGapPixels
+        } else {
+            landscapeStartPaddingPixels
+        }
+    val landscapeControlsTopPixels =
+        if (placeLandscapeControlsBesideNavigation) {
+            landscapeTopPaddingPixels
+        } else {
+            landscapeControlsBelowTopPixels
+        }
+    val landscapeControlsLeft = with(density) {
+        landscapeControlsLeftPixels.toDp()
+    }
+    val landscapeControlsTop = with(density) {
+        landscapeControlsTopPixels.toDp()
+    }
+    val landscapeCompassLeftOffsetPixels =
+        if (useLandscapeNavigationLayout) {
+            landscapeControlsLeftPixels +
+                landscapeControlSizePixels +
+                landscapeGapPixels
+        } else {
+            null
+        }
+    val landscapeCompassTopOffsetPixels =
+        if (useLandscapeNavigationLayout) {
+            landscapeControlsTopPixels + with(density) {
+                4.dp.roundToPx()
             }
         } else {
             null
@@ -283,6 +360,8 @@ internal fun MainScreen(
                 isFollowingLocation = false
             },
             styleUrl = styleUrl,
+            landscapeCompassLeftOffsetPixels =
+                landscapeCompassLeftOffsetPixels,
             landscapeCompassTopOffsetPixels =
                 landscapeCompassTopOffsetPixels,
             modifier = Modifier.fillMaxSize()
@@ -292,53 +371,63 @@ internal fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .safeDrawingPadding()
+                .onSizeChanged { size ->
+                    landscapeViewportWidthPixels = size.width
+                    landscapeViewportHeightPixels = size.height
+                }
         ) {
-            if (useLandscapeNavigationStack) {
-                Column(
+            if (useLandscapeNavigationLayout) {
+                NavigationPanel(
+                    state = jobState.navigation,
+                    isExpandable = false,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(
                             start = 16.dp,
                             top = 12.dp
-                        ),
-                    verticalArrangement =
-                        Arrangement.spacedBy(12.dp)
-                ) {
-                    NavigationPanel(
-                        state = jobState.navigation,
-                        isExpandable = false,
-                        modifier = Modifier
-                            .widthIn(max = 340.dp)
-                            .fillMaxWidth()
-                            .onSizeChanged { size ->
-                                landscapeNavigationPanelHeightPixels =
-                                    size.height
-                            }
-                    )
-
-                    Box(
-                        modifier = Modifier.height(56.dp)
-                    ) {
-                        if (showRecenterButton) {
-                            MapRecenterButton(
-                                onClick = {
-                                    isFollowingLocation = true
-                                    recenterRequestId += 1
-                                }
-                            )
+                        )
+                        .widthIn(max = 340.dp)
+                        .fillMaxWidth()
+                        .onSizeChanged { size ->
+                            landscapeNavigationPanelHeightPixels =
+                                size.height
                         }
-                    }
+                )
 
-                    JobPanel(
-                        state = jobState,
-                        onToggleExpanded =
-                            onToggleJobList,
-                        onRetry = onRetryJobs,
-                        onEditDestination =
-                            onEditDestination,
-                        isExpandable = false
+                if (showRecenterButton) {
+                    MapRecenterButton(
+                        onClick = {
+                            isFollowingLocation = true
+                            recenterRequestId += 1
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(
+                                start = landscapeControlsLeft,
+                                top = landscapeControlsTop
+                            )
                     )
                 }
+
+                JobPanel(
+                    state = jobState,
+                    onToggleExpanded =
+                        onToggleJobList,
+                    onRetry = onRetryJobs,
+                    onEditDestination =
+                        onEditDestination,
+                    isExpandable = false,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(
+                            start = 16.dp,
+                            bottom = 12.dp
+                        )
+                        .onSizeChanged { size ->
+                            landscapeJobPanelHeightPixels =
+                                size.height
+                        }
+                )
             } else {
                 if (canShowNavigationPanel) {
                     NavigationPanel(
@@ -633,6 +722,42 @@ private fun MapRecenterButton(
             )
         )
     }
+}
+
+internal fun shouldPlaceLandscapeControlsBesideNavigation(
+    viewportWidthPixels: Int,
+    viewportHeightPixels: Int,
+    navigationHeightPixels: Int,
+    jobPanelHeightPixels: Int,
+    verticalPaddingPixels: Int,
+    gapPixels: Int,
+    controlSizePixels: Int,
+    minimumSideLayoutWidthPixels: Int
+): Boolean {
+    if (
+        viewportWidthPixels <= 0 ||
+        viewportHeightPixels <= 0 ||
+        jobPanelHeightPixels <= 0
+    ) {
+        return false
+    }
+
+    val controlsTopPixels =
+        verticalPaddingPixels +
+            navigationHeightPixels +
+            gapPixels
+    val jobPanelTopPixels =
+        viewportHeightPixels -
+            verticalPaddingPixels -
+            jobPanelHeightPixels
+    val controlsFitBetweenPanels =
+        controlsTopPixels +
+            controlSizePixels +
+            gapPixels <=
+            jobPanelTopPixels
+
+    return !controlsFitBetweenPanels &&
+        viewportWidthPixels >= minimumSideLayoutWidthPixels
 }
 
 fun String.initial(): String {
