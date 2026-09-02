@@ -62,6 +62,11 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                 ?.session
                 ?.role
         }
+        val getStartKilometer: () -> Double? = {
+            (shiftSessionManager?.state?.value as? ShiftSessionState.Active)
+                ?.session
+                ?.startKilometer
+        }
         val serverSettingsRepository =
             (carContext.applicationContext as? ServerSettingsProvider)
                 ?.serverSettingsRepository
@@ -117,6 +122,7 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                     pricingRepository = pricingRepository,
                     geoServiceRepository = geoServiceRepository,
                     getUserId = getUserId,
+                    getStartKilometer = getStartKilometer,
                     telemetryProvider = telemetryProvider,
                     liveMapUsers = liveMapUsers,
                     jobNotifications = jobNotificationSync?.jobNotifications,

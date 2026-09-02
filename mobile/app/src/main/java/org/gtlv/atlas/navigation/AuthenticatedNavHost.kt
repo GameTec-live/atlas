@@ -40,6 +40,9 @@ internal fun AuthenticatedNavHost(
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
     onStartNextJob: () -> Unit,
+    onStartKilometerChanged: (String) -> Unit,
+    onDismissStartKilometerDialog: () -> Unit,
+    onConfirmStartKilometer: () -> Unit,
     onCancelCurrentJob: () -> Unit,
     onDismissCancelConfirmation: () -> Unit,
     onConfirmCancel: () -> Unit,
@@ -129,6 +132,10 @@ internal fun AuthenticatedNavHost(
                 onToggleJobList = onToggleJobList,
                 onRetryJobs = onRetryJobs,
                 onStartNextJob = onStartNextJob,
+                onStartKilometerChanged = onStartKilometerChanged,
+                onDismissStartKilometerDialog =
+                    onDismissStartKilometerDialog,
+                onConfirmStartKilometer = onConfirmStartKilometer,
                 onCancelCurrentJob = onCancelCurrentJob,
                 onDismissCancelConfirmation =
                     onDismissCancelConfirmation,

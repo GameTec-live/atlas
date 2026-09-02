@@ -3,6 +3,8 @@ package org.gtlv.core.shift
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.Clock
 import java.time.Instant
 
@@ -18,7 +20,9 @@ class ShiftSessionManager(
     val state: StateFlow<ShiftSessionState> =
         _state.asStateFlow()
 
-    suspend fun restore() {
+    private val mutationMutex = Mutex()
+
+    suspend fun restore() = mutationMutex.withLock {
         val storedSession = store.restore()
 
         _state.value = if (storedSession == null) {
@@ -28,7 +32,7 @@ class ShiftSessionManager(
         }
     }
 
-    suspend fun startShift(role: ShiftRole) {
+    suspend fun startShift(role: ShiftRole) = mutationMutex.withLock {
         val session = ShiftSession(
             role = role,
             startTimeUtc = Instant.now(clock)
@@ -40,7 +44,33 @@ class ShiftSessionManager(
             ShiftSessionState.Active(session)
     }
 
-    suspend fun clear() {
+    suspend fun setStartKilometerIfAbsent(
+        startKilometer: Double
+    ) = mutationMutex.withLock {
+        require(
+            startKilometer.isFinite() && startKilometer >= 0.0
+        ) {
+            "startKilometer must be a finite, non-negative value"
+        }
+
+        val currentSession =
+            (_state.value as? ShiftSessionState.Active)
+                ?.session
+                ?: return@withLock
+
+        if (currentSession.startKilometer != null) {
+            return@withLock
+        }
+
+        val updatedSession = currentSession.copy(
+            startKilometer = startKilometer
+        )
+
+        store.save(updatedSession)
+        _state.value = ShiftSessionState.Active(updatedSession)
+    }
+
+    suspend fun clear() = mutationMutex.withLock {
         store.clear()
         _state.value = ShiftSessionState.NoActiveShift
     }

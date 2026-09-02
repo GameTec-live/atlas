@@ -4,7 +4,8 @@ import java.time.Instant
 
 data class ShiftSession(
     val role: ShiftRole,
-    val startTimeUtc: Instant
+    val startTimeUtc: Instant,
+    val startKilometer: Double? = null
 
     // frisi: will add the rest at a later time of the project!
 )

@@ -69,7 +69,8 @@ class MainActivity : ComponentActivity() {
             telemetryProvider = atlasApplication.telemetryProvider,
             collectedJobStore = atlasApplication.collectedJobStore,
             jobMileageStore = atlasApplication.jobMileageStore,
-            pricingRepository = atlasApplication.pricingRepository
+            pricingRepository = atlasApplication.pricingRepository,
+            shiftSessionManager = atlasApplication.shiftSessionManager
         )
     }
 
@@ -397,6 +398,9 @@ class MainActivity : ComponentActivity() {
                                         onToggleJobList = mainScreenViewModel::toggleJobList,
                                         onRetryJobs = mainScreenViewModel::refresh,
                                         onStartNextJob = mainScreenViewModel::startNextJob,
+                                        onStartKilometerChanged = mainScreenViewModel::updateStartKilometerInput,
+                                        onDismissStartKilometerDialog = mainScreenViewModel::dismissStartKilometerDialog,
+                                        onConfirmStartKilometer = mainScreenViewModel::confirmStartKilometer,
                                         onCancelCurrentJob = mainScreenViewModel::requestCancelCurrentJob,
                                         onDismissCancelConfirmation = mainScreenViewModel::dismissCancelConfirmation,
                                         onConfirmCancel = mainScreenViewModel::confirmCancelCurrentJob,

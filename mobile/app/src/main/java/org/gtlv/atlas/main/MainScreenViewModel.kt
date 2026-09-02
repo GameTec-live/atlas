@@ -2,6 +2,7 @@ package org.gtlv.atlas.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -29,6 +30,8 @@ import org.gtlv.core.job.JobsResult
 import org.gtlv.core.location.AtlasLocation
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.location.VehicleHeadingEstimator
+import org.gtlv.core.shift.ShiftSessionManager
+import org.gtlv.core.shift.ShiftSessionState
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryVehicleState
 import org.gtlv.core.pricing.PriceResult
@@ -45,7 +48,9 @@ class MainScreenViewModel(
     private val jobMileageStore:
     JobMileageStateStore,
     private val pricingRepository:
-    PricingRepository
+    PricingRepository,
+    private val shiftSessionManager:
+    ShiftSessionManager
 ) : ViewModel() {
 
     private val _uiState =
@@ -62,6 +67,7 @@ class MainScreenViewModel(
     private var collectedStateTask: Job? = null
     private var jobLifecycleTask: Job? = null
     private var routeRequestTask: Job? = null
+    private var pendingStartJobId: String? = null
     private var collectedJobId: String? = null
     private var latestLocation: AtlasLocation? = null
     private var latestVehicleHeadingDegrees: Int? = null
@@ -81,6 +87,40 @@ class MainScreenViewModel(
     private var lastAutomaticRerouteAtMillis = 0L
     private var navigationLanguage =
         DEFAULT_NAVIGATION_LANGUAGE
+
+    init {
+        observeShiftStartKilometer()
+    }
+
+    private fun observeShiftStartKilometer() {
+        viewModelScope.launch {
+            shiftSessionManager.state.collectLatest { shiftState ->
+                val startKilometer =
+                    (shiftState as? ShiftSessionState.Active)
+                        ?.session
+                        ?.startKilometer
+
+                if (startKilometer != null) {
+                    val shouldStartNextJob =
+                        _uiState.value
+                            .isStartKilometerDialogVisible &&
+                            !_uiState.value.isStartingNextJob
+
+                    _uiState.update { state ->
+                        state.copy(
+                            isStartKilometerDialogVisible = false,
+                            startKilometerInput = "",
+                            isStartKilometerInputInvalid = false
+                        )
+                    }
+
+                    if (shouldStartNextJob) {
+                        startPendingNextJob()
+                    }
+                }
+            }
+        }
+    }
 
     fun updateNavigationLanguage(
         language: String
@@ -263,8 +303,136 @@ class MainScreenViewModel(
             return
         }
 
+        val activeShift =
+            shiftSessionManager.state.value
+                as? ShiftSessionState.Active
+                ?: return
+
+        if (activeShift.session.startKilometer == null) {
+            pendingStartJobId = state.queuedJobs.first().id
+
+            _uiState.update {
+                it.copy(
+                    isStartKilometerDialogVisible = true,
+                    startKilometerInput = "",
+                    isStartKilometerInputInvalid = false,
+                    startNextJobFailed = false
+                )
+            }
+            return
+        }
+
         val nextJob = state.queuedJobs.first()
-        val startedOdometer = currentOdometerKilometers()
+        pendingStartJobId = null
+
+        launchNextJob(
+            userId = userId,
+            nextJob = nextJob
+        )
+    }
+
+    fun updateStartKilometerInput(value: String) {
+        if (!_uiState.value.isStartKilometerDialogVisible) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                startKilometerInput = value,
+                isStartKilometerInputInvalid = false
+            )
+        }
+    }
+
+    fun dismissStartKilometerDialog() {
+        if (_uiState.value.isStartingNextJob) {
+            return
+        }
+
+        pendingStartJobId = null
+
+        _uiState.update {
+            it.copy(
+                isStartKilometerDialogVisible = false,
+                startKilometerInput = "",
+                isStartKilometerInputInvalid = false
+            )
+        }
+    }
+
+    fun confirmStartKilometer() {
+        val state = _uiState.value
+        val startKilometer = state.startKilometerInput
+            .trim()
+            .replace(',', '.')
+            .toDoubleOrNull()
+            ?.takeIf { it.isFinite() && it >= 0.0 }
+
+        if (startKilometer == null) {
+            _uiState.update {
+                it.copy(isStartKilometerInputInvalid = true)
+            }
+            return
+        }
+
+        startPendingNextJob(
+            startKilometerToSave = startKilometer
+        )
+    }
+
+    private fun startPendingNextJob(
+        startKilometerToSave: Double? = null
+    ) {
+        val state = _uiState.value
+        val userId = activeUserId ?: return
+        val pendingJobId = pendingStartJobId ?: return
+        val pendingJob = state.queuedJobs.firstOrNull {
+            it.id == pendingJobId
+        }
+
+        if (pendingJob == null) {
+            cancelPendingNextJob()
+            return
+        }
+
+        if (
+            state.currentJob != null ||
+            state.isStartingNextJob ||
+            state.isCancellingCurrentJob ||
+            state.isFinishingCurrentJob ||
+            state.isPreparingFinishConfirmation ||
+            state.finishConfirmation != null ||
+            state.isAddressEditorOpen ||
+            state.addressSearch.isSaving
+        ) {
+            return
+        }
+
+        launchNextJob(
+            userId = userId,
+            nextJob = pendingJob,
+            startKilometerToSave = startKilometerToSave
+        )
+    }
+
+    private fun cancelPendingNextJob() {
+        pendingStartJobId = null
+
+        _uiState.update {
+            it.copy(
+                isStartKilometerDialogVisible = false,
+                startKilometerInput = "",
+                isStartKilometerInputInvalid = false,
+                startNextJobFailed = true
+            )
+        }
+    }
+
+    private fun launchNextJob(
+        userId: String,
+        nextJob: org.gtlv.core.job.Job,
+        startKilometerToSave: Double? = null
+    ) {
 
         refreshJob?.cancel()
         jobActionTask?.cancel()
@@ -273,11 +441,37 @@ class MainScreenViewModel(
             _uiState.update {
                 it.copy(
                     isStartingNextJob = true,
+                    isStartKilometerDialogVisible = false,
                     startNextJobFailed = false,
                     cancelCurrentJobFailed = false,
                     finishCurrentJobFailed = false
                 )
             }
+
+            if (startKilometerToSave != null) {
+                try {
+                    shiftSessionManager.setStartKilometerIfAbsent(
+                        startKilometerToSave
+                    )
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (_: Exception) {
+                    _uiState.update {
+                        it.copy(
+                            isStartingNextJob = false,
+                            isStartKilometerDialogVisible = true,
+                            startNextJobFailed = true
+                        )
+                    }
+                    return@launch
+                }
+            }
+
+            pendingStartJobId = null
+
+            val startedOdometer =
+                currentOdometerKilometers()
+                    ?: startKilometerToSave
 
             jobMileageStore.recordJobStarted(
                 userId = userId,
@@ -707,6 +901,21 @@ class MainScreenViewModel(
             currentJob != null &&
                     currentJob.id == collectedJobId
 
+        val pendingJobId = pendingStartJobId
+        val pendingJobStarted =
+            pendingJobId != null && currentJob?.id == pendingJobId
+        val pendingJobUnavailable =
+            pendingJobId != null &&
+                !pendingJobStarted &&
+                (
+                    currentJob != null ||
+                        result.queuedJobs.none { it.id == pendingJobId }
+                    )
+
+        if (pendingJobStarted || pendingJobUnavailable) {
+            pendingStartJobId = null
+        }
+
         if (jobChanged) {
             pickupRouteOrigin = null
             destinationRouteOrigin = null
@@ -766,7 +975,21 @@ class MainScreenViewModel(
                             result.queuedJobs.isNotEmpty(),
                 hasError = false,
                 isStartingNextJob = false,
-                startNextJobFailed = false,
+                startNextJobFailed = pendingJobUnavailable,
+                isStartKilometerDialogVisible =
+                    it.isStartKilometerDialogVisible &&
+                        !pendingJobStarted &&
+                        !pendingJobUnavailable,
+                startKilometerInput =
+                    if (pendingJobStarted || pendingJobUnavailable) {
+                        ""
+                    } else {
+                        it.startKilometerInput
+                    },
+                isStartKilometerInputInvalid =
+                    it.isStartKilometerInputInvalid &&
+                        !pendingJobStarted &&
+                        !pendingJobUnavailable,
                 isCancellingCurrentJob = false,
                 cancelCurrentJobFailed = false,
                 isCancelConfirmationVisible =
@@ -1486,6 +1709,8 @@ class MainScreenViewModel(
     )
 
     private fun cancelAllTasks() {
+        pendingStartJobId = null
+
         refreshJob?.cancel()
         refreshJob = null
 
@@ -1508,8 +1733,7 @@ class MainScreenViewModel(
     }
 
     private fun currentOdometerKilometers(): Double? {
-        return telemetryProvider.telemetry.value
-            ?.odometer
+        return telemetryProvider.odometerKilometers.value
             ?.takeIf { it.isFinite() && it >= 0.0 }
     }
 

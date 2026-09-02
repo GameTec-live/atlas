@@ -2,9 +2,14 @@ package org.gtlv.atlas
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import org.gtlv.core.location.CarAwareLocationProvider
 import org.gtlv.core.location.CarLocationProviderRegistry
 import org.gtlv.core.location.LocationProvider
@@ -20,6 +25,7 @@ import org.gtlv.core.settings.DataStoreServerSettingsRepository
 import org.gtlv.core.settings.ServerSettingsProvider
 import org.gtlv.core.shift.DataStoreShiftSessionStore
 import org.gtlv.core.shift.ShiftSessionManager
+import org.gtlv.core.shift.ShiftSessionState
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryProviderRegistry
 import org.gtlv.core.telemetry.Telemetry
@@ -255,8 +261,48 @@ class AtlasApplication : Application(), ShiftSessionProvider,
             .createChannel()
 
         applicationTelemetry.start()
+        observeShiftStartKilometer()
         telemetryWebSocketSender.start()
         jobNotificationSync
         jobNotificationWebSocket.start()
+    }
+
+    private fun observeShiftStartKilometer() {
+        applicationScope.launch {
+            combine(
+                shiftSessionManager.state,
+                applicationTelemetry.odometerKilometers
+            ) { shiftState, odometerKilometers ->
+                val session =
+                    (shiftState as? ShiftSessionState.Active)
+                        ?.session
+
+                odometerKilometers.takeIf {
+                    session != null &&
+                        session.startKilometer == null
+                }
+                }
+                .filterNotNull()
+                .collect { odometerKilometers ->
+                    try {
+                        shiftSessionManager
+                            .setStartKilometerIfAbsent(
+                                odometerKilometers
+                            )
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        Log.e(
+                            TAG,
+                            "Could not save the shift start odometer",
+                            error
+                        )
+                    }
+                }
+        }
+    }
+
+    private companion object {
+        const val TAG = "AtlasApplication"
     }
 }
