@@ -257,7 +257,7 @@ internal fun MainScreen(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(
-                            horizontal = 72.dp,
+                            horizontal = 80.dp,
                             vertical = 12.dp
                         )
                         .widthIn(max = 520.dp)
