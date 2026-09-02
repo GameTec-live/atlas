@@ -44,6 +44,7 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.LocationComponentOptions
 import org.maplibre.android.location.modes.CameraMode
@@ -120,7 +121,10 @@ internal class MapLibreSurfaceRenderer(
     private var isDispatcherSidebarAvailable = true
     private var tiltBeforeAssignJob: Double? = null
     private var zoomBeforeAssignJob: Double? = null
+    private var routeBeforeAssignJob: List<RoutePoint>? = null
     private var wasFollowingBeforeAssignJob: Boolean? = null
+    private var assignJobFocusPoints: List<RoutePoint> = emptyList()
+    private var assignJobFocusRequestId = 0L
     private var isDispatcherSidebarExpanded = false
     private var dispatcherSidebarAnimator: ValueAnimator? = null
     private var isJobCardExpanded = true
@@ -226,6 +230,9 @@ internal class MapLibreSurfaceRenderer(
             configureMapCompass()
             applyVisibleArea()
             styleUrl?.let(::loadStyle)
+            if (!areMainMapOverlaysVisible && assignJobFocusPoints.isNotEmpty()) {
+                focusRoutePoints(assignJobFocusPoints)
+            }
         }
     }
 
@@ -430,31 +437,40 @@ internal class MapLibreSurfaceRenderer(
     }
 
     fun enterAssignJobMode() {
-        if (areMainMapOverlaysVisible) {
+        val enteringFromMainMap = areMainMapOverlaysVisible
+        if (enteringFromMainMap) {
             tiltBeforeAssignJob = selectedFollowTilt
             zoomBeforeAssignJob = map
                 ?.cameraPosition
                 ?.zoom
                 ?: selectedFollowZoom
             wasFollowingBeforeAssignJob = isFollowingLocation
+            routeBeforeAssignJob = routePoints
         }
         setMapOverlayMode(
             mainOverlaysVisible = false,
             dispatcherSidebarAvailable = false,
         )
+        if (enteringFromMainMap) {
+            updateRoute(emptyList())
+        }
         setNorthUpOverview()
     }
 
     fun enterMainMapMode() {
+        assignJobFocusPoints = emptyList()
+        assignJobFocusRequestId += 1
         setMapOverlayMode(
             mainOverlaysVisible = true,
             dispatcherSidebarAvailable = true,
         )
         val restoredTilt = tiltBeforeAssignJob
         val restoredZoom = zoomBeforeAssignJob
+        val restoredRoute = routeBeforeAssignJob
         val restoreFollowing = wasFollowingBeforeAssignJob == true
         tiltBeforeAssignJob = null
         zoomBeforeAssignJob = null
+        routeBeforeAssignJob = null
         wasFollowingBeforeAssignJob = null
 
         if (restoredTilt != null) {
@@ -462,6 +478,9 @@ internal class MapLibreSurfaceRenderer(
         }
         if (restoredZoom != null) {
             selectedFollowZoom = restoredZoom
+        }
+        if (restoredRoute != null) {
+            updateRoute(restoredRoute)
         }
         if (restoreFollowing) {
             recenter()
@@ -471,6 +490,57 @@ internal class MapLibreSurfaceRenderer(
                 tilt = restoredTilt,
             )
         }
+    }
+
+    fun focusRoutePoints(points: List<RoutePoint>) {
+        val validPoints = points
+            .filter(RoutePoint::isValid)
+            .distinct()
+        if (validPoints.isEmpty()) return
+
+        assignJobFocusPoints = validPoints
+        assignJobFocusRequestId += 1
+        val requestId = assignJobFocusRequestId
+        setNorthUpOverview()
+        val readyMapView = mapView ?: return
+        readyMapView.post {
+            if (
+                requestId != assignJobFocusRequestId ||
+                areMainMapOverlaysVisible
+            ) {
+                return@post
+            }
+            applyRoutePointFocus(validPoints)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun applyRoutePointFocus(validPoints: List<RoutePoint>) {
+        val readyMap = map ?: return
+        runCatching {
+            readyMap.locationComponent.cameraMode = CameraMode.NONE
+        }
+        val cameraUpdate = if (validPoints.size == 1) {
+            val point = validPoints.single()
+            CameraUpdateFactory.newLatLngZoom(
+                LatLng(point.latitude, point.longitude),
+                ADDRESS_FOCUS_ZOOM,
+            )
+        } else {
+            val bounds = LatLngBounds.Builder().also { builder ->
+                validPoints.forEach { point ->
+                    builder.include(
+                        LatLng(point.latitude, point.longitude),
+                    )
+                }
+            }.build()
+            CameraUpdateFactory.newLatLngBounds(
+                bounds,
+                dp(ROUTE_OVERVIEW_PADDING_DP),
+            )
+        }
+
+        readyMap.moveCamera(cameraUpdate)
     }
 
     private fun restoreOverviewCamera(
@@ -1953,6 +2023,7 @@ internal class MapLibreSurfaceRenderer(
         const val INITIAL_LONGITUDE = 14.580
         const val INITIAL_ZOOM = 12.5
         const val FOLLOW_ZOOM = 15.5
+        const val ADDRESS_FOCUS_ZOOM = 16.0
         const val NORTH_BEARING_DEGREES = 0.0
         const val COMPASS_MARGIN_DP = 16
         const val COMPASS_RESET_DURATION_MILLIS = 300
@@ -1961,6 +2032,7 @@ internal class MapLibreSurfaceRenderer(
         const val ZOOM_STEP = 1.0
         const val ZOOM_COMPARISON_TOLERANCE = 0.01
         const val ZOOM_DURATION_MILLIS = 300
+        const val ROUTE_OVERVIEW_PADDING_DP = 72
         const val FOLLOW_TILT = 45.0
         const val TILT_COMPARISON_TOLERANCE = 0.5
         const val TILT_DURATION_MILLIS = 300L
@@ -1982,6 +2054,14 @@ private fun Style.addAutomotiveRouteLayers() {
         addSource(
             GeoJsonSource(
                 AUTOMOTIVE_ROUTE_SOURCE_ID,
+                emptyAutomotiveRouteFeatures(),
+            ),
+        )
+    }
+    if (getSource(AUTOMOTIVE_ORIGIN_SOURCE_ID) == null) {
+        addSource(
+            GeoJsonSource(
+                AUTOMOTIVE_ORIGIN_SOURCE_ID,
                 emptyAutomotiveRouteFeatures(),
             ),
         )
@@ -2032,6 +2112,20 @@ private fun Style.addAutomotiveRouteLayers() {
         )
     }
 
+    if (getLayer(AUTOMOTIVE_ORIGIN_LAYER_ID) == null) {
+        addLayer(
+            CircleLayer(
+                AUTOMOTIVE_ORIGIN_LAYER_ID,
+                AUTOMOTIVE_ORIGIN_SOURCE_ID,
+            ).withProperties(
+                PropertyFactory.circleRadius(12f),
+                PropertyFactory.circleColor(Color.rgb(37, 99, 235)),
+                PropertyFactory.circleStrokeColor(Color.WHITE),
+                PropertyFactory.circleStrokeWidth(3f),
+            ),
+        )
+    }
+
     if (getLayer(AUTOMOTIVE_DESTINATION_LAYER_ID) == null) {
         addLayer(
             CircleLayer(
@@ -2039,7 +2133,7 @@ private fun Style.addAutomotiveRouteLayers() {
                 AUTOMOTIVE_DESTINATION_SOURCE_ID,
             ).withProperties(
                 PropertyFactory.circleRadius(10f),
-                PropertyFactory.circleColor(Color.rgb(37, 99, 235)),
+                PropertyFactory.circleColor(Color.rgb(16, 185, 129)),
                 PropertyFactory.circleStrokeColor(Color.WHITE),
                 PropertyFactory.circleStrokeWidth(3f),
             ),
@@ -2064,6 +2158,17 @@ private fun Style.updateAutomotiveRoute(points: List<RoutePoint>) {
     getSourceAs<GeoJsonSource>(AUTOMOTIVE_ROUTE_SOURCE_ID)
         ?.setGeoJson(routeFeatures)
 
+    val originFeatures = points.firstOrNull()
+        ?.let {
+            FeatureCollection.fromFeature(
+                Feature.fromGeometry(
+                    Point.fromLngLat(it.longitude, it.latitude),
+                ),
+            )
+        } ?: emptyAutomotiveRouteFeatures()
+    getSourceAs<GeoJsonSource>(AUTOMOTIVE_ORIGIN_SOURCE_ID)
+        ?.setGeoJson(originFeatures)
+
     val destinationFeatures = points.lastOrNull()
         ?.takeIf { points.size >= 2 }
         ?.let {
@@ -2086,6 +2191,10 @@ private const val AUTOMOTIVE_ROUTE_CASING_LAYER_ID =
     "atlas-automotive-route-casing-layer"
 private const val AUTOMOTIVE_ROUTE_LAYER_ID =
     "atlas-automotive-route-layer"
+private const val AUTOMOTIVE_ORIGIN_SOURCE_ID =
+    "atlas-automotive-origin-source"
+private const val AUTOMOTIVE_ORIGIN_LAYER_ID =
+    "atlas-automotive-origin-layer"
 private const val AUTOMOTIVE_DESTINATION_SOURCE_ID =
     "atlas-automotive-destination-source"
 private const val AUTOMOTIVE_DESTINATION_LAYER_ID =

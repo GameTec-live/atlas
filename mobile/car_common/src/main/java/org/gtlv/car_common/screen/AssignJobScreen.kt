@@ -23,10 +23,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.gtlv.car_common.R
+import org.gtlv.core.geoservice.AddressSuggestion
+import org.gtlv.core.geoservice.GeoServiceRepository
+import org.gtlv.core.geoservice.RoutePoint
+import org.gtlv.core.geoservice.RouteResult
 import org.gtlv.core.location.LocationProvider
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.settings.ServerSettingsRepository
@@ -45,6 +51,7 @@ internal class AssignJobScreen(
     onRoleLost: () -> Unit,
     private val locationProvider: LocationProvider?,
     private val serverSettingsRepository: ServerSettingsRepository?,
+    private val geoServiceRepository: GeoServiceRepository?,
     private val getUserId: () -> String?,
     private val liveMapUsers: StateFlow<Map<String, LiveMapUser>>?,
     private val mapRenderer: MapLibreSurfaceRenderer,
@@ -60,15 +67,20 @@ internal class AssignJobScreen(
     private var locationJob: Job? = null
     private var styleJob: Job? = null
     private var liveUsersJob: Job? = null
+    private var routeJob: Job? = null
     private var from = initialFrom
     private var to = initialTo
     private var note = initialNote
+    private var fromPoint: RoutePoint? = null
+    private var toPoint: RoutePoint? = null
+    private var previewCameraPoints: List<RoutePoint> = emptyList()
     private var drivers: List<AssignDriver> = emptyList()
     private var selectedDriverId: String? = null
 
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
         mapRenderer.enterAssignJobMode()
+        mapRenderer.focusRoutePoints(previewCameraPoints)
         observeMapConfiguration()
         observeLocation()
         observeLiveUsers()
@@ -81,6 +93,8 @@ internal class AssignJobScreen(
         styleJob = null
         liveUsersJob?.cancel()
         liveUsersJob = null
+        routeJob?.cancel()
+        routeJob = null
         super.onStop(owner)
     }
 
@@ -114,23 +128,31 @@ internal class AssignJobScreen(
 
     private fun jobDetailsSection(): SectionedItemList {
         val items = ItemList.Builder()
-            .addItem(editableRow(
+            .addItem(addressRow(
                 label = carContext.getString(R.string.assign_job_from),
                 value = from,
                 placeholder = carContext.getString(
                     R.string.assign_job_from_placeholder,
                 ),
                 editorTitle = carContext.getString(R.string.assign_job_edit_from),
-                onChanged = { from = it },
+                onSelected = { suggestion ->
+                    from = suggestion.displayName
+                    fromPoint = suggestion.toRoutePoint()
+                    updateRoutePreview()
+                },
             ))
-            .addItem(editableRow(
+            .addItem(addressRow(
                 label = carContext.getString(R.string.assign_job_to),
                 value = to,
                 placeholder = carContext.getString(
                     R.string.assign_job_to_placeholder,
                 ),
                 editorTitle = carContext.getString(R.string.assign_job_edit_to),
-                onChanged = { to = it },
+                onSelected = { suggestion ->
+                    to = suggestion.displayName
+                    toPoint = suggestion.toRoutePoint()
+                    updateRoutePreview()
+                },
             ))
             .addItem(editableRow(
                 label = carContext.getString(R.string.assign_job_note),
@@ -148,6 +170,41 @@ internal class AssignJobScreen(
             carContext.getString(R.string.assign_job_details),
         )
     }
+
+    private fun addressRow(
+        label: String,
+        value: String,
+        placeholder: String,
+        editorTitle: String,
+        onSelected: (AddressSuggestion) -> Unit,
+    ): Row = Row.Builder()
+        .setTitle(label)
+        .addText(value.ifBlank { placeholder })
+        .setOnClickListener {
+            val repository = geoServiceRepository
+            if (repository == null) {
+                CarToast.makeText(
+                    carContext,
+                    R.string.assign_job_address_search_unavailable,
+                    CarToast.LENGTH_SHORT,
+                ).show()
+                return@setOnClickListener
+            }
+
+            carContext.getCarService(ScreenManager::class.java).push(
+                AssignJobAddressSearchScreen(
+                    carContext = carContext,
+                    title = editorTitle,
+                    initialValue = value,
+                    geoServiceRepository = repository,
+                    onSuggestionSelected = { suggestion ->
+                        onSelected(suggestion)
+                        invalidate()
+                    },
+                ),
+            )
+        }
+        .build()
 
     private fun editableRow(
         label: String,
@@ -367,6 +424,51 @@ internal class AssignJobScreen(
             }
         }
     }
+
+    private fun updateRoutePreview() {
+        routeJob?.cancel()
+        routeJob = null
+        mapRenderer.updateRoute(emptyList())
+
+        val origin = fromPoint
+        val destination = toPoint
+        val selectedPoints = listOfNotNull(origin, destination)
+        previewCameraPoints = selectedPoints
+        when {
+            origin != null && destination == null -> {
+                mapRenderer.updateRoute(listOf(origin))
+            }
+            origin == null && destination != null -> {
+                mapRenderer.updateRoute(listOf(destination))
+            }
+        }
+        mapRenderer.focusRoutePoints(selectedPoints)
+
+        val repository = geoServiceRepository ?: return
+        if (origin == null || destination == null) return
+
+        routeJob = screenScope.launch {
+            val result = repository.requestRoute(origin, destination)
+            currentCoroutineContext().ensureActive()
+            if (fromPoint != origin || toPoint != destination) return@launch
+
+            val previewPoints = if (result is RouteResult.Success) {
+                result.route.points
+            } else {
+                selectedPoints
+            }
+            previewCameraPoints = previewPoints
+            mapRenderer.updateRoute(
+                if (result is RouteResult.Success) previewPoints else emptyList(),
+            )
+            mapRenderer.focusRoutePoints(previewPoints)
+        }
+    }
+
+    private fun AddressSuggestion.toRoutePoint(): RoutePoint = RoutePoint(
+        latitude = latitude,
+        longitude = longitude,
+    )
 }
 
 private data class AssignDriver(

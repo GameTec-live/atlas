@@ -1291,6 +1291,7 @@ class MainScreen(
                 onRoleLost = onRoleLost,
                 locationProvider = locationProvider,
                 serverSettingsRepository = serverSettingsRepository,
+                geoServiceRepository = geoServiceRepository,
                 getUserId = getUserId,
                 liveMapUsers = liveMapUsers,
                 mapRenderer = mapRenderer,

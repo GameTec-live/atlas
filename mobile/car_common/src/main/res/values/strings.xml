@@ -47,7 +47,7 @@
     <string name="job_notification_declining">Declining…</string>
     <string name="job_notification_decline_failed">Could not decline the new job</string>
     <string name="assign_job_title">Assign job</string>
-    <string name="assign_job_details">Job details</string>
+    <string name="assign_job_details">&#8212; Job details &#8212;</string>
     <string name="assign_job_from">From</string>
     <string name="assign_job_to">To</string>
     <string name="assign_job_note">Note</string>
@@ -57,7 +57,11 @@
     <string name="assign_job_edit_from">Edit pickup location</string>
     <string name="assign_job_edit_to">Edit destination</string>
     <string name="assign_job_edit_note">Edit note</string>
-    <string name="assign_job_recommended_drivers">Recommended drivers</string>
+    <string name="assign_job_address_search_unavailable">Address search is not available</string>
+    <string name="address_search_error">Could not load address suggestions</string>
+    <string name="address_search_no_results">No matching addresses found</string>
+    <string name="address_search_recent">Recent address</string>
+    <string name="assign_job_recommended_drivers">&#8212; Recommended drivers &#8212;</string>
     <string name="assign_job_no_available_drivers">No available drivers</string>
     <string name="assign_job_driver_rank">%1$d. %2$s</string>
     <string name="assign_job_selected_driver_rank">Selected: %1$d. %2$s</string>
