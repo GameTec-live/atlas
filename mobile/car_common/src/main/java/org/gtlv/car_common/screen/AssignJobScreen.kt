@@ -20,6 +20,9 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.core.graphics.drawable.IconCompat
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -91,7 +94,9 @@ internal class AssignJobScreen(
     private var isLoadingCandidates = false
     private var candidatesFailed = false
     private var selectedDriverId: String? = null
+    private var createUnassignedSelected = false
     private var candidateDueDate = Instant.now().toString()
+    private var existingPickupTime: String? = null
 
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
@@ -144,7 +149,7 @@ internal class AssignJobScreen(
     }
 
     private fun jobDetailsSection(): SectionedItemList {
-        val items = ItemList.Builder()
+        val itemsBuilder = ItemList.Builder()
             .addItem(addressRow(
                 label = carContext.getString(R.string.assign_job_from),
                 value = from,
@@ -175,7 +180,12 @@ internal class AssignJobScreen(
                     loadRecommendedDrivers()
                 },
             ))
-            .addItem(editableRow(
+
+        existingPickupTime?.let { pickupTime ->
+            itemsBuilder.addItem(pickupTimeRow(pickupTime))
+        }
+
+        val items = itemsBuilder.addItem(editableRow(
                 label = carContext.getString(R.string.assign_job_note),
                 value = note,
                 placeholder = carContext.getString(
@@ -191,6 +201,19 @@ internal class AssignJobScreen(
             carContext.getString(R.string.assign_job_details),
         )
     }
+
+    private fun pickupTimeRow(value: String): Row = Row.Builder()
+        .setTitle(carContext.getString(R.string.assign_job_pickup_time))
+        .addText(formatPickupTime(value))
+        .build()
+
+    private fun formatPickupTime(value: String): String = runCatching {
+        DateTimeFormatter
+            .ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+            .withLocale(carContext.resources.configuration.locales[0])
+            .withZone(ZoneId.systemDefault())
+            .format(Instant.parse(value))
+    }.getOrDefault(value)
 
     private fun addressRow(
         label: String,
@@ -323,11 +346,20 @@ internal class AssignJobScreen(
                         }
                         .setOnClickListener {
                             selectedDriverId = candidate.driverId
+                            createUnassignedSelected = false
                             invalidate()
                         }
                         .build(),
                 )
             }
+        }
+
+        if (
+            !isLoadingExistingJob &&
+            !isLoadingCandidates &&
+            fromPoint != null
+        ) {
+            items.addItem(createUnassignedRow())
         }
 
         return SectionedItemList.create(
@@ -336,13 +368,37 @@ internal class AssignJobScreen(
         )
     }
 
+    private fun createUnassignedRow(): Row = Row.Builder()
+        .setTitle(
+            carContext.getString(
+                if (createUnassignedSelected) {
+                    R.string.assign_job_create_unassigned_selected
+                } else {
+                    R.string.assign_job_create_unassigned
+                },
+            ),
+        )
+        .setOnClickListener {
+            selectedDriverId = null
+            createUnassignedSelected = true
+            invalidate()
+        }
+        .build()
+
     private fun assignAction(): Action {
         val canAssign = from.isNotBlank() &&
-            to.isNotBlank() &&
-            selectedDriverId != null
+            (selectedDriverId != null || createUnassignedSelected)
 
         return Action.Builder()
-            .setTitle(carContext.getString(R.string.assign_job_assign))
+            .setTitle(
+                carContext.getString(
+                    if (createUnassignedSelected) {
+                        R.string.assign_job_create_unassigned
+                    } else {
+                        R.string.assign_job_assign
+                    },
+                ),
+            )
             .setFlags(Action.FLAG_PRIMARY or Action.FLAG_IS_PERSISTENT)
             .setBackgroundColor(CarColor.BLUE)
             .setEnabled(canAssign)
@@ -541,9 +597,9 @@ internal class AssignJobScreen(
             note = existingJob.note.orEmpty()
             fromPoint = existingJob.from?.toRoutePoint()
             toPoint = existingJob.to?.toRoutePoint()
-            candidateDueDate = existingJob.dueDate
+            existingPickupTime = existingJob.dueDate
                 ?.takeIf(String::isNotBlank)
-                ?: candidateDueDate
+            candidateDueDate = existingPickupTime ?: candidateDueDate
             routeWasEdited = false
             updateRoutePreview()
             loadRecommendedDrivers()

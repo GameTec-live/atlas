@@ -50,6 +50,7 @@
     <string name="assign_job_details">&#8212; Job details &#8212;</string>
     <string name="assign_job_from">From</string>
     <string name="assign_job_to">To</string>
+    <string name="assign_job_pickup_time">Pick-up time</string>
     <string name="assign_job_note">Note</string>
     <string name="assign_job_from_placeholder">Enter pickup location</string>
     <string name="assign_job_to_placeholder">Enter destination (optional)</string>
@@ -68,7 +69,9 @@
     <string name="assign_job_retry_candidates">Tap to retry</string>
     <string name="assign_job_no_available_drivers">No available drivers</string>
     <string name="assign_job_driver_rank">%1$d. %2$s</string>
-    <string name="assign_job_selected_driver_rank">Selected: %1$d. %2$s</string>
+    <string name="assign_job_selected_driver_rank">&#9679; %1$d. %2$s</string>
+    <string name="assign_job_create_unassigned">Create unassigned</string>
+    <string name="assign_job_create_unassigned_selected">&#9679; Create unassigned</string>
     <string name="assign_job_pickup_in_minutes">Pick-Up in %1$dmin</string>
     <string name="assign_job_pickup_in_hours">Pick-Up in %1$dh</string>
     <string name="assign_job_pickup_in_hours_minutes">Pick-Up in %1$dh %2$dmin</string>
