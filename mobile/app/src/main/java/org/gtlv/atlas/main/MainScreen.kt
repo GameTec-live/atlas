@@ -265,6 +265,9 @@ internal fun MainScreen(
     val landscapeGapPixels = with(density) {
         12.dp.roundToPx()
     }
+    val landscapeMinimumGapPixels = with(density) {
+        4.dp.roundToPx()
+    }
     val landscapeControlSizePixels = with(density) {
         56.dp.roundToPx()
     }
@@ -277,12 +280,8 @@ internal fun MainScreen(
         } ?: with(density) {
             136.dp.roundToPx()
         }
-    val landscapeControlsBelowTopPixels =
-        landscapeTopPaddingPixels +
-            landscapeNavigationHeightPixels +
-            landscapeGapPixels
-    val placeLandscapeControlsBesideNavigation =
-        shouldPlaceLandscapeControlsBesideNavigation(
+    val landscapeControlsPlacement =
+        calculateLandscapeControlsPlacement(
             viewportWidthPixels =
                 landscapeViewportWidthPixels,
             viewportHeightPixels =
@@ -293,7 +292,9 @@ internal fun MainScreen(
                 landscapeJobPanelHeightPixels,
             verticalPaddingPixels =
                 landscapeTopPaddingPixels,
-            gapPixels = landscapeGapPixels,
+            preferredGapPixels = landscapeGapPixels,
+            minimumGapPixels =
+                landscapeMinimumGapPixels,
             controlSizePixels =
                 landscapeControlSizePixels,
             minimumSideLayoutWidthPixels =
@@ -301,6 +302,8 @@ internal fun MainScreen(
                     500.dp.roundToPx()
                 }
         )
+    val placeLandscapeControlsBesideNavigation =
+        landscapeControlsPlacement.besideNavigation
     val landscapeControlsLeftPixels =
         if (placeLandscapeControlsBesideNavigation) {
             landscapeStartPaddingPixels +
@@ -310,11 +313,7 @@ internal fun MainScreen(
             landscapeStartPaddingPixels
         }
     val landscapeControlsTopPixels =
-        if (placeLandscapeControlsBesideNavigation) {
-            landscapeTopPaddingPixels
-        } else {
-            landscapeControlsBelowTopPixels
-        }
+        landscapeControlsPlacement.topPixels
     val landscapeControlsLeft = with(density) {
         landscapeControlsLeftPixels.toDp()
     }
@@ -724,40 +723,69 @@ private fun MapRecenterButton(
     }
 }
 
-internal fun shouldPlaceLandscapeControlsBesideNavigation(
+internal data class LandscapeControlsPlacement(
+    val besideNavigation: Boolean,
+    val topPixels: Int
+)
+
+internal fun calculateLandscapeControlsPlacement(
     viewportWidthPixels: Int,
     viewportHeightPixels: Int,
     navigationHeightPixels: Int,
     jobPanelHeightPixels: Int,
     verticalPaddingPixels: Int,
-    gapPixels: Int,
+    preferredGapPixels: Int,
+    minimumGapPixels: Int,
     controlSizePixels: Int,
     minimumSideLayoutWidthPixels: Int
-): Boolean {
+): LandscapeControlsPlacement {
+    val navigationBottomPixels =
+        verticalPaddingPixels + navigationHeightPixels
+    val preferredTopPixels =
+        navigationBottomPixels + preferredGapPixels
+
     if (
         viewportWidthPixels <= 0 ||
         viewportHeightPixels <= 0 ||
         jobPanelHeightPixels <= 0
     ) {
-        return false
+        return LandscapeControlsPlacement(
+            besideNavigation = false,
+            topPixels = preferredTopPixels
+        )
     }
 
-    val controlsTopPixels =
-        verticalPaddingPixels +
-            navigationHeightPixels +
-            gapPixels
     val jobPanelTopPixels =
         viewportHeightPixels -
             verticalPaddingPixels -
             jobPanelHeightPixels
+    val availableHeightPixels =
+        jobPanelTopPixels - navigationBottomPixels
     val controlsFitBetweenPanels =
-        controlsTopPixels +
-            controlSizePixels +
-            gapPixels <=
-            jobPanelTopPixels
-
-    return !controlsFitBetweenPanels &&
+        availableHeightPixels >=
+            controlSizePixels + minimumGapPixels * 2
+    val controlsFitBesideNavigation =
         viewportWidthPixels >= minimumSideLayoutWidthPixels
+
+    if (!controlsFitBetweenPanels && controlsFitBesideNavigation) {
+        return LandscapeControlsPlacement(
+            besideNavigation = true,
+            topPixels = verticalPaddingPixels
+        )
+    }
+
+    val balancedGapPixels =
+        ((availableHeightPixels - controlSizePixels) / 2)
+            .coerceIn(
+                minimumGapPixels,
+                preferredGapPixels
+            )
+
+    return LandscapeControlsPlacement(
+        besideNavigation = false,
+        topPixels = navigationBottomPixels +
+            balancedGapPixels
+    )
 }
 
 fun String.initial(): String {
