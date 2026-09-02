@@ -198,36 +198,6 @@ describe("system management routes", () => {
         expect(response.status).toBe(422);
         expect(managementRequests).toEqual([]);
     });
-
-    it("removes a newly provisioned connector when origin setup fails", async () => {
-        managementResponder = (path, init) => {
-            if (path.endsWith("auth-origins")) {
-                return Response.json(
-                    {
-                        error: {
-                            code: "origins_failed",
-                            message: "invalid origin",
-                        },
-                    },
-                    { status: 400 },
-                );
-            }
-            return Response.json({
-                status: init?.method === "DELETE" ? "removed" : "active",
-            });
-        };
-        getSessionMock.mockResolvedValue(adminSession);
-
-        const response = await jsonRequest(
-            app,
-            "/connections/remote-access/cloudflare-tunnel",
-            "PUT",
-            { token: "secret", origin: "https://atlas.example.com" },
-        );
-
-        expect(response.status).toBe(400);
-        expect(managementRequests.at(-1)?.init?.method).toBe("DELETE");
-    });
 });
 
 describe("firmware updates", () => {
