@@ -45,11 +45,6 @@ const provisionRemoteAccess = async (
         "/api/v1/connections/auth-origins",
         jsonRequest("POST", { origin }),
     );
-    if (!originResponse.ok) {
-        // A connector without its auth origin is not usable from a browser.
-        await management.request(providerPath, { method: "DELETE" });
-        return originResponse;
-    }
 
     const [remoteAccess, origins] = await Promise.all([
         providerResponse.json(),

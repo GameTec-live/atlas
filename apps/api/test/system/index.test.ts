@@ -231,6 +231,74 @@ describe("system management routes", () => {
 });
 
 describe("firmware updates", () => {
+    it("rejects an update already pending in management before staging", async () => {
+        const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
+        try {
+            envMock.DATA_STORAGE_PATH = stagingDirectory;
+            getSessionMock.mockResolvedValue(adminSession);
+            managementResponder = (path) =>
+                path === "/api/v1/update"
+                    ? Response.json({
+                          update: {
+                              active: "system_b",
+                              other: "system_a",
+                              pending: "system_b",
+                          },
+                          monitor: { phase: "monitoring" },
+                      })
+                    : Response.json({ status: "ok" });
+            let cancelled = false;
+
+            const response = await request(app, "/update/upload", {
+                method: "POST",
+                headers: { "content-type": "application/octet-stream" },
+                body: new ReadableStream({
+                    cancel() {
+                        cancelled = true;
+                    },
+                }),
+            });
+
+            expect(response.status).toBe(409);
+            expect(await response.json()).toEqual({
+                error: {
+                    code: "update_pending",
+                    message: "An Atlas OS update is already pending",
+                },
+            });
+            expect(cancelled).toBe(true);
+            expect(applyUpdateMock).not.toHaveBeenCalled();
+            expect(existsSync(join(stagingDirectory, "system-updates"))).toBe(
+                false,
+            );
+        } finally {
+            rmSync(stagingDirectory, { recursive: true, force: true });
+        }
+    });
+
+    it("reserves staging so concurrent uploads cannot both consume disk", async () => {
+        const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
+        try {
+            envMock.DATA_STORAGE_PATH = stagingDirectory;
+            getSessionMock.mockResolvedValue(adminSession);
+            const upload = () =>
+                request(app, "/update/upload", {
+                    method: "POST",
+                    headers: { "content-type": "application/octet-stream" },
+                    body: new Uint8Array([1, 2, 3]),
+                });
+
+            const responses = await Promise.all([upload(), upload()]);
+
+            expect(responses.map(({ status }) => status).sort()).toEqual([
+                202, 409,
+            ]);
+            expect(applyUpdateMock).toHaveBeenCalledTimes(1);
+        } finally {
+            rmSync(stagingDirectory, { recursive: true, force: true });
+        }
+    });
+
     it("streams raw uploads through a temporary disk file and removes it", async () => {
         const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
         try {

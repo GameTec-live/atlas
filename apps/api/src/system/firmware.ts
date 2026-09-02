@@ -7,6 +7,7 @@ import { applyUpdate, request } from "./management";
 const DEFAULT_REPOSITORY = "GameTec-live/atlas";
 const MAX_UPDATE_BYTES = 4 * 1024 ** 3;
 const updateAssetPattern = /^atlas-rpi5-.+-update\.tar\.zst$/;
+let updateReserved = false;
 
 function fail(status: number, code: string, message: string): never {
     throw Response.json({ error: { code, message } }, { status });
@@ -16,53 +17,83 @@ const applyStream = async (
     stream: ReadableStream<Uint8Array> | null,
     declaredLength?: number,
 ) => {
-    const management = await request("/healthz");
-    if (!management.ok) return management;
-    if (!stream) {
-        fail(400, "empty_update", "Update file is empty");
-    }
-    if (declaredLength !== undefined && declaredLength > MAX_UPDATE_BYTES) {
+    if (updateReserved) {
+        if (stream) await stream.cancel().catch(() => undefined);
         fail(
-            413,
-            "update_too_large",
-            `Update file exceeds the ${MAX_UPDATE_BYTES}-byte size limit`,
+            409,
+            "operation_in_progress",
+            "Another firmware update is already being prepared",
         );
     }
-
-    const stagingDirectory = resolve(
-        env.DATA_STORAGE_PATH ?? "./data",
-        "system-updates",
-    );
-    await mkdir(stagingDirectory, { recursive: true });
-    const path = resolve(stagingDirectory, `update-${randomUUID()}.tar.zst`);
-    const file = await open(path, "wx", 0o600);
-    const reader = stream.getReader();
-    let size = 0;
+    updateReserved = true;
 
     try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            size += value.byteLength;
-            if (size > MAX_UPDATE_BYTES) {
-                await reader.cancel();
-                fail(
-                    413,
-                    "update_too_large",
-                    `Update file exceeds the ${MAX_UPDATE_BYTES}-byte size limit`,
-                );
-            }
-            await file.writeFile(value);
+        const management = await request("/api/v1/update");
+        if (!management.ok) {
+            if (stream) await stream.cancel().catch(() => undefined);
+            return management;
+        }
+        const updateStatus = (await management.json()) as {
+            update?: { pending?: string };
+        };
+        if (updateStatus.update?.pending) {
+            if (stream) await stream.cancel().catch(() => undefined);
+            fail(
+                409,
+                "update_pending",
+                "An Atlas OS update is already pending",
+            );
+        }
+        if (!stream) fail(400, "empty_update", "Update file is empty");
+        if (declaredLength !== undefined && declaredLength > MAX_UPDATE_BYTES) {
+            await stream.cancel().catch(() => undefined);
+            fail(
+                413,
+                "update_too_large",
+                `Update file exceeds the ${MAX_UPDATE_BYTES}-byte size limit`,
+            );
         }
 
-        if (size === 0) fail(400, "empty_update", "Update file is empty");
-        await file.sync();
-        await file.close();
-        return await applyUpdate(path);
+        const stagingDirectory = resolve(
+            env.DATA_STORAGE_PATH ?? "./data",
+            "system-updates",
+        );
+        await mkdir(stagingDirectory, { recursive: true });
+        const path = resolve(
+            stagingDirectory,
+            `update-${randomUUID()}.tar.zst`,
+        );
+        const file = await open(path, "wx", 0o600);
+        const reader = stream.getReader();
+        let size = 0;
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                size += value.byteLength;
+                if (size > MAX_UPDATE_BYTES) {
+                    await reader.cancel();
+                    fail(
+                        413,
+                        "update_too_large",
+                        `Update file exceeds the ${MAX_UPDATE_BYTES}-byte size limit`,
+                    );
+                }
+                await file.writeFile(value);
+            }
+
+            if (size === 0) fail(400, "empty_update", "Update file is empty");
+            await file.sync();
+            await file.close();
+            return await applyUpdate(path);
+        } finally {
+            await file.close().catch(() => undefined);
+            await unlink(path).catch(() => undefined);
+        }
     } finally {
-        await file.close().catch(() => undefined);
-        await unlink(path).catch(() => undefined);
+        updateReserved = false;
     }
 };
 
