@@ -43,7 +43,6 @@ import org.gtlv.core.job.JobCandidatesResult
 import org.gtlv.core.job.JobCoordinates
 import org.gtlv.core.job.JobActionResult
 import org.gtlv.core.job.JobCreationResult
-import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.NewJobRequest
 import org.gtlv.core.job.UnassignedJobsResult
@@ -88,7 +87,6 @@ internal class AssignJobScreen(
     private var hasRequestedExistingJob = false
     private var isLoadingExistingJob = initialJobId != null
     private var routeWasEdited = false
-    private var fromWasEdited = false
     private var from = initialFrom
     private var to = initialTo
     private var note = initialNote
@@ -155,8 +153,8 @@ internal class AssignJobScreen(
     }
 
     private fun jobDetailsSection(): SectionedItemList {
-        val itemsBuilder = ItemList.Builder()
-            .addItem(addressRow(
+        val fromRow = if (initialJobId == null) {
+            addressRow(
                 label = carContext.getString(R.string.assign_job_from),
                 value = from,
                 placeholder = carContext.getString(
@@ -167,11 +165,22 @@ internal class AssignJobScreen(
                     from = suggestion.displayName
                     fromPoint = suggestion.toRoutePoint()
                     routeWasEdited = true
-                    fromWasEdited = true
                     updateRoutePreview()
                     loadRecommendedDrivers()
                 },
-            ))
+            )
+        } else {
+            readOnlyRow(
+                label = carContext.getString(R.string.assign_job_from),
+                value = from,
+                placeholder = carContext.getString(
+                    R.string.assign_job_from_placeholder,
+                ),
+            )
+        }
+
+        val itemsBuilder = ItemList.Builder()
+            .addItem(fromRow)
             .addItem(addressRow(
                 label = carContext.getString(R.string.assign_job_to),
                 value = to,
@@ -208,6 +217,15 @@ internal class AssignJobScreen(
             carContext.getString(R.string.assign_job_details),
         )
     }
+
+    private fun readOnlyRow(
+        label: String,
+        value: String,
+        placeholder: String,
+    ): Row = Row.Builder()
+        .setTitle(label)
+        .addText(value.ifBlank { placeholder })
+        .build()
 
     private fun pickupTimeRow(value: String): Row = Row.Builder()
         .setTitle(carContext.getString(R.string.assign_job_pickup_time))
@@ -450,7 +468,6 @@ internal class AssignJobScreen(
                     repository = repository,
                     jobId = initialJobId,
                     driverId = driverId,
-                    pickup = pickup,
                 ) == JobActionResult.Success
             }
             currentCoroutineContext().ensureActive()
@@ -478,26 +495,13 @@ internal class AssignJobScreen(
         repository: JobRepository,
         jobId: String,
         driverId: String,
-        pickup: RoutePoint,
-    ): JobActionResult {
-        if (fromWasEdited) {
-            val updateResult = repository.updateJobLocation(
-                jobId = jobId,
-                field = JobLocationField.FROM,
-                latitude = pickup.latitude,
-                longitude = pickup.longitude,
-            )
-            if (updateResult != JobActionResult.Success) return updateResult
-        }
-
-        return repository.assignJob(
-            jobId = jobId,
-            driverId = driverId,
-            destination = toPoint?.toJobCoordinates(),
-            dueDate = candidateDueDate,
-            note = note.trim().ifBlank { null },
-        )
-    }
+    ): JobActionResult = repository.assignJob(
+        jobId = jobId,
+        driverId = driverId,
+        destination = toPoint?.toJobCoordinates(),
+        dueDate = candidateDueDate,
+        note = note.trim().ifBlank { null },
+    )
 
     private fun showSubmissionToast(message: Int) {
         CarToast.makeText(
@@ -696,7 +700,6 @@ internal class AssignJobScreen(
                 ?.takeIf(String::isNotBlank)
             candidateDueDate = existingPickupTime ?: candidateDueDate
             routeWasEdited = false
-            fromWasEdited = false
             updateRoutePreview()
             loadRecommendedDrivers()
             invalidate()
