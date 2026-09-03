@@ -24,6 +24,7 @@ mmdebstrap:
           atlas-kiosk
       fi
       chroot "$1" passwd --lock atlas-kiosk
+    - chmod 0755 "$1/usr/local/libexec/atlas-kiosk-launcher"
     - chmod 0644 "$1/usr/lib/systemd/system/atlas-kiosk.service"
     - chmod 0644 "$1/usr/share/atlas/kiosk-retry/manifest.json"
     - chmod 0644 "$1/usr/share/atlas/kiosk-retry/retry.js"

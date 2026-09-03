@@ -15,6 +15,7 @@ rootfs=$(find "$work_root" -mindepth 2 -maxdepth 2 -type d \
 [[ -x "$rootfs/usr/local/sbin/atlas-sys" ]]
 [[ -x "$rootfs/usr/bin/cage" ]]
 [[ -x "$rootfs/usr/bin/chromium" ]]
+[[ -x "$rootfs/usr/local/libexec/atlas-kiosk-launcher" ]]
 [[ -n "$(find "$rootfs/usr/lib" -path '*/security/pam_systemd.so' -print -quit)" ]]
 grep -q '^atlas-kiosk:.*:/run/atlas-kiosk:/usr/sbin/nologin$' \
     "$rootfs/etc/passwd"
@@ -66,8 +67,12 @@ grep -q '^dtparam=pciex1_gen=3$' "$rootfs/boot/firmware/config.txt"
 [[ ! -e "$rootfs/etc/systemd/system/multi-user.target.wants/ssh.service" ]]
 [[ ! -L "$rootfs/etc/systemd/system/multi-user.target.wants/ssh.service" ]]
 [[ "$(readlink "$rootfs/etc/systemd/system/multi-user.target.wants/atlas-kiosk.service")" = /usr/lib/systemd/system/atlas-kiosk.service ]]
-grep -q -F -- '--allow-insecure-localhost' \
+grep -q -F 'Press ENTER to launch Atlas' \
+    "$rootfs/usr/local/libexec/atlas-kiosk-launcher"
+grep -q -F 'ExecStart=/usr/local/libexec/atlas-kiosk-launcher' \
     "$rootfs/usr/lib/systemd/system/atlas-kiosk.service"
+grep -q -F -- '--allow-insecure-localhost' \
+    "$rootfs/usr/local/libexec/atlas-kiosk-launcher"
 grep -q -F 'User=atlas-kiosk' \
     "$rootfs/usr/lib/systemd/system/atlas-kiosk.service"
 python3 -m json.tool \

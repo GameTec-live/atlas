@@ -21,24 +21,11 @@ RuntimeDirectoryMode=0700
 WorkingDirectory=/run/atlas-kiosk
 Environment=HOME=/run/atlas-kiosk
 Environment=XDG_RUNTIME_DIR=/run/atlas-kiosk
-Environment=XDG_SESSION_CLASS=user
+Environment=XDG_SESSION_CLASS=greeter
 Environment=XDG_SEAT=seat0
 Environment=XDG_SESSION_TYPE=wayland
 Environment=XDG_VTNR=1
-ExecStart=/usr/bin/cage -s -- /usr/bin/chromium \
-    --allow-insecure-localhost \
-    --disable-extensions-except=/usr/share/atlas/kiosk-retry \
-    --disable-features=Translate \
-    --disable-session-crashed-bubble \
-    --disable-setuid-sandbox \
-    --kiosk \
-    --load-extension=/usr/share/atlas/kiosk-retry \
-    --no-default-browser-check \
-    --no-first-run \
-    --ozone-platform=wayland \
-    --password-store=basic \
-    --user-data-dir=/run/atlas-kiosk/chromium \
-    https://localhost/
+ExecStart=/usr/local/libexec/atlas-kiosk-launcher
 Restart=always
 RestartSec=5
 LimitCORE=0

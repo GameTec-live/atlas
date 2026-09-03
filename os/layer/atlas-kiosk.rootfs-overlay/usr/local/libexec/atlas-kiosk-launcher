@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+show_prompt() {
+    printf '\033[2J\033[H\033[?25h'
+    printf '\n  Atlas OS\n\n'
+    printf '  Press ENTER to launch Atlas\n\n'
+}
+
+show_prompt
+while :; do
+    if ! IFS= read -r input; then
+        exit 0
+    fi
+    if [ -z "$input" ]; then
+        break
+    fi
+    show_prompt
+done
+
+exec /usr/bin/cage -s -- /usr/bin/chromium \
+    --allow-insecure-localhost \
+    --disable-extensions-except=/usr/share/atlas/kiosk-retry \
+    --disable-features=Translate \
+    --disable-session-crashed-bubble \
+    --disable-setuid-sandbox \
+    --kiosk \
+    --load-extension=/usr/share/atlas/kiosk-retry \
+    --no-default-browser-check \
+    --no-first-run \
+    --ozone-platform=wayland \
+    --password-store=basic \
+    --user-data-dir=/run/atlas-kiosk/chromium \
+    https://localhost/

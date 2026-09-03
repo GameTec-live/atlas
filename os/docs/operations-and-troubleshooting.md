@@ -10,14 +10,18 @@ A normal first boot roughly follows this order:
 3. systemd mounts the immutable root and persistent storage.
 4. NetworkManager obtains DHCP configuration; systemd-resolved and time sync
    become available.
-5. Cage starts Chromium on the attached display and opens
-   `https://localhost/` in kiosk mode.
+5. The kiosk service displays `Press ENTER to launch Atlas` on the attached
+   display and waits without starting Cage or Chromium.
 6. The lingering `atlas-containers` user manager starts.
 7. `atlas-container-init` imports the offline OCI archive, deletes it, creates
    secrets and generates auth origins.
 8. Quadlets create networks/volumes and start containers in dependency order.
-9. Caddy becomes healthy and exposes the UI over HTTPS. Until then, the kiosk
-   retries the local page every 30 seconds.
+9. Caddy becomes healthy and exposes the UI over HTTPS.
+
+Pressing ENTER replaces the lightweight TTY launcher with Cage and Chromium,
+which opens `https://localhost/` in kiosk mode. If it is launched before Caddy
+is ready, it retries the local page every 30 seconds. Exiting the kiosk returns
+to the prompt after the service's five-second restart delay.
 
 First boot is slower than later boots because importing roughly 2 GiB of image
 data and initializing PostgreSQL/storage are I/O intensive. Router, geocoder and
@@ -35,12 +39,13 @@ timeout.
   client network
 - SSH: disabled by default
 
-The attached display uses the primary virtual terminal for the kiosk. The
-locked `atlas-kiosk` system account runs Cage and Chromium; it has no login,
-sudo access, supplementary groups, persistent home, or non-loopback network
-access. The serial console remains available for recovery. Chromium accepts
-the appliance's local certificate only for localhost; remote clients still need
-to trust the local Caddy CA or use a publicly trusted domain.
+The attached display uses the primary virtual terminal for the on-demand kiosk
+prompt. The locked `atlas-kiosk` system account runs the prompt and, only after
+ENTER, Cage and Chromium. It has no login, sudo access, supplementary groups,
+persistent home, or non-loopback network access. The serial console remains
+available for recovery. Chromium accepts the appliance's local certificate only
+for localhost; remote clients still need to trust the local Caddy CA or use a
+publicly trusted domain.
 
 Change the initial password before enabling remote maintenance:
 
@@ -365,10 +370,12 @@ logs.
 ### Local display does not show the kiosk
 
 Check `systemctl status atlas-kiosk` and `journalctl -b -u atlas-kiosk`. Cage
-owns `tty1`, so use the serial console for recovery. Confirm the display and
-input devices are detected and that `/usr/bin/cage` and `/usr/bin/chromium`
-exist. A temporary Chromium connection-error page is expected during first
-boot; it should retry every 30 seconds without restarting the kiosk service.
+or its launcher owns `tty1`, so use the serial console for recovery. Confirm
+the prompt appears, then press ENTER on an empty line. If Cage does not start,
+confirm the display and input devices are detected and that `/usr/bin/cage` and
+`/usr/bin/chromium` exist. A temporary Chromium connection-error page is
+expected when launched during first boot; it should retry every 30 seconds
+without restarting the kiosk service.
 
 ### `atlas-web` stays `activating`
 

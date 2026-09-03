@@ -10,7 +10,7 @@ state:
 - one persistent data area holds application state and device policy;
 - all application workloads run as rootless Podman containers;
 - the only normal host ingress is Caddy on ports 80 and 443;
-- a local Cage session presents that HTTPS UI full-screen in Chromium;
+- an on-demand local Cage session presents that HTTPS UI full-screen in Chromium;
 - SSH is an explicitly enabled maintenance path, not a default service.
 
 The `os` directory is an external source tree and does not patch or vendor
@@ -95,10 +95,14 @@ Change it before exposing SSH.
 
 - system account with a locked password and `/usr/sbin/nologin` shell;
 - has no persistent home or state, supplementary groups, or sudo access;
-- runs only the Cage compositor and Chromium;
+- runs only a small TTY launcher until ENTER is pressed, then replaces it with
+  the Cage compositor and Chromium;
 - receives temporary access to the active DRM/input seat through logind;
 - is limited by systemd to loopback networking, required display/input devices,
   and an ephemeral runtime directory.
+
+The waiting prompt uses a greeter-class logind session, so it does not start a
+separate per-user service manager for the kiosk account.
 
 Chromium keeps its process sandbox using unprivileged user namespaces; its
 legacy setuid bootstrap is disabled. The kiosk service prevents privilege
@@ -124,7 +128,7 @@ capability sets and filesystems.
 System services handle host-level policy:
 
 - NetworkManager, systemd-resolved and network-online coordination;
-- the Cage/Chromium kiosk on the primary virtual terminal;
+- the on-demand Cage/Chromium launcher on the primary virtual terminal;
 - persistent SSH state;
 - one-time Raspberry Pi EEPROM boot-order policy;
 - the authenticated Unix-socket management API and early-boot factory reset.
@@ -157,7 +161,7 @@ The configuration deliberately avoids one monolithic custom layer:
 | `atlas-device-policy` | Serial console, PCIe Gen 3 and EEPROM boot order |
 | `atlas-ssh` | Hardened, persistent, disabled-by-default SSH |
 | `atlas-management` | Privileged Unix-socket API, A/B health commit and factory reset |
-| `atlas-kiosk` | Local Cage session, Chromium kiosk and localhost retry extension |
+| `atlas-kiosk` | On-demand TTY launcher, Cage/Chromium kiosk and localhost retry extension |
 | `atlas-branding` | Console/SSH branding and `os-release` identity |
 
 Keep future features in the narrowest sensible layer. Cross-layer ordering is

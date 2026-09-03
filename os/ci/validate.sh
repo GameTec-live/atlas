@@ -116,9 +116,13 @@ rg -q -F "printf 'BETTER_AUTH_URL=%s\\n'" \
 
 kiosk_root="$source_root/layer/atlas-kiosk.rootfs-overlay"
 kiosk_unit="$kiosk_root/usr/lib/systemd/system/atlas-kiosk.service"
+kiosk_launcher="$kiosk_root/usr/local/libexec/atlas-kiosk-launcher"
 kiosk_extension="$kiosk_root/usr/share/atlas/kiosk-retry"
 python3 -m json.tool "$kiosk_extension/manifest.json" >/dev/null
-rg -q -F 'ExecStart=/usr/bin/cage -s -- /usr/bin/chromium' "$kiosk_unit"
+rg -q -F 'ExecStart=/usr/local/libexec/atlas-kiosk-launcher' "$kiosk_unit"
+rg -q -F 'Press ENTER to launch Atlas' "$kiosk_launcher"
+rg -q -F 'if ! IFS= read -r input; then' "$kiosk_launcher"
+rg -q -F 'exec /usr/bin/cage -s -- /usr/bin/chromium' "$kiosk_launcher"
 rg -q -F 'User=atlas-kiosk' "$kiosk_unit"
 rg -q -F 'PAMName=login' "$kiosk_unit"
 rg -q -F -- '- libpam-systemd' "$source_root/layer/atlas-kiosk.yaml"
@@ -128,16 +132,16 @@ rg -q -F 'IPAddressDeny=any' "$kiosk_unit"
 rg -q -F 'IPAddressAllow=localhost' "$kiosk_unit"
 rg -q -F 'NoNewPrivileges=yes' "$kiosk_unit"
 rg -q -F 'RestrictSUIDSGID=yes' "$kiosk_unit"
-rg -q -F -- '--disable-setuid-sandbox' "$kiosk_unit"
-rg -q -F -- '--allow-insecure-localhost' "$kiosk_unit"
-rg -q -F -- '--kiosk' "$kiosk_unit"
-rg -q -F 'https://localhost/' "$kiosk_unit" "$kiosk_extension/retry.js"
+rg -q -F -- '--disable-setuid-sandbox' "$kiosk_launcher"
+rg -q -F -- '--allow-insecure-localhost' "$kiosk_launcher"
+rg -q -F -- '--kiosk' "$kiosk_launcher"
+rg -q -F 'https://localhost/' "$kiosk_launcher" "$kiosk_extension/retry.js"
 rg -q -F 'const retryPeriodMinutes = 0.5;' "$kiosk_extension/retry.js"
-if rg -q -F -- '--ignore-certificate-errors' "$kiosk_unit"; then
+if rg -q -F -- '--ignore-certificate-errors' "$kiosk_launcher"; then
     echo "atlas-kiosk must only relax certificate checks for localhost" >&2
     exit 1
 fi
-if rg -q -F -- '--no-sandbox' "$kiosk_unit"; then
+if rg -q -F -- '--no-sandbox' "$kiosk_launcher"; then
     echo "atlas-kiosk must keep Chromium's process sandbox enabled" >&2
     exit 1
 fi
