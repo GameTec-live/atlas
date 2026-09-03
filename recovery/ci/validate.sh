@@ -12,6 +12,10 @@ for script in \
     "$project_dir/scripts/assemble-image.sh" \
     "$project_dir/scripts/build.sh" \
     "$project_dir/scripts/set-artifact.sh"; do
+    [ -x "$script" ] || {
+        echo "Recovery script is not executable: $script" >&2
+        exit 1
+    }
     sh -n "$script"
 done
 
