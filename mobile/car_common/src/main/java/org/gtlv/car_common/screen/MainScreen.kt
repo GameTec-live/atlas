@@ -43,6 +43,8 @@ import org.gtlv.core.geoservice.RouteProgress
 import org.gtlv.core.geoservice.RouteProgressCalculator
 import org.gtlv.core.geoservice.RouteResult
 import org.gtlv.core.job.JobActionResult
+import org.gtlv.core.job.JobCoordinates
+import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.AssignedJobNotification
 import org.gtlv.core.job.JobNotification
 import org.gtlv.core.job.JobRepository
@@ -699,7 +701,10 @@ class MainScreen(
         screenScope.launch {
             val result = jobRequestMutex.withLock {
                 if (complete) {
-                    repository.completeJob(job.id)
+                    completeCurrentJob(
+                        repository = repository,
+                        job = job
+                    )
                 } else {
                     repository.cancelJob(job.id)
                 }
@@ -734,6 +739,41 @@ class MainScreen(
                 invalidateSafely()
             }
         }
+    }
+
+    private suspend fun completeCurrentJob(
+        repository: JobRepository,
+        job: AtlasJob
+    ): JobActionResult {
+        if (job.to == null) {
+            val location = latestLocation
+                ?: return JobActionResult.InvalidResponse
+            val destination = JobCoordinates(
+                latitude = location.latitude,
+                longitude = location.longitude
+            )
+            val updateResult = repository.updateJobLocation(
+                jobId = job.id,
+                field = JobLocationField.TO,
+                latitude = destination.latitude,
+                longitude = destination.longitude
+            )
+
+            if (updateResult != JobActionResult.Success) {
+                return updateResult
+            }
+
+            if (
+                currentJob?.id == job.id &&
+                currentJob?.to == null
+            ) {
+                currentJob = currentJob?.copy(
+                    to = destination
+                )
+            }
+        }
+
+        return repository.completeJob(job.id)
     }
 
     private fun observeCollectedJobState() {
