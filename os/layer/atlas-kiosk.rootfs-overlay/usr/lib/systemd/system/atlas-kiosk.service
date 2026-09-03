@@ -1,0 +1,64 @@
+[Unit]
+Description=Atlas local web kiosk
+After=systemd-user-sessions.service getty@tty1.service
+Conflicts=getty@tty1.service
+
+[Service]
+User=atlas-kiosk
+Group=atlas-kiosk
+PAMName=login
+UtmpIdentifier=tty1
+UtmpMode=user
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+RuntimeDirectory=atlas-kiosk
+RuntimeDirectoryMode=0700
+WorkingDirectory=/run/atlas-kiosk
+Environment=HOME=/run/atlas-kiosk
+Environment=XDG_SESSION_CLASS=greeter
+Environment=XDG_SEAT=seat0
+Environment=XDG_SESSION_TYPE=wayland
+Environment=XDG_VTNR=1
+ExecStart=/usr/local/libexec/atlas-kiosk-launcher
+Restart=always
+RestartSec=5
+LimitCORE=0
+UMask=0077
+
+# Atlas already requires unprivileged user namespaces for rootless Podman.
+# Chromium uses those namespaces without its legacy setuid bootstrap; its
+# process sandbox remains enabled (there is deliberately no --no-sandbox).
+DevicePolicy=closed
+DeviceAllow=/dev/tty0 rw
+DeviceAllow=/dev/tty1 rw
+DeviceAllow=char-drm rw
+DeviceAllow=char-input rw
+IPAddressDeny=any
+IPAddressAllow=localhost
+KeyringMode=private
+LockPersonality=yes
+NoNewPrivileges=yes
+PrivateIPC=yes
+PrivateMounts=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

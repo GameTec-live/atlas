@@ -13,6 +13,18 @@ rootfs=$(find "$work_root" -mindepth 2 -maxdepth 2 -type d \
 [[ -x "$rootfs/usr/local/libexec/atlas-auth-origins" ]]
 [[ -x "$rootfs/usr/local/libexec/atlas-management" ]]
 [[ -x "$rootfs/usr/local/sbin/atlas-sys" ]]
+[[ -x "$rootfs/usr/bin/cage" ]]
+[[ -x "$rootfs/usr/bin/chromium" ]]
+[[ -x "$rootfs/usr/local/libexec/atlas-kiosk-launcher" ]]
+[[ -n "$(find "$rootfs/usr/lib" -path '*/security/pam_systemd.so' -print -quit)" ]]
+grep -q '^atlas-kiosk:.*:1999:.*:/run/atlas-kiosk:/usr/sbin/nologin$' \
+    "$rootfs/etc/passwd"
+grep -q '^atlas-kiosk:!' "$rootfs/etc/shadow"
+if grep -Eq '^(adm|input|render|sudo|video):[^:]*:[^:]*:([^,]*,)*atlas-kiosk(,|$)' \
+    "$rootfs/etc/group"; then
+    echo "atlas-kiosk must not have privileged supplementary groups" >&2
+    exit 1
+fi
 [[ -f "$rootfs/usr/share/zoneinfo/Etc/UTC" ]]
 [[ "$(readlink "$rootfs/etc/localtime")" = /persistent/atlas/timezone/localtime ]]
 [[ "$(readlink "$rootfs/persistent/atlas/timezone/localtime")" = /usr/share/zoneinfo/Etc/UTC ]]
@@ -54,6 +66,21 @@ grep -q '^dtparam=pciex1_gen=3$' "$rootfs/boot/firmware/config.txt"
 [[ -L "$rootfs/etc/systemd/system/getty.target.wants/serial-getty@serial0.service" ]]
 [[ ! -e "$rootfs/etc/systemd/system/multi-user.target.wants/ssh.service" ]]
 [[ ! -L "$rootfs/etc/systemd/system/multi-user.target.wants/ssh.service" ]]
+[[ "$(readlink "$rootfs/etc/systemd/system/multi-user.target.wants/atlas-kiosk.service")" = /usr/lib/systemd/system/atlas-kiosk.service ]]
+grep -q -F 'Press ENTER to launch Atlas' \
+    "$rootfs/usr/local/libexec/atlas-kiosk-launcher"
+grep -q -F "XDG_RUNTIME_DIR=\${RUNTIME_DIRECTORY:?missing runtime directory}" \
+    "$rootfs/usr/local/libexec/atlas-kiosk-launcher"
+grep -q -F 'ExecStart=/usr/local/libexec/atlas-kiosk-launcher' \
+    "$rootfs/usr/lib/systemd/system/atlas-kiosk.service"
+grep -q -F -- '--allow-insecure-localhost' \
+    "$rootfs/usr/local/libexec/atlas-kiosk-launcher"
+grep -q -F 'User=atlas-kiosk' \
+    "$rootfs/usr/lib/systemd/system/atlas-kiosk.service"
+grep -q -F 'IPAddressDeny=any' \
+    "$rootfs/usr/lib/systemd/system/user-1999.slice.d/50-atlas-kiosk.conf"
+python3 -m json.tool \
+    "$rootfs/usr/share/atlas/kiosk-retry/manifest.json" >/dev/null
 
 python3 - "$image_dir/provisionmap.json" "$archive" <<'PY'
 import json

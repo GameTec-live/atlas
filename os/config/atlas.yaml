@@ -31,6 +31,7 @@ layer:
   device_policy: atlas-device-policy
   ssh: atlas-ssh
   management: atlas-management
+  kiosk: atlas-kiosk
   branding: atlas-branding
 
 abupdate:
