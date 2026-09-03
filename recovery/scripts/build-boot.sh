@@ -37,6 +37,7 @@ rsync -a --delete \
     "$source_dir/configurations/$configuration/"
 
 mkdir -p "$work_dir"
+"$script_dir/build-fastbootd.sh" "$source_dir" "$work_dir"
 cd "$work_dir"
 SEQUOIA_CRYPTO_POLICY=$policy_file \
     "$source_dir/pi-gen-micro-sysroot" run "$configuration" pi5
@@ -58,6 +59,8 @@ for executable in \
         exit 1
     }
 done
+strings "$root/usr/bin/fastbootd" | \
+    grep -q 'TCP-only mode: preserving state across client connections'
 
 test -x "$root/bin/busybox"
 for applet in blkid blockdev dd find getty ifconfig sha256sum stat tar timeout; do

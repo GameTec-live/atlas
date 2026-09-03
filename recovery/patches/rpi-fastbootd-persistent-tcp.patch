@@ -1,0 +1,52 @@
+diff --git a/fastboot/device/main.cpp b/fastboot/device/main.cpp
+index 93a7998..e35f754 100644
+--- a/fastboot/device/main.cpp
++++ b/fastboot/device/main.cpp
+@@ -213,23 +213,11 @@ int main(int argc, char* argv[]) {
+         RunUsbLoop();  // never returns
+     } else {
+-        // TCP only: full command map, sequential connections.
+-        auto server = ClientTcpTransport::CreateServer();
+-        if (!server) {
+-            LOG(FATAL) << "Failed to create TCP server socket";
+-            return 1;
+-        }
+-        // No USB descriptors to worry about here, but we still want the
+-        // lock pass to run before serving traffic so getvar otp-lock-status
+-        // is meaningful and GetPrivkey is gated correctly.
++        // Keep one FastbootDevice across sequential TCP clients. IDP state and
++        // staged data belong to the device, while the local fastboot CLI opens
++        // a fresh connection for every invocation.
++        FastbootDevice device("tcp");
+         LockOtpKeyAtStartup();
+-        LOG(INFO) << "TCP-only mode: accepting one connection at a time";
+-        while (true) {
+-            auto socket = ClientTcpTransport::AcceptHandshake(server.get());
+-            if (!socket) continue;
+-            auto transport = std::make_unique<ClientTcpTransport>(std::move(socket));
+-            FastbootDevice device(std::move(transport), /*data_plane_only=*/false);
+-            device.ExecuteCommands();
+-            LOG(INFO) << "TCP connection finished";
+-        }
++        LOG(INFO) << "TCP-only mode: preserving state across client connections";
++        device.ExecuteCommands();  // accepts reconnects and never returns
+     }
+ }
+diff --git a/fastboot/device/commands.cpp b/fastboot/device/commands.cpp
+index 5f6c750..ee0ff4e 100644
+--- a/fastboot/device/commands.cpp
++++ b/fastboot/device/commands.cpp
+@@ -1739,7 +1739,12 @@ namespace {
+             int result = crypto.ProvisionKey();
+             if (result == RPI_FW_CRYPTO_KEY_NOT_BLANK) {
+                 crypto.RefreshProvisioningStatus();
+-                return device->WriteOkay("Key already provisioned");
++                if (crypto.LockKey() != 0) {
++                    return device->WriteFail(
++                        "Existing key but LOCK failed — refusing to continue; "
++                        "reboot and retry");
++                }
++                return device->WriteOkay("Key already provisioned and LOCKed");
+             }
+             if (result != 0) {
+                 return device->WriteFail(

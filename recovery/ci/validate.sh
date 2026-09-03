@@ -8,6 +8,7 @@ for script in \
     "$project_dir/configurations/atlas-recovery/atlas-recover" \
     "$project_dir/configurations/atlas-recovery/post_creation.sh" \
     "$project_dir/configurations/atlas-recovery/rcS" \
+    "$project_dir/scripts/build-fastbootd.sh" \
     "$project_dir/scripts/build-boot.sh" \
     "$project_dir/scripts/assemble-image.sh" \
     "$project_dir/scripts/build.sh" \
@@ -32,6 +33,7 @@ recovery=$project_dir/configurations/atlas-recovery/atlas-recover
 dpkg_args=$project_dir/configurations/atlas-recovery/dpkg_extra_args
 kernel_modules=$project_dir/configurations/atlas-recovery/kernel_modules.list
 post_creation=$project_dir/configurations/atlas-recovery/post_creation.sh
+fastbootd_patch=$project_dir/patches/rpi-fastbootd-persistent-tcp.patch
 
 # pi-gen-micro prefixes every non-comment line with `--`; an empty line would
 # consequently become dpkg's end-of-options marker before its action argument.
@@ -59,5 +61,7 @@ grep -q 'oem idpdone' "$recovery"
 ! grep -q 'secure.boot\|program_pubkey\|CUSTOMER_KEY' "$recovery"
 grep -q 'build/usr/lib/modules-load.d/fastbootd.conf' "$post_creation"
 grep -q "s|/sbin/getty|/bin/getty|g" "$post_creation"
+grep -q 'FastbootDevice device("tcp")' "$fastbootd_patch"
+grep -q 'device.ExecuteCommands()' "$fastbootd_patch"
 
 echo "Atlas recovery source validation passed."
