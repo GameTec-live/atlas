@@ -142,7 +142,7 @@ export function SystemDetailsDialog({
                 )}
 
                 <Separator />
-                <section className="grid gap-3">
+                <section className="flex min-w-0 flex-col gap-3">
                     <div className="flex items-center justify-between gap-3">
                         <h3 className="flex items-center gap-2 font-medium">
                             <ContainerIcon className="size-4 text-muted-foreground" />
@@ -153,13 +153,13 @@ export function SystemDetailsDialog({
                         </Badge>
                     </div>
                     {containers?.items.length ? (
-                        <div className="grid gap-2">
+                        <div className="flex flex-col gap-2">
                             {containers.items.map((container) => (
                                 <div
                                     key={`${container.name}-${container.imageId}`}
                                     className="flex flex-row justify-between items-center gap-2 rounded-lg border p-3"
                                 >
-                                    <div>
+                                    <div className="min-w-0 flex-1">
                                         <p className="font-medium">
                                             {container.name}
                                         </p>
@@ -170,7 +170,10 @@ export function SystemDetailsDialog({
                                             {container.image}
                                         </p>
                                     </div>
-                                    <Badge variant="outline">
+                                    <Badge
+                                        variant="outline"
+                                        className="inline-block min-w-0 max-w-1/2 shrink truncate"
+                                    >
                                         {container.version ||
                                             m.settings_unknown()}
                                     </Badge>

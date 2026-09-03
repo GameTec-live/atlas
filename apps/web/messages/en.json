@@ -16,6 +16,9 @@
     "misty_tired_jay_heal": "System",
     "sleek_cuddly_maggot_hush": "Toggle theme",
     "antsy_fuzzy_platypus_trim": "Sign out",
+    "navigation_menu": "Navigation",
+    "navigation_open_menu": "Open navigation menu",
+    "navigation_close_menu": "Close navigation menu",
     "plain_topical_ant_compose": "Home",
     "simple_awful_coyote_quiz": "Map",
     "cool_only_manatee_pout": "Fleet",
@@ -477,5 +480,6 @@
     "setup_finish": "Finish setup",
     "setup_step_progress": "Step {current} of {total}",
     "setup_resume_title": "Sign in to continue",
-    "setup_resume_description": "The administrator account already exists. Sign in with it to finish this setup."
+    "setup_resume_description": "The administrator account already exists. Sign in with it to finish this setup.",
+    "spicy_fresh_vulture_learn": "Default username and password: {username}"
 }
