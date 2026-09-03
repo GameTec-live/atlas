@@ -18,6 +18,9 @@ let stagedPathExisted = false;
 let managementResponder:
     | ((path: string, init?: RequestInit) => Response)
     | undefined;
+let applyUpdateResponder:
+    | ((path: string) => Response | Promise<Response>)
+    | undefined;
 
 const managementRequestMock = mock(async (path: string, init?: RequestInit) => {
     managementRequests.push({ path, init });
@@ -27,11 +30,12 @@ const managementRequestMock = mock(async (path: string, init?: RequestInit) => {
     );
 });
 const applyUpdateMock = mock(async (path: string) => {
+    const response = applyUpdateResponder?.(path);
     stagedPathExisted = existsSync(path);
     appliedBytes = await Bun.file(path).bytes();
-    return Response.json(
-        { status: "rebooting_into_candidate" },
-        { status: 202 },
+    return (
+        (await response) ??
+        Response.json({ status: "rebooting_into_candidate" }, { status: 202 })
     );
 });
 
@@ -75,6 +79,7 @@ beforeEach(() => {
     appliedBytes = undefined;
     stagedPathExisted = false;
     managementResponder = undefined;
+    applyUpdateResponder = undefined;
     managementRequestMock.mockClear();
     applyUpdateMock.mockClear();
     envMock.DATA_STORAGE_PATH = undefined;
@@ -324,6 +329,85 @@ describe("firmware updates", () => {
 
             expect(response.status).toBe(202);
             expect(stagedPathExisted).toBe(true);
+            expect(appliedBytes).toEqual(update);
+            expect(
+                readdirSync(join(stagingDirectory, "system-updates")),
+            ).toEqual([]);
+        } finally {
+            rmSync(stagingDirectory, { recursive: true, force: true });
+        }
+    });
+
+    it("uploads firmware in bounded chunks before starting installation", async () => {
+        const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
+        try {
+            envMock.DATA_STORAGE_PATH = stagingDirectory;
+            getSessionMock.mockResolvedValue(adminSession);
+            const update = new Uint8Array([0, 1, 2, 3, 4]);
+            let finishInstallation: (response: Response) => void = () =>
+                undefined;
+            applyUpdateResponder = () =>
+                new Promise((resolve) => {
+                    finishInstallation = resolve;
+                });
+
+            const startResponse = await jsonRequest(
+                app,
+                "/update/upload/start",
+                "POST",
+                { size: update.byteLength },
+            );
+            expect(startResponse.status).toBe(201);
+            const started = (await startResponse.json()) as {
+                uploadId: string;
+                chunkSize: number;
+            };
+            expect(started.chunkSize).toBeGreaterThan(0);
+
+            const uploadChunk = (start: number, end: number) =>
+                request(app, `/update/upload/${started.uploadId}`, {
+                    method: "PUT",
+                    headers: {
+                        "content-type": "application/octet-stream",
+                        "content-range": `bytes ${start}-${end - 1}/${update.byteLength}`,
+                    },
+                    body: update.slice(start, end),
+                });
+
+            const firstChunk = await uploadChunk(0, 2);
+            expect(firstChunk.status).toBe(200);
+            expect(await firstChunk.json()).toEqual({ received: 2 });
+            const secondChunk = await uploadChunk(2, update.byteLength);
+            expect(secondChunk.status).toBe(200);
+            expect(await secondChunk.json()).toEqual({ received: 5 });
+
+            const installResponse = await request(
+                app,
+                `/update/upload/${started.uploadId}/install`,
+                { method: "POST" },
+            );
+            expect(installResponse.status).toBe(202);
+            expect(await installResponse.json()).toEqual({
+                status: "installing",
+            });
+            expect(applyUpdateMock).toHaveBeenCalledTimes(1);
+            finishInstallation(
+                Response.json(
+                    { status: "rebooting_into_candidate" },
+                    { status: 202 },
+                ),
+            );
+            await applyUpdateMock.mock.results[0]?.value;
+            for (
+                let attempt = 0;
+                attempt < 100 &&
+                readdirSync(join(stagingDirectory, "system-updates")).length >
+                    0;
+                attempt++
+            ) {
+                await Bun.sleep(1);
+            }
+
             expect(appliedBytes).toEqual(update);
             expect(
                 readdirSync(join(stagingDirectory, "system-updates")),

@@ -125,13 +125,81 @@ export const systemUrlUpdateMutationOptions = () =>
 export const systemUploadUpdateMutationOptions = () =>
     mutationOptions({
         mutationFn: async (file: File) => {
-            const response = await fetch(`${apiUrl}/system/update/upload`, {
-                method: "POST",
-                credentials: "include",
-                headers: { "content-type": "application/octet-stream" },
-                body: file,
-            });
-            if (!response.ok) throw new Error("Update upload failed");
+            const request = async (path: string, init: RequestInit) => {
+                const response = await fetch(
+                    `${apiUrl}/system/update/upload${path}`,
+                    { ...init, credentials: "include" },
+                );
+                if (response.ok) return response;
+
+                const payload: unknown = await response
+                    .json()
+                    .catch(() => undefined);
+                const message =
+                    payload &&
+                    typeof payload === "object" &&
+                    "error" in payload &&
+                    payload.error &&
+                    typeof payload.error === "object" &&
+                    "message" in payload.error &&
+                    typeof payload.error.message === "string"
+                        ? payload.error.message
+                        : `Update upload failed (HTTP ${response.status})`;
+                throw new Error(message);
+            };
+
+            let uploadId: string | undefined;
+            try {
+                const startResponse = await request("/start", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ size: file.size }),
+                });
+                const upload: unknown = await startResponse.json();
+                if (
+                    !upload ||
+                    typeof upload !== "object" ||
+                    !("uploadId" in upload) ||
+                    typeof upload.uploadId !== "string" ||
+                    !("chunkSize" in upload) ||
+                    typeof upload.chunkSize !== "number" ||
+                    !Number.isSafeInteger(upload.chunkSize) ||
+                    upload.chunkSize <= 0
+                ) {
+                    throw new Error(
+                        "Update server returned an invalid response",
+                    );
+                }
+                uploadId = upload.uploadId;
+
+                for (
+                    let start = 0;
+                    start < file.size;
+                    start += upload.chunkSize
+                ) {
+                    const end = Math.min(start + upload.chunkSize, file.size);
+                    await request(`/${encodeURIComponent(uploadId)}`, {
+                        method: "PUT",
+                        headers: {
+                            "content-type": "application/octet-stream",
+                            "content-range": `bytes ${start}-${end - 1}/${file.size}`,
+                        },
+                        body: file.slice(start, end),
+                    });
+                }
+
+                await request(`/${encodeURIComponent(uploadId)}/install`, {
+                    method: "POST",
+                });
+            } catch (error) {
+                if (uploadId) {
+                    await fetch(
+                        `${apiUrl}/system/update/upload/${encodeURIComponent(uploadId)}`,
+                        { method: "DELETE", credentials: "include" },
+                    ).catch(() => undefined);
+                }
+                throw error;
+            }
         },
     });
 
