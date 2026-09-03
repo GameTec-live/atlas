@@ -21,7 +21,6 @@ const adminSession = {
 type RecordedRequest = { path: string; init?: RequestInit };
 const managementRequests: RecordedRequest[] = [];
 let appliedBytes: Uint8Array | undefined;
-let stagedPathExisted = false;
 let managementResponder:
     | ((path: string, init?: RequestInit) => Response)
     | undefined;
@@ -38,7 +37,6 @@ const managementRequestMock = mock(async (path: string, init?: RequestInit) => {
 });
 const applyUpdateMock = mock(async (path: string) => {
     const response = applyUpdateResponder?.(path);
-    stagedPathExisted = existsSync(path);
     appliedBytes = await Bun.file(path).bytes();
     return (
         (await response) ??
@@ -86,7 +84,6 @@ beforeEach(() => {
     resetAuthMocks();
     managementRequests.length = 0;
     appliedBytes = undefined;
-    stagedPathExisted = false;
     managementResponder = undefined;
     applyUpdateResponder = undefined;
     managementRequestMock.mockClear();
@@ -277,7 +274,7 @@ describe("firmware updates", () => {
         }
     });
 
-    it("rejects an update already pending in management before staging", async () => {
+    it("rejects an upload when an update is already pending", async () => {
         const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
         try {
             envMock.DATA_STORAGE_PATH = stagingDirectory;
@@ -293,25 +290,9 @@ describe("firmware updates", () => {
                           monitor: { phase: "monitoring" },
                       })
                     : Response.json({ status: "ok" });
-            let bodyAcquired = false;
-            const uploadRequest = new Request(
-                "http://localhost/system/update/upload",
-                {
-                    method: "POST",
-                    headers: {
-                        authorization: "Bearer test-token",
-                        "content-type": "application/octet-stream",
-                    },
-                },
-            );
-            Object.defineProperty(uploadRequest, "body", {
-                get() {
-                    bodyAcquired = true;
-                    throw new Error("pending update acquired the request body");
-                },
+            const response = await jsonRequest(app, "/update/upload", "POST", {
+                size: 3,
             });
-
-            const response = await app.handle(uploadRequest);
 
             expect(response.status).toBe(409);
             expect(await response.json()).toEqual({
@@ -320,7 +301,6 @@ describe("firmware updates", () => {
                     message: "An Atlas OS update is already pending",
                 },
             });
-            expect(bodyAcquired).toBe(false);
             expect(applyUpdateMock).not.toHaveBeenCalled();
             expect(existsSync(join(stagingDirectory, "system-updates"))).toBe(
                 false,
@@ -330,54 +310,31 @@ describe("firmware updates", () => {
         }
     });
 
-    it("reserves staging so concurrent uploads cannot both consume disk", async () => {
+    it("allows only one upload at a time", async () => {
         const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
         try {
             envMock.DATA_STORAGE_PATH = stagingDirectory;
             getSessionMock.mockResolvedValue(adminSession);
             const upload = () =>
-                request(app, "/update/upload", {
-                    method: "POST",
-                    headers: { "content-type": "application/octet-stream" },
-                    body: new Uint8Array([1, 2, 3]),
-                });
+                jsonRequest(app, "/update/upload", "POST", { size: 3 });
 
             const responses = await Promise.all([upload(), upload()]);
 
             expect(responses.map(({ status }) => status).sort()).toEqual([
-                202, 409,
+                201, 409,
             ]);
-            expect(applyUpdateMock).toHaveBeenCalledTimes(1);
-        } finally {
-            rmSync(stagingDirectory, { recursive: true, force: true });
-        }
-    });
-
-    it("streams raw uploads through a temporary disk file and removes it", async () => {
-        const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
-        try {
-            envMock.DATA_STORAGE_PATH = stagingDirectory;
-            getSessionMock.mockResolvedValue(adminSession);
-            const update = new Uint8Array([0, 1, 2, 3, 255]);
-
-            const response = await request(app, "/update/upload", {
-                method: "POST",
-                headers: { "content-type": "application/octet-stream" },
-                body: new ReadableStream({
-                    start(controller) {
-                        controller.enqueue(update.slice(0, 2));
-                        controller.enqueue(update.slice(2));
-                        controller.close();
-                    },
-                }),
-            });
-
-            expect(response.status).toBe(202);
-            expect(stagedPathExisted).toBe(true);
-            expect(appliedBytes).toEqual(update);
+            const accepted = responses.find(({ status }) => status === 201);
+            if (!accepted) throw new Error("Expected one accepted upload");
+            const { uploadId } = (await accepted.json()) as {
+                uploadId: string;
+            };
             expect(
-                readdirSync(join(stagingDirectory, "system-updates")),
-            ).toEqual([]);
+                (
+                    await request(app, `/update/upload/${uploadId}`, {
+                        method: "DELETE",
+                    })
+                ).status,
+            ).toBe(200);
         } finally {
             rmSync(stagingDirectory, { recursive: true, force: true });
         }
@@ -392,7 +349,7 @@ describe("firmware updates", () => {
 
             const startResponse = await jsonRequest(
                 app,
-                "/update/upload/start",
+                "/update/upload",
                 "POST",
                 { size: update.byteLength },
             );
@@ -408,7 +365,7 @@ describe("firmware updates", () => {
                     method: "PUT",
                     headers: {
                         "content-type": "application/octet-stream",
-                        "content-range": `bytes ${start}-${end - 1}/${update.byteLength}`,
+                        "upload-offset": String(start),
                     },
                     body: update.slice(start, end),
                 });
@@ -417,16 +374,8 @@ describe("firmware updates", () => {
             expect(firstChunk.status).toBe(200);
             expect(await firstChunk.json()).toEqual({ received: 2 });
             const secondChunk = await uploadChunk(2, update.byteLength);
-            expect(secondChunk.status).toBe(200);
-            expect(await secondChunk.json()).toEqual({ received: 5 });
-
-            const installResponse = await request(
-                app,
-                `/update/upload/${started.uploadId}/install`,
-                { method: "POST" },
-            );
-            expect(installResponse.status).toBe(202);
-            expect(await installResponse.json()).toEqual({
+            expect(secondChunk.status).toBe(202);
+            expect(await secondChunk.json()).toEqual({
                 status: "rebooting_into_candidate",
             });
             expect(applyUpdateMock).toHaveBeenCalledTimes(1);
@@ -458,7 +407,7 @@ describe("firmware updates", () => {
 
             const startResponse = await jsonRequest(
                 app,
-                "/update/upload/start",
+                "/update/upload",
                 "POST",
                 { size: 1 },
             );
@@ -472,21 +421,13 @@ describe("firmware updates", () => {
                     method: "PUT",
                     headers: {
                         "content-type": "application/octet-stream",
-                        "content-range": "bytes 0-0/1",
+                        "upload-offset": "0",
                     },
                     body: new Uint8Array([1]),
                 },
             );
-            expect(chunkResponse.status).toBe(200);
-
-            const installResponse = await request(
-                app,
-                `/update/upload/${uploadId}/install`,
-                { method: "POST" },
-            );
-
-            expect(installResponse.status).toBe(503);
-            expect(await installResponse.json()).toEqual({
+            expect(chunkResponse.status).toBe(503);
+            expect(await chunkResponse.json()).toEqual({
                 error: {
                     code: "management_unavailable",
                     message: "Atlas OS management is unavailable",

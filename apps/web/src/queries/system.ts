@@ -1,6 +1,7 @@
 import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import { api, unwrapEden } from "@/lib/api-client";
 import { apiUrl } from "@/lib/api-url";
+import { getErrorMessage } from "@/lib/error";
 import type { SystemIpMethod } from "@/lib/system";
 
 const keys = {
@@ -125,10 +126,23 @@ export const systemUrlUpdateMutationOptions = () =>
 export const systemUploadUpdateMutationOptions = () =>
     mutationOptions({
         mutationFn: async (file: File) => {
-            const request = async (path: string, init: RequestInit) => {
+            const upload = await unwrapEden(
+                api.system.update.upload.post({ size: file.size }),
+            );
+            if (!upload) throw new Error("Could not start update upload");
+            const uploadId = upload.uploadId;
+            const uploadChunk = async (start: number, end: number) => {
                 const response = await fetch(
-                    `${apiUrl}/system/update/upload${path}`,
-                    { ...init, credentials: "include" },
+                    `${apiUrl}/system/update/upload/${encodeURIComponent(uploadId)}`,
+                    {
+                        method: "PUT",
+                        credentials: "include",
+                        headers: {
+                            "content-type": "application/octet-stream",
+                            "upload-offset": String(start),
+                        },
+                        body: file.slice(start, end),
+                    },
                 );
                 if (response.ok) return response;
 
@@ -136,68 +150,27 @@ export const systemUploadUpdateMutationOptions = () =>
                     .json()
                     .catch(() => undefined);
                 const message =
-                    payload &&
-                    typeof payload === "object" &&
-                    "error" in payload &&
-                    payload.error &&
-                    typeof payload.error === "object" &&
-                    "message" in payload.error &&
-                    typeof payload.error.message === "string"
-                        ? payload.error.message
-                        : `Update upload failed (HTTP ${response.status})`;
-                throw new Error(message);
+                    payload && typeof payload === "object" && "error" in payload
+                        ? getErrorMessage(payload.error)
+                        : undefined;
+                throw new Error(
+                    message ?? `Update upload failed (HTTP ${response.status})`,
+                );
             };
 
-            let uploadId: string | undefined;
             try {
-                const startResponse = await request("/start", {
-                    method: "POST",
-                    headers: { "content-type": "application/json" },
-                    body: JSON.stringify({ size: file.size }),
-                });
-                const upload: unknown = await startResponse.json();
-                if (
-                    !upload ||
-                    typeof upload !== "object" ||
-                    !("uploadId" in upload) ||
-                    typeof upload.uploadId !== "string" ||
-                    !("chunkSize" in upload) ||
-                    typeof upload.chunkSize !== "number" ||
-                    !Number.isSafeInteger(upload.chunkSize) ||
-                    upload.chunkSize <= 0
-                ) {
-                    throw new Error(
-                        "Update server returned an invalid response",
-                    );
-                }
-                uploadId = upload.uploadId;
-
                 for (
                     let start = 0;
                     start < file.size;
                     start += upload.chunkSize
                 ) {
                     const end = Math.min(start + upload.chunkSize, file.size);
-                    await request(`/${encodeURIComponent(uploadId)}`, {
-                        method: "PUT",
-                        headers: {
-                            "content-type": "application/octet-stream",
-                            "content-range": `bytes ${start}-${end - 1}/${file.size}`,
-                        },
-                        body: file.slice(start, end),
-                    });
+                    await uploadChunk(start, end);
                 }
-
-                await request(`/${encodeURIComponent(uploadId)}/install`, {
-                    method: "POST",
-                });
             } catch (error) {
-                if (uploadId) {
-                    await fetch(
-                        `${apiUrl}/system/update/upload/${encodeURIComponent(uploadId)}`,
-                        { method: "DELETE", credentials: "include" },
-                    ).catch(() => undefined);
-                }
+                await unwrapEden(
+                    api.system.update.upload({ uploadId }).delete(),
+                ).catch(() => undefined);
                 throw error;
             }
         },

@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readdir, unlink } from "node:fs/promises";
+import {
+    appendFile,
+    mkdir,
+    open,
+    readdir,
+    stat,
+    unlink,
+} from "node:fs/promises";
 import { resolve } from "node:path";
 import { env } from "@/env";
 import { applyUpdate, request } from "./management";
@@ -33,6 +40,7 @@ const stagingDirectory = () =>
 
 /** Removes uploads that cannot be resumed after an API process restart. */
 export const reconcileStagedUploads = async () => {
+    const startedAt = Date.now();
     const directory = stagingDirectory();
     let entries: string[];
     try {
@@ -58,6 +66,7 @@ export const reconcileStagedUploads = async () => {
             .map(async (name) => {
                 const path = resolve(directory, name);
                 try {
+                    if ((await stat(path)).mtimeMs >= startedAt) return;
                     await unlink(path);
                 } catch (error) {
                     console.error(
@@ -69,11 +78,7 @@ export const reconcileStagedUploads = async () => {
     );
 };
 
-const releaseUpdate = () => {
-    updateReserved = false;
-};
-
-const reserveUpdate = async (): Promise<Response | undefined> => {
+const reserveUpdate = async () => {
     if (updateReserved) {
         fail(
             409,
@@ -85,10 +90,7 @@ const reserveUpdate = async (): Promise<Response | undefined> => {
 
     try {
         const management = await request("/api/v1/update");
-        if (!management.ok) {
-            releaseUpdate();
-            return management;
-        }
+        if (!management.ok) throw management;
 
         const updateStatus = (await management.json()) as {
             update?: { pending?: string };
@@ -100,29 +102,26 @@ const reserveUpdate = async (): Promise<Response | undefined> => {
                 "An Atlas OS update is already pending",
             );
         }
-        return undefined;
     } catch (error) {
-        releaseUpdate();
+        updateReserved = false;
         throw error;
     }
 };
 
 const discardUpload = async (upload: StagedUpload) => {
-    if (stagedUpload?.id === upload.id) stagedUpload = undefined;
+    if (stagedUpload !== upload) return;
+    stagedUpload = undefined;
     if (upload.expiration) clearTimeout(upload.expiration);
-    releaseUpdate();
+    updateReserved = false;
     await unlink(upload.path).catch(() => undefined);
 };
 
-const refreshUploadExpiration = (upload: StagedUpload) => {
+const scheduleUploadExpiration = (upload: StagedUpload) => {
     if (upload.expiration) clearTimeout(upload.expiration);
-    upload.expiration = setTimeout(() => {
-        if (upload.writing) {
-            refreshUploadExpiration(upload);
-            return;
-        }
-        void discardUpload(upload);
-    }, UPLOAD_IDLE_TIMEOUT_MS);
+    upload.expiration = setTimeout(
+        () => void discardUpload(upload),
+        UPLOAD_IDLE_TIMEOUT_MS,
+    );
 };
 
 const activeUpload = (id: string) => {
@@ -137,8 +136,7 @@ const applyStream = async (
     getStream: () => ReadableStream<Uint8Array> | null,
     declaredLength?: number,
 ) => {
-    const management = await reserveUpdate();
-    if (management) return management;
+    await reserveUpdate();
 
     try {
         if (declaredLength !== undefined && declaredLength > MAX_UPDATE_BYTES) {
@@ -184,21 +182,8 @@ const applyStream = async (
             await unlink(path).catch(() => undefined);
         }
     } finally {
-        releaseUpdate();
+        updateReserved = false;
     }
-};
-
-export const fromUpload = async (request: Request) => {
-    const contentLength = request.headers.get("content-length");
-    const declaredLength = Number(contentLength);
-    return applyStream(
-        () => request.body,
-        contentLength !== null &&
-            Number.isSafeInteger(declaredLength) &&
-            declaredLength >= 0
-            ? declaredLength
-            : undefined,
-    );
 };
 
 export const createUpload = async (size: number) => {
@@ -213,8 +198,7 @@ export const createUpload = async (size: number) => {
         );
     }
 
-    const management = await reserveUpdate();
-    if (management) return management;
+    await reserveUpdate();
 
     let path: string | undefined;
     try {
@@ -233,40 +217,17 @@ export const createUpload = async (size: number) => {
             writing: false,
         };
         stagedUpload = upload;
-        refreshUploadExpiration(upload);
+        scheduleUploadExpiration(upload);
 
         return Response.json(
             { uploadId: id, chunkSize: UPLOAD_CHUNK_BYTES },
             { status: 201 },
         );
     } catch (error) {
-        releaseUpdate();
+        updateReserved = false;
         if (path) await unlink(path).catch(() => undefined);
         throw error;
     }
-};
-
-const parseContentRange = (value: string | null) => {
-    const match = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(value ?? "");
-    if (!match) {
-        fail(
-            400,
-            "invalid_content_range",
-            "A valid Content-Range header is required",
-        );
-    }
-    const [, startValue, endValue, totalValue] = match;
-    const start = Number(startValue);
-    const end = Number(endValue);
-    const total = Number(totalValue);
-    if (
-        !Number.isSafeInteger(start) ||
-        !Number.isSafeInteger(end) ||
-        !Number.isSafeInteger(total)
-    ) {
-        fail(400, "invalid_content_range", "Content-Range is invalid");
-    }
-    return { start, end, total };
 };
 
 export const appendUpload = async (id: string, request: Request) => {
@@ -275,115 +236,55 @@ export const appendUpload = async (id: string, request: Request) => {
         fail(409, "upload_busy", "A firmware chunk is already being written");
     }
 
-    const { start, end, total } = parseContentRange(
-        request.headers.get("content-range"),
-    );
-    const chunkSize = end - start + 1;
+    const offsetHeader = request.headers.get("upload-offset");
+    const offset = Number(offsetHeader);
     if (
-        total !== upload.size ||
-        start !== upload.received ||
-        end < start ||
-        end >= total ||
-        chunkSize > UPLOAD_CHUNK_BYTES
+        offsetHeader === null ||
+        !Number.isSafeInteger(offset) ||
+        offset !== upload.received
     ) {
         fail(
             409,
-            "unexpected_upload_range",
+            "unexpected_upload_offset",
             `Expected the next chunk to start at byte ${upload.received}`,
         );
     }
 
-    const contentLengthHeader = request.headers.get("content-length");
-    const contentLength = Number(contentLengthHeader);
-    if (
-        contentLengthHeader !== null &&
-        Number.isSafeInteger(contentLength) &&
-        contentLength !== chunkSize
-    ) {
-        fail(
-            400,
-            "invalid_chunk_size",
-            "Chunk length does not match Content-Range",
-        );
-    }
-
-    const stream = request.body;
-    if (!stream) fail(400, "empty_update_chunk", "Update chunk is empty");
-
     upload.writing = true;
-    refreshUploadExpiration(upload);
-    const reader = stream.getReader();
-    let written = 0;
-    let file: Awaited<ReturnType<typeof open>> | undefined;
-
+    if (upload.expiration) clearTimeout(upload.expiration);
     try {
-        file = await open(upload.path, "r+");
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const valueStart = written;
-            written += value.byteLength;
-            if (written > chunkSize) {
-                await reader.cancel();
-                fail(
-                    400,
-                    "invalid_chunk_size",
-                    "Chunk length exceeds Content-Range",
-                );
-            }
-            let valueOffset = 0;
-            while (valueOffset < value.byteLength) {
-                const { bytesWritten } = await file.write(
-                    value,
-                    valueOffset,
-                    value.byteLength - valueOffset,
-                    start + valueStart + valueOffset,
-                );
-                if (bytesWritten === 0) {
-                    throw new Error("Could not write firmware upload chunk");
-                }
-                valueOffset += bytesWritten;
-            }
+        const chunk = new Uint8Array(await request.arrayBuffer());
+        if (chunk.byteLength === 0) {
+            fail(400, "empty_update_chunk", "Update chunk is empty");
         }
-        if (written !== chunkSize) {
+        if (
+            chunk.byteLength > UPLOAD_CHUNK_BYTES ||
+            upload.received + chunk.byteLength > upload.size
+        ) {
             fail(
-                400,
+                413,
                 "invalid_chunk_size",
-                "Chunk length does not match Content-Range",
+                `Update chunks cannot exceed ${UPLOAD_CHUNK_BYTES} bytes`,
             );
         }
 
-        await file.sync();
-        upload.received += written;
-        return Response.json({ received: upload.received });
+        await appendFile(upload.path, chunk);
+        upload.received += chunk.byteLength;
+        if (upload.received < upload.size) {
+            return Response.json({ received: upload.received });
+        }
+
+        stagedUpload = undefined;
+        if (upload.expiration) clearTimeout(upload.expiration);
+        try {
+            return await applyUpdate(upload.path);
+        } finally {
+            await unlink(upload.path).catch(() => undefined);
+            updateReserved = false;
+        }
     } finally {
-        await file?.close().catch(() => undefined);
         upload.writing = false;
-        refreshUploadExpiration(upload);
-    }
-};
-
-export const installUpload = async (id: string) => {
-    const upload = activeUpload(id);
-    if (upload.writing) {
-        fail(409, "upload_busy", "A firmware chunk is still being written");
-    }
-    if (upload.received !== upload.size) {
-        fail(
-            409,
-            "upload_incomplete",
-            `Firmware upload is incomplete (${upload.received}/${upload.size} bytes)`,
-        );
-    }
-
-    stagedUpload = undefined;
-    if (upload.expiration) clearTimeout(upload.expiration);
-    try {
-        return await applyUpdate(upload.path);
-    } finally {
-        await unlink(upload.path).catch(() => undefined);
-        releaseUpdate();
+        if (stagedUpload === upload) scheduleUploadExpiration(upload);
     }
 };
 

@@ -84,42 +84,10 @@ export const system = new Elysia({
     })
     .post(
         "/update/upload",
-        ({ request, status, set }) =>
-            forwardJSON(
-                firmwareResponse(() => firmware.fromUpload(request)),
-                { status, set },
-            ),
-        {
-            admin: true,
-            parse: "none",
-            response: SystemResponse.updateUpload,
-            detail: {
-                summary: "Install an uploaded Atlas OS update",
-                description:
-                    "Streams the raw update bundle to temporary disk storage.",
-                requestBody: {
-                    required: true,
-                    content: {
-                        "application/octet-stream": {
-                            schema: { type: "string", format: "binary" },
-                        },
-                        "application/zstd": {
-                            schema: { type: "string", format: "binary" },
-                        },
-                    },
-                },
-            },
-        },
-    )
-    .post(
-        "/update/upload/start",
         ({ body, status, set }) =>
             forwardJSON(
                 firmwareResponse(() => firmware.createUpload(body.size)),
-                {
-                    status,
-                    set,
-                },
+                { status, set },
             ),
         {
             admin: true,
@@ -146,7 +114,7 @@ export const system = new Elysia({
             detail: {
                 summary: "Upload an Atlas OS update chunk",
                 description:
-                    "Appends a bounded raw chunk using its Content-Range header.",
+                    "Appends a bounded chunk and installs the completed upload.",
                 requestBody: {
                     required: true,
                     content: {
@@ -155,24 +123,6 @@ export const system = new Elysia({
                         },
                     },
                 },
-            },
-        },
-    )
-    .post(
-        "/update/upload/:uploadId/install",
-        ({ params, status, set }) =>
-            forwardJSON(
-                firmwareResponse(() => firmware.installUpload(params.uploadId)),
-                { status, set },
-            ),
-        {
-            admin: true,
-            params: SystemModel.uploadId,
-            response: SystemResponse.uploadInstall,
-            detail: {
-                summary: "Install an uploaded Atlas OS update",
-                description:
-                    "Forwards a completed upload and returns the management service response.",
             },
         },
     )

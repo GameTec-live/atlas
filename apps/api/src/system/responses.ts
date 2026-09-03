@@ -25,15 +25,6 @@ export const SystemResponse = {
         200: SystemModel.updateStatus,
         ...readErrors,
     },
-    updateUpload: {
-        202: SystemModel.updateAccepted,
-        400: SystemModel.error,
-        409: SystemModel.error,
-        413: SystemModel.error,
-        422: SystemModel.error,
-        500: SystemModel.error,
-        503: SystemModel.error,
-    },
     uploadStart: {
         201: SystemModel.uploadStart,
         400: SystemModel.error,
@@ -45,16 +36,11 @@ export const SystemResponse = {
     },
     uploadChunk: {
         200: SystemModel.uploadProgress,
-        400: SystemModel.error,
-        404: SystemModel.error,
-        409: SystemModel.error,
-        500: SystemModel.error,
-    },
-    uploadInstall: {
         202: SystemModel.updateAccepted,
         400: SystemModel.error,
         404: SystemModel.error,
         409: SystemModel.error,
+        413: SystemModel.error,
         422: SystemModel.error,
         500: SystemModel.error,
         503: SystemModel.error,
