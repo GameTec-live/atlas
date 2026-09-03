@@ -74,6 +74,9 @@ func (m *Manager) Connections(ctx context.Context) ([]Connection, error) {
 		if err != nil {
 			return nil, err
 		}
+		if fields[2] == "loopback" {
+			continue
+		}
 		connections = append(connections, Connection{UUID: fields[0], Name: fields[1], Type: fields[2], Device: fields[3]})
 	}
 	return connections, nil
@@ -89,6 +92,9 @@ func (m *Manager) Devices(ctx context.Context) ([]Device, error) {
 		fields, err := splitEscaped(strings.TrimSpace(line), ':', 4)
 		if err != nil {
 			return nil, err
+		}
+		if fields[1] == "loopback" {
+			continue
 		}
 		devices = append(devices, Device{Interface: fields[0], Type: fields[1], State: fields[2], Connection: fields[3]})
 	}

@@ -22,8 +22,8 @@ func (r *fakeRunner) Run(_ context.Context, input, name string, args ...string) 
 	return r.output, nil
 }
 
-func TestConnectionsParsesEscapedNmcliFields(t *testing.T) {
-	runner := &fakeRunner{output: "uuid-1:Office\\: primary:802-11-wireless:wlan0\n"}
+func TestConnectionsParsesEscapedNmcliFieldsAndExcludesLoopback(t *testing.T) {
+	runner := &fakeRunner{output: "uuid-lo:lo:loopback:lo\nuuid-1:Office\\: primary:802-11-wireless:wlan0\n"}
 	connections, err := New(runner).Connections(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -33,8 +33,8 @@ func TestConnectionsParsesEscapedNmcliFields(t *testing.T) {
 	}
 }
 
-func TestDevicesIncludesDisconnectedInterfaces(t *testing.T) {
-	runner := &fakeRunner{output: "eth0:ethernet:connected:Wired connection 1\nwlan0:wifi:disconnected:\n"}
+func TestDevicesIncludesDisconnectedInterfacesAndExcludesLoopback(t *testing.T) {
+	runner := &fakeRunner{output: "lo:loopback:connected (externally):lo\neth0:ethernet:connected:Wired connection 1\nwlan0:wifi:disconnected:\n"}
 	devices, err := New(runner).Devices(context.Background())
 	if err != nil {
 		t.Fatal(err)
