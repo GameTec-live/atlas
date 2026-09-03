@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import {
     existsSync,
     mkdirSync,
@@ -241,8 +241,11 @@ describe("system management routes", () => {
 });
 
 describe("firmware updates", () => {
-    it("removes uploads orphaned by an API process restart", async () => {
+    it("reconciles orphaned uploads as best-effort cleanup", async () => {
         const storageDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
+        const consoleError = spyOn(console, "error").mockImplementation(
+            () => undefined,
+        );
         try {
             envMock.DATA_STORAGE_PATH = storageDirectory;
             const updateDirectory = join(storageDirectory, "system-updates");
@@ -254,12 +257,22 @@ describe("firmware updates", () => {
                 ),
                 "stale",
             );
+            const undeletableName =
+                "update-11111111-1111-4111-8111-111111111111.tar.zst";
+            mkdirSync(join(updateDirectory, undeletableName));
             writeFileSync(join(updateDirectory, "keep.tar.zst"), "keep");
 
             await reconcileStagedUploads();
 
-            expect(readdirSync(updateDirectory)).toEqual(["keep.tar.zst"]);
+            expect(readdirSync(updateDirectory).sort()).toEqual(
+                ["keep.tar.zst", undeletableName].sort(),
+            );
+            expect(consoleError).toHaveBeenCalledTimes(1);
+            expect(String(consoleError.mock.calls[0]?.[0])).toContain(
+                undeletableName,
+            );
         } finally {
+            consoleError.mockRestore();
             rmSync(storageDirectory, { recursive: true, force: true });
         }
     });

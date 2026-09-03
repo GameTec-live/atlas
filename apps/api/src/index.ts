@@ -24,7 +24,7 @@ console.log("Applying database migrations...");
 await runMigrations();
 console.log("Database migrations complete.\n\n");
 
-await reconcileStagedUploads();
+void reconcileStagedUploads();
 
 const references =
     process.env.NODE_ENV === "production"

@@ -45,13 +45,27 @@ export const reconcileStagedUploads = async () => {
         ) {
             return;
         }
-        throw error;
+        console.error(
+            `Could not inspect staged firmware uploads in ${directory}`,
+            error,
+        );
+        return;
     }
 
     await Promise.all(
         entries
             .filter((name) => stagedUpdatePattern.test(name))
-            .map((name) => unlink(resolve(directory, name))),
+            .map(async (name) => {
+                const path = resolve(directory, name);
+                try {
+                    await unlink(path);
+                } catch (error) {
+                    console.error(
+                        `Could not remove stale firmware upload ${path}`,
+                        error,
+                    );
+                }
+            }),
     );
 };
 
