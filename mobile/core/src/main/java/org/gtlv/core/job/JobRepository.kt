@@ -34,6 +34,14 @@ interface JobRepository {
         driverId: String
     ): JobActionResult
 
+    suspend fun assignJob(
+        jobId: String,
+        driverId: String,
+        destination: JobCoordinates?,
+        dueDate: String,
+        note: String?
+    ): JobActionResult = assignJob(jobId, driverId)
+
     suspend fun startJob(
         jobId: String
     ): JobActionResult

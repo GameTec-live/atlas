@@ -194,6 +194,7 @@ class JobRepositoryUnassignedTest {
                           {
                             "driverId": "driver-1",
                             "driverName": "Hermann",
+                            "estimatedPickupAt": "2026-09-02T11:38:00.035Z",
                             "rankingTrace": {
                               "rank": 1,
                               "summary": "Best available driver"
@@ -219,6 +220,10 @@ class JobRepositoryUnassignedTest {
             assertEquals("driver-1", candidate.driverId)
             assertEquals("Hermann", candidate.driverName)
             assertEquals(1, candidate.rank)
+            assertEquals(
+                "2026-09-02T11:38:00.035Z",
+                candidate.estimatedPickupAt
+            )
 
             val request = server.takeRequest()
             assertEquals(
@@ -259,6 +264,41 @@ class JobRepositoryUnassignedTest {
                     "\"assignedDriverId\":\"driver-1\""
                 )
         )
+    }
+
+    @Test
+    fun assignJobWithDetails_postsCurrentJobDetails() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader(
+                    "Content-Type",
+                    "application/json"
+                )
+                .setBody("{}")
+        )
+
+        val result = repository.assignJob(
+            jobId = "job-1",
+            driverId = "driver-1",
+            destination = JobCoordinates(48.4, 14.5),
+            dueDate = "2026-09-02T12:00:00Z",
+            note = "Side entrance"
+        )
+
+        assertEquals(JobActionResult.Success, result)
+
+        val request = server.takeRequest()
+        assertEquals("/api/jobs/job-1/assign", request.path)
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals("driver-1", body.getString("assignedDriverId"))
+        assertEquals(
+            "2026-09-02T12:00:00Z",
+            body.getString("dueDate")
+        )
+        assertEquals("Side entrance", body.getString("note"))
+        assertEquals(48.4, body.getJSONArray("to").getDouble(0), 0.0)
+        assertEquals(14.5, body.getJSONArray("to").getDouble(1), 0.0)
     }
 
     @Test

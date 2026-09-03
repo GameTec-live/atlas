@@ -68,8 +68,8 @@ import androidx.core.graphics.createBitmap
 class MainScreen(
     carContext: CarContext,
     private val role: ShiftRole,
-    getRole: () -> ShiftRole?,
-    onRoleLost: () -> Unit,
+    private val getRole: () -> ShiftRole?,
+    private val onRoleLost: () -> Unit,
     private val jobRepository: JobRepository?,
     private val locationProvider: LocationProvider?,
     private val serverSettingsRepository: ServerSettingsRepository?,
@@ -141,6 +141,7 @@ class MainScreen(
 
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
+        mapRenderer.enterMainMapMode()
         observeMapConfiguration()
         observeLocation()
         observeCollectedJobState()
@@ -297,7 +298,7 @@ class MainScreen(
             val assignActionBuilder = Action.Builder()
                 .setTitle(carContext.getString(R.string.job_notification_assign_now))
                 .setOnClickListener {
-                    // Assignment flow will be added in a follow-up PBI.
+                    openAssignJob(notification)
                 }
 
             if (carContext.carAppApiLevel >= 4) {
@@ -1261,7 +1262,45 @@ class MainScreen(
     }
 
     private fun onNewJobClick() {
-        showToast(R.string.dispatcher_new_job_unavailable)
+        openAssignJob()
+    }
+
+    private fun openAssignJob(
+        notification: UnassignedJobNotification? = null,
+    ) {
+        if (carContext.carAppApiLevel < 7) {
+            showToast(R.string.assign_job_requires_car_api_7)
+            return
+        }
+
+        val screenManager = carContext.getCarService(
+            ScreenManager::class.java,
+        )
+        if (screenManager.screenStack.any { screen ->
+                screen is AssignJobScreen
+            }
+        ) {
+            return
+        }
+
+        screenManager.push(
+            AssignJobScreen(
+                carContext = carContext,
+                initialJobId = notification?.jobId,
+                initialFrom = notification?.from.orEmpty(),
+                initialTo = notification?.to.orEmpty(),
+                initialNote = notification?.note.orEmpty(),
+                getRole = getRole,
+                onRoleLost = onRoleLost,
+                locationProvider = locationProvider,
+                serverSettingsRepository = serverSettingsRepository,
+                geoServiceRepository = geoServiceRepository,
+                jobRepository = jobRepository,
+                getUserId = getUserId,
+                liveMapUsers = liveMapUsers,
+                mapRenderer = mapRenderer,
+            ),
+        )
     }
 
     private fun invalidateSafely() {

@@ -320,7 +320,43 @@ class JobRepositoryImpl(
 
         val result = executeAssignment(
             jobId = jobId,
-            driverId = driverId
+            driverId = driverId,
+            destination = null,
+            dueDate = null,
+            note = null,
+            includeJobDetails = false
+        )
+
+        if (result == JobActionResult.Success) {
+            _jobChanges.emit(Unit)
+        }
+
+        return result
+    }
+
+    override suspend fun assignJob(
+        jobId: String,
+        driverId: String,
+        destination: JobCoordinates?,
+        dueDate: String,
+        note: String?
+    ): JobActionResult {
+        if (
+            jobId.isBlank() ||
+            driverId.isBlank() ||
+            dueDate.isBlank() ||
+            destination?.isValid() == false
+        ) {
+            return JobActionResult.InvalidResponse
+        }
+
+        val result = executeAssignment(
+            jobId = jobId,
+            driverId = driverId,
+            destination = destination,
+            dueDate = dueDate,
+            note = note,
+            includeJobDetails = true
         )
 
         if (result == JobActionResult.Success) {
@@ -626,7 +662,11 @@ class JobRepositoryImpl(
 
     private suspend fun executeAssignment(
         jobId: String,
-        driverId: String
+        driverId: String,
+        destination: JobCoordinates?,
+        dueDate: String?,
+        note: String?,
+        includeJobDetails: Boolean
     ): JobActionResult = withContext(Dispatchers.IO) {
         val serverAddress = serverSettingsRepository
             .serverAddress
@@ -644,6 +684,15 @@ class JobRepositoryImpl(
 
         val requestBody = JSONObject()
             .put("assignedDriverId", driverId)
+            .apply {
+                destination?.let { coordinates ->
+                    put("to", coordinates.toJsonArray())
+                }
+                dueDate?.let { value -> put("dueDate", value) }
+                if (includeJobDetails) {
+                    put("note", note ?: JSONObject.NULL)
+                }
+            }
             .toString()
             .toRequestBody(
                 "application/json".toMediaType()
@@ -1038,7 +1087,9 @@ class JobRepositoryImpl(
                             ?.coerceAtLeast(1)
                             ?: index + 1,
                         summary = rankingTrace
-                            ?.nullableString("summary")
+                            ?.nullableString("summary"),
+                        estimatedPickupAt = json
+                            .nullableString("estimatedPickupAt"),
                     )
                 )
             }

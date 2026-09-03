@@ -44,6 +44,7 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.LocationComponentOptions
 import org.maplibre.android.location.modes.CameraMode
@@ -72,6 +73,7 @@ import kotlin.math.roundToInt
 internal class MapLibreSurfaceRenderer(
     private val carContext: CarContext,
     private val showDispatcherDriverList: Boolean = false,
+    private val showJobCard: Boolean = true,
 ) : SurfaceCallback {
     private val displayManager = carContext.getSystemService(
         Context.DISPLAY_SERVICE,
@@ -115,6 +117,14 @@ internal class MapLibreSurfaceRenderer(
     private var stableArea = Rect()
     private var appliedMapPadding: IntArray? = null
     private var interactionTarget = InteractionTarget.MAP
+    private var areMainMapOverlaysVisible = true
+    private var isDispatcherSidebarAvailable = true
+    private var tiltBeforeAssignJob: Double? = null
+    private var zoomBeforeAssignJob: Double? = null
+    private var routeBeforeAssignJob: List<RoutePoint>? = null
+    private var wasFollowingBeforeAssignJob: Boolean? = null
+    private var assignJobFocusPoints: List<RoutePoint> = emptyList()
+    private var assignJobFocusRequestId = 0L
     private var isDispatcherSidebarExpanded = false
     private var dispatcherSidebarAnimator: ValueAnimator? = null
     private var isJobCardExpanded = true
@@ -220,6 +230,9 @@ internal class MapLibreSurfaceRenderer(
             configureMapCompass()
             applyVisibleArea()
             styleUrl?.let(::loadStyle)
+            if (!areMainMapOverlaysVisible && assignJobFocusPoints.isNotEmpty()) {
+                focusRoutePoints(assignJobFocusPoints)
+            }
         }
     }
 
@@ -296,6 +309,7 @@ internal class MapLibreSurfaceRenderer(
 
         val target = if (
             showDispatcherDriverList &&
+            isDispatcherSidebarAvailable &&
             isDispatcherSidebarExpanded &&
             isDispatcherSidebarScrollable() &&
             x >= 0f &&
@@ -349,7 +363,10 @@ internal class MapLibreSurfaceRenderer(
     fun updateRoute(points: List<RoutePoint>) {
         routePoints = points.filter(RoutePoint::isValid)
         if (!isStyleReady) return
-        map?.style?.updateAutomotiveRoute(routePoints)
+        map?.style?.updateAutomotiveRoute(
+            points = routePoints,
+            showEndpoints = !areMainMapOverlaysVisible,
+        )
     }
 
     fun updateJobSummary(summary: String) {
@@ -422,6 +439,181 @@ internal class MapLibreSurfaceRenderer(
         changeZoom(-ZOOM_STEP)
     }
 
+    fun enterAssignJobMode() {
+        val enteringFromMainMap = areMainMapOverlaysVisible
+        if (enteringFromMainMap) {
+            tiltBeforeAssignJob = selectedFollowTilt
+            zoomBeforeAssignJob = map
+                ?.cameraPosition
+                ?.zoom
+                ?: selectedFollowZoom
+            wasFollowingBeforeAssignJob = isFollowingLocation
+            routeBeforeAssignJob = routePoints
+        }
+        setMapOverlayMode(
+            mainOverlaysVisible = false,
+            dispatcherSidebarAvailable = false,
+        )
+        if (enteringFromMainMap) {
+            updateRoute(emptyList())
+        }
+        setNorthUpOverview()
+    }
+
+    fun enterMainMapMode() {
+        assignJobFocusPoints = emptyList()
+        assignJobFocusRequestId += 1
+        setMapOverlayMode(
+            mainOverlaysVisible = true,
+            dispatcherSidebarAvailable = true,
+        )
+        val restoredTilt = tiltBeforeAssignJob
+        val restoredZoom = zoomBeforeAssignJob
+        val restoredRoute = routeBeforeAssignJob
+        val restoreFollowing = wasFollowingBeforeAssignJob == true
+        tiltBeforeAssignJob = null
+        zoomBeforeAssignJob = null
+        routeBeforeAssignJob = null
+        wasFollowingBeforeAssignJob = null
+
+        if (restoredTilt != null) {
+            selectedFollowTilt = restoredTilt
+        }
+        if (restoredZoom != null) {
+            selectedFollowZoom = restoredZoom
+        }
+        if (restoredRoute != null) {
+            updateRoute(restoredRoute)
+        }
+        if (restoreFollowing) {
+            recenter()
+        } else {
+            restoreOverviewCamera(
+                zoom = restoredZoom,
+                tilt = restoredTilt,
+            )
+        }
+    }
+
+    fun focusRoutePoints(points: List<RoutePoint>) {
+        val validPoints = points
+            .filter(RoutePoint::isValid)
+            .distinct()
+        if (validPoints.isEmpty()) return
+
+        assignJobFocusPoints = validPoints
+        assignJobFocusRequestId += 1
+        val requestId = assignJobFocusRequestId
+        setNorthUpOverview()
+        val readyMapView = mapView ?: return
+        readyMapView.post {
+            if (
+                requestId != assignJobFocusRequestId ||
+                areMainMapOverlaysVisible
+            ) {
+                return@post
+            }
+            applyRoutePointFocus(validPoints)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun applyRoutePointFocus(validPoints: List<RoutePoint>) {
+        val readyMap = map ?: return
+        runCatching {
+            readyMap.locationComponent.cameraMode = CameraMode.NONE
+        }
+        val cameraUpdate = if (validPoints.size == 1) {
+            val point = validPoints.single()
+            CameraUpdateFactory.newLatLngZoom(
+                LatLng(point.latitude, point.longitude),
+                ADDRESS_FOCUS_ZOOM,
+            )
+        } else {
+            val bounds = LatLngBounds.Builder().also { builder ->
+                validPoints.forEach { point ->
+                    builder.include(
+                        LatLng(point.latitude, point.longitude),
+                    )
+                }
+            }.build()
+            CameraUpdateFactory.newLatLngBounds(
+                bounds,
+                dp(ROUTE_OVERVIEW_PADDING_DP),
+            )
+        }
+
+        readyMap.moveCamera(cameraUpdate)
+    }
+
+    private fun restoreOverviewCamera(
+        zoom: Double?,
+        tilt: Double?,
+    ) {
+        if (zoom == null && tilt == null) return
+        val readyMap = map ?: return
+
+        readyMap.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder(readyMap.cameraPosition)
+                    .apply {
+                        zoom?.let { restoredZoom ->
+                            this.zoom(restoredZoom)
+                        }
+                        tilt?.let { restoredTilt ->
+                            this.tilt(restoredTilt)
+                        }
+                    }
+                    .build(),
+            ),
+            RECENTER_DURATION_MILLIS.toInt(),
+        )
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun setNorthUpOverview() {
+        selectedFollowTilt = 0.0
+        isNorthUp = true
+        isFollowingLocation = false
+        val readyMap = map ?: return
+
+        runCatching {
+            readyMap.locationComponent.cameraMode = CameraMode.NONE
+        }
+        readyMap.moveCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder(readyMap.cameraPosition)
+                    .bearing(NORTH_BEARING_DEGREES)
+                    .tilt(0.0)
+                    .build(),
+            ),
+        )
+        applyVisibleArea()
+    }
+
+    @SuppressLint("MissingPermission")
+    fun setTilt(tilt: Double) {
+        val targetTilt = tilt.coerceIn(
+            TILT_LEVELS.first(),
+            TILT_LEVELS.last(),
+        )
+        selectedFollowTilt = targetTilt
+        val readyMap = map ?: return
+
+        if (isFollowingLocation && isStyleReady && lastLocation != null) {
+            runCatching {
+                readyMap.locationComponent.tiltWhileTracking(
+                    targetTilt,
+                    TILT_DURATION_MILLIS,
+                )
+            }.onFailure {
+                animateTilt(readyMap, targetTilt)
+            }
+        } else {
+            animateTilt(readyMap, targetTilt)
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private fun changeZoom(change: Double) {
         val readyMap = map ?: return
@@ -456,27 +648,12 @@ internal class MapLibreSurfaceRenderer(
         }
     }
 
-    @SuppressLint("MissingPermission")
     fun cycleTilt() {
-        val readyMap = map ?: return
         val currentIndex = TILT_LEVELS.indices.minByOrNull { index ->
             abs(TILT_LEVELS[index] - selectedFollowTilt)
         } ?: 0
         val targetTilt = TILT_LEVELS[(currentIndex + 1) % TILT_LEVELS.size]
-        selectedFollowTilt = targetTilt
-
-        if (isFollowingLocation && isStyleReady && lastLocation != null) {
-            runCatching {
-                readyMap.locationComponent.tiltWhileTracking(
-                    targetTilt,
-                    TILT_DURATION_MILLIS,
-                )
-            }.onFailure {
-                animateTilt(readyMap, targetTilt)
-            }
-        } else {
-            animateTilt(readyMap, targetTilt)
-        }
+        setTilt(targetTilt)
     }
 
     private fun animateTilt(readyMap: MapLibreMap, targetTilt: Double) {
@@ -530,6 +707,59 @@ internal class MapLibreSurfaceRenderer(
         destroyDisplay()
     }
 
+    private fun setMapOverlayMode(
+        mainOverlaysVisible: Boolean,
+        dispatcherSidebarAvailable: Boolean,
+    ) {
+        areMainMapOverlaysVisible = mainOverlaysVisible
+        isDispatcherSidebarAvailable = dispatcherSidebarAvailable
+        interactionTarget = InteractionTarget.MAP
+        if (isStyleReady) {
+            map?.style?.updateAutomotiveRoute(
+                points = routePoints,
+                showEndpoints = !mainOverlaysVisible,
+            )
+        }
+
+        jobCardView?.visibility = if (mainOverlaysVisible && showJobCard) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        jobCardToggleView?.visibility = if (
+            mainOverlaysVisible && showJobCard
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        dispatcherSidebarView?.visibility = if (
+            dispatcherSidebarAvailable && isDispatcherSidebarExpanded
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        dispatcherSidebarToggleView?.visibility = if (
+            dispatcherSidebarAvailable && showDispatcherDriverList
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        updateDispatcherSidebarToggleContent()
+
+        (mapView?.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            params.leftMargin = dispatcherSidebarWidth()
+            mapView?.layoutParams = params
+        }
+
+        renderJobNotification()
+        appliedMapPadding = null
+        applyVisibleArea()
+        applyOverlayInsets()
+    }
+
     private fun loadStyle(url: String) {
         val readyMap = map ?: return
         isStyleReady = false
@@ -539,7 +769,10 @@ internal class MapLibreSurfaceRenderer(
 
             activateLocationPuck(readyMap, style)
             style.addAutomotiveRouteLayers()
-            style.updateAutomotiveRoute(routePoints)
+            style.updateAutomotiveRoute(
+                points = routePoints,
+                showEndpoints = !areMainMapOverlaysVisible,
+            )
             style.addLiveMapUserLayers()
             style.updateLiveMapUsers(liveMapUsers)
             isStyleReady = true
@@ -700,14 +933,19 @@ internal class MapLibreSurfaceRenderer(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
             ).apply {
-                if (showDispatcherDriverList) {
-                    leftMargin = dispatcherSidebarWidth()
-                }
+                leftMargin = dispatcherSidebarWidth()
             },
         )
 
         val jobCard = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            visibility = if (
+                showJobCard && areMainMapOverlaysVisible
+            ) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
             setPadding(dp(20), dp(14), dp(20), dp(14))
             background = roundedBackground(
                 color = Color.argb(230, 32, 33, 36),
@@ -763,6 +1001,13 @@ internal class MapLibreSurfaceRenderer(
         applyResponsiveJobCardLayout()
 
         val jobToggle = createJobCardToggle(context)
+        jobToggle.visibility = if (
+            showJobCard && areMainMapOverlaysVisible
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         jobCardToggleView = jobToggle
         root.addView(
             jobToggle,
@@ -775,7 +1020,10 @@ internal class MapLibreSurfaceRenderer(
 
         if (showDispatcherDriverList) {
             val sidebar = createDispatcherSidebar(context).apply {
-                visibility = if (isDispatcherSidebarExpanded) {
+                visibility = if (
+                    isDispatcherSidebarAvailable &&
+                    isDispatcherSidebarExpanded
+                ) {
                     View.VISIBLE
                 } else {
                     View.GONE
@@ -793,6 +1041,11 @@ internal class MapLibreSurfaceRenderer(
             )
 
             val toggle = createDispatcherSidebarToggle(context)
+            toggle.visibility = if (isDispatcherSidebarAvailable) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
             dispatcherSidebarToggleView = toggle
             root.addView(
                 toggle,
@@ -926,7 +1179,7 @@ internal class MapLibreSurfaceRenderer(
     private fun renderJobNotification() {
         val notification = jobNotification
         val card = jobNotificationView ?: return
-        if (notification == null) {
+        if (notification == null || !areMainMapOverlaysVisible) {
             card.visibility = View.GONE
             return
         }
@@ -1230,7 +1483,9 @@ internal class MapLibreSurfaceRenderer(
         }
 
     private fun isDispatcherSidebarToggleClick(x: Float, y: Float): Boolean {
-        if (!showDispatcherDriverList) return false
+        if (!showDispatcherDriverList || !isDispatcherSidebarAvailable) {
+            return false
+        }
 
         val toggleWidth = dp(SIDEBAR_TOGGLE_WIDTH_DP)
         val toggleLeft = if (isDispatcherSidebarExpanded) {
@@ -1252,6 +1507,7 @@ internal class MapLibreSurfaceRenderer(
     private fun setDispatcherSidebarExpanded(expanded: Boolean) {
         if (
             !showDispatcherDriverList ||
+            !isDispatcherSidebarAvailable ||
             isDispatcherSidebarExpanded == expanded ||
             dispatcherSidebarAnimator != null
         ) {
@@ -1316,6 +1572,23 @@ internal class MapLibreSurfaceRenderer(
         }
         dispatcherSidebarAnimator = animator
         animator.start()
+    }
+
+    private fun updateDispatcherSidebarToggleContent() {
+        dispatcherSidebarToggleView?.apply {
+            text = if (isDispatcherSidebarExpanded) {
+                SIDEBAR_COLLAPSE_CHEVRON
+            } else {
+                SIDEBAR_EXPAND_CHEVRON
+            }
+            contentDescription = carContext.getString(
+                if (isDispatcherSidebarExpanded) {
+                    org.gtlv.car_common.R.string.dispatcher_hide_sidebar
+                } else {
+                    org.gtlv.car_common.R.string.dispatcher_show_sidebar
+                },
+            )
+        }
     }
 
     private fun updateDispatcherSidebarAnimationFrame(
@@ -1497,7 +1770,11 @@ internal class MapLibreSurfaceRenderer(
     }
 
     private fun dispatcherSidebarWidth(): Int =
-        if (showDispatcherDriverList && isDispatcherSidebarExpanded) {
+        if (
+            showDispatcherDriverList &&
+            isDispatcherSidebarAvailable &&
+            isDispatcherSidebarExpanded
+        ) {
             expandedDispatcherSidebarWidth()
         } else {
             0
@@ -1551,7 +1828,9 @@ internal class MapLibreSurfaceRenderer(
         } else {
             maxOf(stableArea.left, sidebarWidth) + dp(OVERLAY_MARGIN_DP)
         }
-        val driverToggleClearance = if (showDispatcherDriverList) {
+        val driverToggleClearance = if (
+            showDispatcherDriverList && isDispatcherSidebarAvailable
+        ) {
             sidebarWidth +
                 dp(SIDEBAR_TOGGLE_WIDTH_DP + JOB_CARD_DRIVER_TOGGLE_GAP_DP)
         } else {
@@ -1756,6 +2035,7 @@ internal class MapLibreSurfaceRenderer(
         const val INITIAL_LONGITUDE = 14.580
         const val INITIAL_ZOOM = 12.5
         const val FOLLOW_ZOOM = 15.5
+        const val ADDRESS_FOCUS_ZOOM = 16.0
         const val NORTH_BEARING_DEGREES = 0.0
         const val COMPASS_MARGIN_DP = 16
         const val COMPASS_RESET_DURATION_MILLIS = 300
@@ -1764,6 +2044,7 @@ internal class MapLibreSurfaceRenderer(
         const val ZOOM_STEP = 1.0
         const val ZOOM_COMPARISON_TOLERANCE = 0.01
         const val ZOOM_DURATION_MILLIS = 300
+        const val ROUTE_OVERVIEW_PADDING_DP = 72
         const val FOLLOW_TILT = 45.0
         const val TILT_COMPARISON_TOLERANCE = 0.5
         const val TILT_DURATION_MILLIS = 300L
@@ -1785,6 +2066,14 @@ private fun Style.addAutomotiveRouteLayers() {
         addSource(
             GeoJsonSource(
                 AUTOMOTIVE_ROUTE_SOURCE_ID,
+                emptyAutomotiveRouteFeatures(),
+            ),
+        )
+    }
+    if (getSource(AUTOMOTIVE_ORIGIN_SOURCE_ID) == null) {
+        addSource(
+            GeoJsonSource(
+                AUTOMOTIVE_ORIGIN_SOURCE_ID,
                 emptyAutomotiveRouteFeatures(),
             ),
         )
@@ -1835,6 +2124,20 @@ private fun Style.addAutomotiveRouteLayers() {
         )
     }
 
+    if (getLayer(AUTOMOTIVE_ORIGIN_LAYER_ID) == null) {
+        addLayer(
+            CircleLayer(
+                AUTOMOTIVE_ORIGIN_LAYER_ID,
+                AUTOMOTIVE_ORIGIN_SOURCE_ID,
+            ).withProperties(
+                PropertyFactory.circleRadius(12f),
+                PropertyFactory.circleColor(Color.rgb(37, 99, 235)),
+                PropertyFactory.circleStrokeColor(Color.WHITE),
+                PropertyFactory.circleStrokeWidth(3f),
+            ),
+        )
+    }
+
     if (getLayer(AUTOMOTIVE_DESTINATION_LAYER_ID) == null) {
         addLayer(
             CircleLayer(
@@ -1842,7 +2145,7 @@ private fun Style.addAutomotiveRouteLayers() {
                 AUTOMOTIVE_DESTINATION_SOURCE_ID,
             ).withProperties(
                 PropertyFactory.circleRadius(10f),
-                PropertyFactory.circleColor(Color.rgb(37, 99, 235)),
+                PropertyFactory.circleColor(Color.rgb(16, 185, 129)),
                 PropertyFactory.circleStrokeColor(Color.WHITE),
                 PropertyFactory.circleStrokeWidth(3f),
             ),
@@ -1850,7 +2153,10 @@ private fun Style.addAutomotiveRouteLayers() {
     }
 }
 
-private fun Style.updateAutomotiveRoute(points: List<RoutePoint>) {
+private fun Style.updateAutomotiveRoute(
+    points: List<RoutePoint>,
+    showEndpoints: Boolean,
+) {
     val routeFeatures = if (points.size >= 2) {
         FeatureCollection.fromFeature(
             Feature.fromGeometry(
@@ -1867,8 +2173,20 @@ private fun Style.updateAutomotiveRoute(points: List<RoutePoint>) {
     getSourceAs<GeoJsonSource>(AUTOMOTIVE_ROUTE_SOURCE_ID)
         ?.setGeoJson(routeFeatures)
 
+    val originFeatures = points.firstOrNull()
+        ?.takeIf { showEndpoints }
+        ?.let {
+            FeatureCollection.fromFeature(
+                Feature.fromGeometry(
+                    Point.fromLngLat(it.longitude, it.latitude),
+                ),
+            )
+        } ?: emptyAutomotiveRouteFeatures()
+    getSourceAs<GeoJsonSource>(AUTOMOTIVE_ORIGIN_SOURCE_ID)
+        ?.setGeoJson(originFeatures)
+
     val destinationFeatures = points.lastOrNull()
-        ?.takeIf { points.size >= 2 }
+        ?.takeIf { showEndpoints && points.size >= 2 }
         ?.let {
             FeatureCollection.fromFeature(
                 Feature.fromGeometry(
@@ -1889,6 +2207,10 @@ private const val AUTOMOTIVE_ROUTE_CASING_LAYER_ID =
     "atlas-automotive-route-casing-layer"
 private const val AUTOMOTIVE_ROUTE_LAYER_ID =
     "atlas-automotive-route-layer"
+private const val AUTOMOTIVE_ORIGIN_SOURCE_ID =
+    "atlas-automotive-origin-source"
+private const val AUTOMOTIVE_ORIGIN_LAYER_ID =
+    "atlas-automotive-origin-layer"
 private const val AUTOMOTIVE_DESTINATION_SOURCE_ID =
     "atlas-automotive-destination-source"
 private const val AUTOMOTIVE_DESTINATION_LAYER_ID =
