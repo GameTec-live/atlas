@@ -480,5 +480,6 @@
     "setup_finish": "Finish setup",
     "setup_step_progress": "Step {current} of {total}",
     "setup_resume_title": "Sign in to continue",
-    "setup_resume_description": "The administrator account already exists. Sign in with it to finish this setup."
+    "setup_resume_description": "The administrator account already exists. Sign in with it to finish this setup.",
+    "spicy_fresh_vulture_learn": "Default username and password: {username}"
 }

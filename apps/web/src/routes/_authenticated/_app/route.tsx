@@ -35,6 +35,39 @@ import {
 } from "@/components/ui/navigation-menu";
 import { m } from "@/paraglide/messages";
 
+const navigation = [
+    { label: m.plain_topical_ant_compose, icon: HouseIcon, to: "/" },
+    { label: m.simple_awful_coyote_quiz, icon: MapIcon, to: "/realtime" },
+    {
+        label: m.keen_plane_bobcat_value,
+        icon: BriefcaseBusinessIcon,
+        to: "/jobs",
+    },
+    { label: m.cool_only_manatee_pout, icon: TruckIcon, to: "/fleet" },
+    { label: m.logbook_title, icon: BookOpenIcon, to: "/logbook" },
+    {
+        label: m.factual_happy_falcon_arise,
+        children: [
+            {
+                label: m.long_topical_wolf_embrace,
+                icon: Link2Icon,
+                to: "/settings/shortnames",
+            },
+            {
+                label: m.noisy_topical_camel_bloom,
+                icon: Settings2Icon,
+                to: "/settings",
+            },
+        ],
+    },
+] as const;
+
+type NavigationEntry = (typeof navigation)[number];
+type NavigationGroup = Extract<NavigationEntry, { children: unknown }>;
+type NavigationLinkItem =
+    | Extract<NavigationEntry, { to: string }>
+    | NavigationGroup["children"][number];
+
 export const Route = createFileRoute("/_authenticated/_app")({
     component: RouteComponent,
 });
@@ -49,60 +82,47 @@ function RouteComponent() {
                     </Link>
                     <NavigationMenu className="hidden md:flex">
                         <NavigationMenuList>
-                            <NavigationMenuItem>
-                                <NavigationMenuLink render={<Link to="/" />}>
-                                    {m.plain_topical_ant_compose()}
-                                </NavigationMenuLink>
-                            </NavigationMenuItem>
-                            <NavigationMenuItem>
-                                <NavigationMenuLink
-                                    render={<Link to="/realtime" />}
+                            {navigation.map((item) => (
+                                <NavigationMenuItem
+                                    key={"to" in item ? item.to : "settings"}
                                 >
-                                    {m.simple_awful_coyote_quiz()}
-                                </NavigationMenuLink>
-                            </NavigationMenuItem>
-                            <NavigationMenuItem>
-                                <NavigationMenuLink
-                                    render={<Link to="/jobs" />}
-                                >
-                                    {m.keen_plane_bobcat_value()}
-                                </NavigationMenuLink>
-                            </NavigationMenuItem>
-                            <NavigationMenuItem>
-                                <NavigationMenuLink
-                                    render={<Link to="/fleet" />}
-                                >
-                                    {m.cool_only_manatee_pout()}
-                                </NavigationMenuLink>
-                            </NavigationMenuItem>
-                            <NavigationMenuItem>
-                                <NavigationMenuLink
-                                    render={<Link to="/logbook" />}
-                                >
-                                    {m.logbook_title()}
-                                </NavigationMenuLink>
-                            </NavigationMenuItem>
-                            <NavigationMenuItem>
-                                <NavigationMenuTrigger>
-                                    {m.factual_happy_falcon_arise()}
-                                </NavigationMenuTrigger>
-                                <NavigationMenuContent>
-                                    <NavigationMenuLink
-                                        render={
-                                            <Link to="/settings/shortnames" />
-                                        }
-                                    >
-                                        <Link2Icon />
-                                        {m.long_topical_wolf_embrace()}
-                                    </NavigationMenuLink>
-                                    <NavigationMenuLink
-                                        render={<Link to="/settings" />}
-                                    >
-                                        <Settings2Icon />
-                                        {m.noisy_topical_camel_bloom()}
-                                    </NavigationMenuLink>
-                                </NavigationMenuContent>
-                            </NavigationMenuItem>
+                                    {"to" in item ? (
+                                        <NavigationMenuLink
+                                            render={<Link to={item.to} />}
+                                        >
+                                            <item.icon />
+                                            {item.label()}
+                                        </NavigationMenuLink>
+                                    ) : (
+                                        <>
+                                            <NavigationMenuTrigger>
+                                                {item.label()}
+                                            </NavigationMenuTrigger>
+                                            <NavigationMenuContent>
+                                                {item.children.map((child) => {
+                                                    const Icon = child.icon;
+
+                                                    return (
+                                                        <NavigationMenuLink
+                                                            key={child.to}
+                                                            render={
+                                                                <Link
+                                                                    to={
+                                                                        child.to
+                                                                    }
+                                                                />
+                                                            }
+                                                        >
+                                                            <Icon />
+                                                            {child.label()}
+                                                        </NavigationMenuLink>
+                                                    );
+                                                })}
+                                            </NavigationMenuContent>
+                                        </>
+                                    )}
+                                </NavigationMenuItem>
+                            ))}
                         </NavigationMenuList>
                     </NavigationMenu>
                 </div>
@@ -147,78 +167,28 @@ function MobileNavigation() {
                 </DrawerHeader>
 
                 <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2">
-                    <Button
-                        className="w-full justify-start"
-                        nativeButton={false}
-                        variant="ghost"
-                        render={<Link to="/" onClick={closeMenu} />}
-                    >
-                        <HouseIcon />
-                        {m.plain_topical_ant_compose()}
-                    </Button>
-                    <Button
-                        className="w-full justify-start"
-                        nativeButton={false}
-                        variant="ghost"
-                        render={<Link to="/realtime" onClick={closeMenu} />}
-                    >
-                        <MapIcon />
-                        {m.simple_awful_coyote_quiz()}
-                    </Button>
-                    <Button
-                        className="w-full justify-start"
-                        nativeButton={false}
-                        variant="ghost"
-                        render={<Link to="/jobs" onClick={closeMenu} />}
-                    >
-                        <BriefcaseBusinessIcon />
-                        {m.keen_plane_bobcat_value()}
-                    </Button>
-                    <Button
-                        className="w-full justify-start"
-                        nativeButton={false}
-                        variant="ghost"
-                        render={<Link to="/fleet" onClick={closeMenu} />}
-                    >
-                        <TruckIcon />
-                        {m.cool_only_manatee_pout()}
-                    </Button>
-                    <Button
-                        className="w-full justify-start"
-                        nativeButton={false}
-                        variant="ghost"
-                        render={<Link to="/logbook" onClick={closeMenu} />}
-                    >
-                        <BookOpenIcon />
-                        {m.logbook_title()}
-                    </Button>
-
-                    <p className="px-2 pt-5 pb-1 text-xs font-medium text-muted-foreground">
-                        {m.factual_happy_falcon_arise()}
-                    </p>
-                    <Button
-                        className="w-full justify-start"
-                        nativeButton={false}
-                        variant="ghost"
-                        render={
-                            <Link
-                                to="/settings/shortnames"
-                                onClick={closeMenu}
+                    {navigation.map((item) =>
+                        "to" in item ? (
+                            <MobileNavigationLink
+                                key={item.to}
+                                item={item}
+                                onNavigate={closeMenu}
                             />
-                        }
-                    >
-                        <Link2Icon />
-                        {m.long_topical_wolf_embrace()}
-                    </Button>
-                    <Button
-                        className="w-full justify-start"
-                        nativeButton={false}
-                        variant="ghost"
-                        render={<Link to="/settings" onClick={closeMenu} />}
-                    >
-                        <Settings2Icon />
-                        {m.noisy_topical_camel_bloom()}
-                    </Button>
+                        ) : (
+                            <div key={item.label()}>
+                                <p className="px-2 pt-4 pb-1 text-xs font-medium text-muted-foreground">
+                                    {item.label()}
+                                </p>
+                                {item.children.map((child) => (
+                                    <MobileNavigationLink
+                                        key={child.to}
+                                        item={child}
+                                        onNavigate={closeMenu}
+                                    />
+                                ))}
+                            </div>
+                        ),
+                    )}
                 </div>
 
                 <DrawerFooter className="flex-row items-center justify-end border-t p-4">
@@ -228,5 +198,27 @@ function MobileNavigation() {
                 </DrawerFooter>
             </DrawerContent>
         </Drawer>
+    );
+}
+
+function MobileNavigationLink({
+    item,
+    onNavigate,
+}: {
+    item: NavigationLinkItem;
+    onNavigate: () => void;
+}) {
+    const Icon = item.icon;
+
+    return (
+        <Button
+            className="w-full justify-start"
+            nativeButton={false}
+            variant="ghost"
+            render={<Link to={item.to} onClick={onNavigate} />}
+        >
+            <Icon />
+            {item.label()}
+        </Button>
     );
 }

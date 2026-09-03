@@ -480,5 +480,6 @@
     "setup_finish": "Einrichtung abschließen",
     "setup_step_progress": "Schritt {current} von {total}",
     "setup_resume_title": "Zum Fortfahren anmelden",
-    "setup_resume_description": "Das Administratorkonto existiert bereits. Melde dich damit an, um die Einrichtung abzuschließen."
+    "setup_resume_description": "Das Administratorkonto existiert bereits. Melde dich damit an, um die Einrichtung abzuschließen.",
+    "spicy_fresh_vulture_learn": "Standard Nutzername und Passwort: {username}"
 }
