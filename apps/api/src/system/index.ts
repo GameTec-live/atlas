@@ -14,7 +14,9 @@ const jsonRequest = (method: string, body?: unknown): RequestInit => ({
     body: body === undefined ? undefined : JSON.stringify(body),
 });
 
-const firmwareResponse = async (operation: () => Promise<Response>) => {
+const firmwareResponse = async (
+    operation: () => Response | Promise<Response>,
+) => {
     try {
         return await operation();
     } catch (error) {
@@ -82,31 +84,57 @@ export const system = new Elysia({
     })
     .post(
         "/update/upload",
-        ({ request, status, set }) =>
+        ({ body, status, set }) =>
             forwardJSON(
-                firmwareResponse(() => firmware.fromUpload(request)),
+                firmwareResponse(() => firmware.createUpload(body.size)),
                 { status, set },
             ),
         {
             admin: true,
-            parse: "none",
-            response: SystemResponse.updateUpload,
+            body: SystemModel.uploadSize,
+            response: SystemResponse.uploadStart,
             detail: {
-                summary: "Install an uploaded Atlas OS update",
+                summary: "Start an Atlas OS update upload",
                 description:
-                    "Streams the raw update bundle to temporary disk storage.",
+                    "Reserves temporary storage and returns the maximum chunk size.",
+            },
+        },
+    )
+    .put(
+        "/update/upload/:uploadId",
+        ({ params, request }) =>
+            firmwareResponse(() =>
+                firmware.appendUpload(params.uploadId, request),
+            ),
+        {
+            admin: true,
+            params: SystemModel.uploadId,
+            parse: "none",
+            response: SystemResponse.uploadChunk,
+            detail: {
+                summary: "Upload an Atlas OS update chunk",
+                description:
+                    "Appends a bounded chunk and installs the completed upload.",
                 requestBody: {
                     required: true,
                     content: {
                         "application/octet-stream": {
                             schema: { type: "string", format: "binary" },
                         },
-                        "application/zstd": {
-                            schema: { type: "string", format: "binary" },
-                        },
                     },
                 },
             },
+        },
+    )
+    .delete(
+        "/update/upload/:uploadId",
+        ({ params }) =>
+            firmwareResponse(() => firmware.cancelUpload(params.uploadId)),
+        {
+            admin: true,
+            params: SystemModel.uploadId,
+            response: SystemResponse.uploadCancel,
+            detail: { summary: "Cancel an Atlas OS update upload" },
         },
     )
     .post(

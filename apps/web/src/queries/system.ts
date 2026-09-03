@@ -1,6 +1,7 @@
 import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import { api, unwrapEden } from "@/lib/api-client";
 import { apiUrl } from "@/lib/api-url";
+import { getErrorMessage } from "@/lib/error";
 import type { SystemIpMethod } from "@/lib/system";
 
 const keys = {
@@ -125,13 +126,53 @@ export const systemUrlUpdateMutationOptions = () =>
 export const systemUploadUpdateMutationOptions = () =>
     mutationOptions({
         mutationFn: async (file: File) => {
-            const response = await fetch(`${apiUrl}/system/update/upload`, {
-                method: "POST",
-                credentials: "include",
-                headers: { "content-type": "application/octet-stream" },
-                body: file,
-            });
-            if (!response.ok) throw new Error("Update upload failed");
+            const upload = await unwrapEden(
+                api.system.update.upload.post({ size: file.size }),
+            );
+            if (!upload) throw new Error("Could not start update upload");
+            const uploadId = upload.uploadId;
+            const uploadChunk = async (start: number, end: number) => {
+                const response = await fetch(
+                    `${apiUrl}/system/update/upload/${encodeURIComponent(uploadId)}`,
+                    {
+                        method: "PUT",
+                        credentials: "include",
+                        headers: {
+                            "content-type": "application/octet-stream",
+                            "upload-offset": String(start),
+                        },
+                        body: file.slice(start, end),
+                    },
+                );
+                if (response.ok) return response;
+
+                const payload: unknown = await response
+                    .json()
+                    .catch(() => undefined);
+                const message =
+                    payload && typeof payload === "object" && "error" in payload
+                        ? getErrorMessage(payload.error)
+                        : undefined;
+                throw new Error(
+                    message ?? `Update upload failed (HTTP ${response.status})`,
+                );
+            };
+
+            try {
+                for (
+                    let start = 0;
+                    start < file.size;
+                    start += upload.chunkSize
+                ) {
+                    const end = Math.min(start + upload.chunkSize, file.size);
+                    await uploadChunk(start, end);
+                }
+            } catch (error) {
+                await unwrapEden(
+                    api.system.update.upload({ uploadId }).delete(),
+                ).catch(() => undefined);
+                throw error;
+            }
         },
     });
 
