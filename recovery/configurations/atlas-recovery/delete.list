@@ -1,0 +1,5 @@
+# pi-gen-micro still consults these while fetching the kernel and firmware.
+# package_image applies this list only after those downloads are complete.
+var/cache
+var/lib/apt
+var/lib/dpkg

@@ -1,0 +1,4 @@
+# For a raw image, use sd or nvme when both devices are installed.
+# An IDP provisioning archive declares and enforces its own storage type.
+TARGET=auto
+

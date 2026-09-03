@@ -1,0 +1,18 @@
+# Atlas recovery runs entirely from an initramfs loaded from USB storage.
+arm_64bit=1
+disable_overscan=1
+disable_splash=1
+gpu_mem=16
+dtparam=audio=off
+camera_auto_detect=0
+display_auto_detect=0
+dtparam=spi=on
+usb_max_current_enable=1
+
+[all]
+kernel=zImage
+initramfs rootfs.cpio.zst
+dtparam=uart0=on
+enable_uart=1
+uart_2ndstage=1
+

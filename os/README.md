@@ -22,11 +22,20 @@ builds publish:
 - `atlas-rpi5-<version>-development.img.zst` - unencrypted whole-disk image for
   direct development SD-card flashing.
 - `atlas-rpi5-<version>-update.tar.zst` - signed A/B update bundle.
-- `SHA256SUMS` - hashes for those three files.
+- `atlas-rpi5-<version>-recovery-encrypted.{img.zst,zip}` - recovery media
+  containing the encrypted provisioning archive.
+- `atlas-rpi5-<version>-recovery-unencrypted.{img.zst,zip}` - recovery media
+  containing the unencrypted development image.
+- `SHA256SUMS` - hashes for all release files.
 
 Every full run uploads an Actions artifact. A `v*` tag also publishes the files
 on the matching GitHub Release. Run the workflow manually only after the
 container-image workflows have published the desired `latest` tags.
+
+The recovery ZIPs contain the FAT32 partition files without a disk-image
+container. Extract one at the root of an empty FAT32 drive labelled
+`ATLASRECOV`; see the [recovery documentation](../recovery/README.md) before
+booting because recovery immediately erases its selected target.
 
 For a local Linux build, clone the pinned upstream version and use this folder
 as its external source tree:

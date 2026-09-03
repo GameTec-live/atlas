@@ -29,6 +29,12 @@ The three release artifacts are not interchangeable:
 
 Always verify the artifact against the release `SHA256SUMS` before using it.
 
+Each OS build also publishes encrypted and unencrypted recovery media as
+`.img.zst` disk images and file-only ZIPs. The ZIP contents can be extracted to
+an empty FAT32 drive labelled `ATLASRECOV`. See the
+[recovery documentation](../../recovery/README.md) for the destructive boot
+behavior and complete instructions.
+
 ## Non-obvious invariants
 
 - Only `atlas-web` publishes host ports. The optional outbound Cloudflare and

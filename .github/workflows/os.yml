@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "os/**"
+      - "recovery/**"
       - "apps/osManagementAPI/**"
       - ".github/workflows/os.yml"
   push:
@@ -42,19 +43,23 @@ jobs:
         run: |
           sudo apt-get update
           sudo ./rpi-image-gen/install_deps.sh
-          sudo apt-get install -y --no-install-recommends podman ripgrep shellcheck
+          sudo apt-get install -y --no-install-recommends \
+            dosfstools fdisk mtools podman ripgrep shellcheck unzip zip zstd
 
       - name: Validate configuration
         run: |
           chmod +x atlas/os/pre-build.sh atlas/os/post-image.sh atlas/os/ci/*.sh
           ./atlas/os/ci/validate.sh "$GITHUB_WORKSPACE/atlas/os" "$GITHUB_WORKSPACE/rpi-image-gen"
+          chmod +x atlas/recovery/ci/*.sh atlas/recovery/scripts/*.sh
+          ./atlas/recovery/ci/validate.sh
+          ./atlas/recovery/ci/test-assemble.sh
 
   build:
     name: Build and publish
     if: github.event_name != 'pull_request'
     needs: validate
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 120
+    timeout-minutes: 180
     permissions:
       contents: write
     steps:
@@ -75,7 +80,9 @@ jobs:
           sudo apt-get update
           sudo chmod o+x /home/runner
           sudo ./rpi-image-gen/install_deps.sh
-          sudo apt-get install -y --no-install-recommends podman ripgrep shellcheck zstd
+          sudo apt-get install -y --no-install-recommends \
+            binfmt-support dosfstools fdisk mtools podman qemu-user-static \
+            ripgrep rsync shellcheck uidmap unzip util-linux zip zstd
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -87,6 +94,9 @@ jobs:
         run: |
           chmod +x atlas/os/pre-build.sh atlas/os/post-image.sh atlas/os/ci/*.sh
           ./atlas/os/ci/validate.sh "$GITHUB_WORKSPACE/atlas/os" "$GITHUB_WORKSPACE/rpi-image-gen"
+          chmod +x atlas/recovery/ci/*.sh atlas/recovery/scripts/*.sh
+          ./atlas/recovery/ci/validate.sh
+          ./atlas/recovery/ci/test-assemble.sh
 
       - name: Select build version
         id: version
@@ -132,6 +142,36 @@ jobs:
             "$release_dir/atlas-rpi5-${version}-update.tar.zst"
           (cd "$release_dir" && sha256sum atlas-rpi5-* > SHA256SUMS)
           echo "directory=$release_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Build recovery boot environment
+        env:
+          ATLAS_RECOVERY_STATE_DIR: ${{ runner.temp }}/atlas-recovery
+        run: ./atlas/recovery/scripts/build-boot.sh
+
+      - name: Package recovery media
+        env:
+          ATLAS_RECOVERY_STATE_DIR: ${{ runner.temp }}/atlas-recovery
+          RELEASE_DIR: ${{ steps.files.outputs.directory }}
+          VERSION: ${{ steps.version.outputs.value }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          boot_files="$ATLAS_RECOVERY_STATE_DIR/build/pi-gen-micro/out_image"
+
+          ./atlas/recovery/scripts/assemble-image.sh \
+            "$boot_files" \
+            "$RELEASE_DIR/atlas-rpi5-$VERSION-provisioning.tar.zst" \
+            "$RELEASE_DIR/atlas-rpi5-$VERSION-recovery-encrypted.img"
+          rm "$RELEASE_DIR/atlas-rpi5-$VERSION-recovery-encrypted.img"
+
+          ./atlas/recovery/scripts/assemble-image.sh \
+            "$boot_files" \
+            "$RELEASE_DIR/atlas-rpi5-$VERSION-development.img.zst" \
+            "$RELEASE_DIR/atlas-rpi5-$VERSION-recovery-unencrypted.img"
+          rm "$RELEASE_DIR/atlas-rpi5-$VERSION-recovery-unencrypted.img"
+
+          rm "$RELEASE_DIR/SHA256SUMS.recovery"
+          (cd "$RELEASE_DIR" && sha256sum atlas-rpi5-* > SHA256SUMS)
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v6

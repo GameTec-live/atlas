@@ -1,0 +1,21 @@
+# Recovery-media access.
+usb-storage
+uas
+vfat
+nls-cp437
+nls-iso8859-1
+
+# IDP/FDE provisioning.
+dm-crypt
+algif_skcipher
+crypto-xts(aes)
+crypto-nhpoly1305
+crypto-xchacha12
+crypto-adiantum
+
+# rpi-fastbootd inspects the Pi EEPROM and storage hardware.
+spi-bcm2835
+spidev
+nvme
+f2fs
+
