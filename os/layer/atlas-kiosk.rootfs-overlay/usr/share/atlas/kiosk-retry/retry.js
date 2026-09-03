@@ -44,6 +44,7 @@ async function probeAndReload(tabId) {
 
     if (response.ok) {
       await clearRetry(tabId);
+      return;
     }
   } catch {
     // Chromium's error page cannot reload itself, so replace it below.
