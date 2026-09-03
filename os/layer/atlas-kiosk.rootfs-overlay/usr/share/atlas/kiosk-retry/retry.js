@@ -1,16 +1,37 @@
 const targetUrl = "https://localhost/";
-const retryAlarm = "atlas-kiosk-retry";
+const retryAlarmPrefix = "atlas-kiosk-retry:";
 const retryPeriodMinutes = 0.5;
 const requestTimeoutMs = 10_000;
 
-function scheduleRetry() {
-  chrome.alarms.create(retryAlarm, {
+function retryAlarmName(tabId) {
+  return `${retryAlarmPrefix}${tabId}`;
+}
+
+function retryTabId(alarmName) {
+  if (!alarmName.startsWith(retryAlarmPrefix)) {
+    return undefined;
+  }
+
+  const tabId = Number(alarmName.slice(retryAlarmPrefix.length));
+  return Number.isInteger(tabId) && tabId >= 0 ? tabId : undefined;
+}
+
+function scheduleRetry(tabId) {
+  if (!Number.isInteger(tabId) || tabId < 0) {
+    return;
+  }
+
+  chrome.alarms.create(retryAlarmName(tabId), {
     delayInMinutes: retryPeriodMinutes,
     periodInMinutes: retryPeriodMinutes,
   });
 }
 
-async function probeAndReload() {
+async function clearRetry(tabId) {
+  await chrome.alarms.clear(retryAlarmName(tabId));
+}
+
+async function probeAndReload(tabId) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
 
@@ -22,7 +43,7 @@ async function probeAndReload() {
     });
 
     if (response.ok) {
-      await chrome.alarms.clear(retryAlarm);
+      await clearRetry(tabId);
     }
   } catch {
     // Chromium's error page cannot reload itself, so replace it below.
@@ -30,22 +51,18 @@ async function probeAndReload() {
     clearTimeout(timeout);
   }
 
-  const tabs = await chrome.tabs.query({});
-  await Promise.all(
-    tabs.flatMap((tab) =>
-      tab.id === undefined
-        ? []
-        : [chrome.tabs.update(tab.id, { url: targetUrl })],
-    ),
-  );
+  try {
+    await chrome.tabs.update(tabId, { url: targetUrl });
+  } catch {
+    // The kiosk tab was closed, so there is nothing left to recover.
+    await clearRetry(tabId);
+  }
 }
 
-chrome.runtime.onInstalled.addListener(scheduleRetry);
-chrome.runtime.onStartup.addListener(scheduleRetry);
 chrome.webNavigation.onErrorOccurred.addListener(
   (details) => {
     if (details.frameId === 0) {
-      scheduleRetry();
+      scheduleRetry(details.tabId);
     }
   },
   { url: [{ schemes: ["https"], hostEquals: "localhost" }] },
@@ -53,15 +70,16 @@ chrome.webNavigation.onErrorOccurred.addListener(
 chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
     if (details.type === "main_frame" && details.statusCode >= 500) {
-      scheduleRetry();
+      scheduleRetry(details.tabId);
+    } else if (details.type === "main_frame") {
+      void clearRetry(details.tabId);
     }
   },
   { urls: [`${targetUrl}*`], types: ["main_frame"] },
 );
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === retryAlarm) {
-    void probeAndReload();
+  const tabId = retryTabId(alarm.name);
+  if (tabId !== undefined) {
+    void probeAndReload(tabId);
   }
 });
-
-scheduleRetry();

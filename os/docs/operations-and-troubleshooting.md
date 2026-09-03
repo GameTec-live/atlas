@@ -20,8 +20,9 @@ A normal first boot roughly follows this order:
 
 Pressing ENTER replaces the lightweight TTY launcher with Cage and Chromium,
 which opens `https://localhost/` in kiosk mode. If it is launched before Caddy
-is ready, it retries the local page every 30 seconds. Exiting the kiosk returns
-to the prompt after the service's five-second restart delay.
+is ready, it retries that kiosk tab every 30 seconds. Retries stop as soon as a
+healthy response loads. Exiting the kiosk returns to the prompt after the
+service's five-second restart delay.
 
 First boot is slower than later boots because importing roughly 2 GiB of image
 data and initializing PostgreSQL/storage are I/O intensive. Router, geocoder and
