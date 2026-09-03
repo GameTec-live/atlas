@@ -40,6 +40,9 @@ import org.gtlv.core.fleet.ConnectedVehicleStore
 import org.gtlv.core.fleet.FleetRepository
 import org.gtlv.core.fleet.FleetRepositoryImpl
 import org.gtlv.core.fleet.FleetRepositoryProvider
+import org.gtlv.core.logbook.LogbookRepository
+import org.gtlv.core.logbook.LogbookRepositoryImpl
+import org.gtlv.core.logbook.LogbookRepositoryProvider
 import org.gtlv.core.telemetry.TelemetryWebSocketSender
 import org.gtlv.core.telemetry.LiveMapUsersProvider
 import org.gtlv.core.job.CollectedJobStore
@@ -62,7 +65,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     JobMileageStoreProvider, PricingRepositoryProvider,
     SessionManagerProvider, LiveMapUsersProvider,
     GeoServiceRepositoryProvider, JobNotificationSyncProvider,
-    FleetRepositoryProvider {
+    FleetRepositoryProvider, LogbookRepositoryProvider {
 
     private val applicationScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate
@@ -200,6 +203,13 @@ class AtlasApplication : Application(), ShiftSessionProvider,
 
     override val fleetRepository: FleetRepository by lazy {
         FleetRepositoryImpl(
+            networkClient = networkClient,
+            serverSettingsRepository = serverSettingsRepository
+        )
+    }
+
+    override val logbookRepository: LogbookRepository by lazy {
+        LogbookRepositoryImpl(
             networkClient = networkClient,
             serverSettingsRepository = serverSettingsRepository
         )

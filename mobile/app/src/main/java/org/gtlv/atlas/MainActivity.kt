@@ -43,6 +43,10 @@ import org.gtlv.atlas.navigation.AuthenticatedNavHost
 import org.gtlv.atlas.notification.JobNotificationViewModel
 import org.gtlv.atlas.notification.JobNotificationViewModelFactory
 import org.gtlv.atlas.notification.JobSystemNotificationManager
+import org.gtlv.atlas.offboarding.EndKilometerDialog
+import org.gtlv.atlas.offboarding.OffboardingScreen
+import org.gtlv.atlas.offboarding.OffboardingViewModel
+import org.gtlv.atlas.offboarding.OffboardingViewModelFactory
 import org.gtlv.atlas.newjob.NewJobViewModel
 import org.gtlv.atlas.newjob.NewJobViewModelFactory
 import org.gtlv.atlas.role.RoleSelectionScreen
@@ -81,6 +85,18 @@ class MainActivity : ComponentActivity() {
         JobNotificationViewModelFactory(
             jobRepository = atlasApplication.jobRepository,
             notificationSync = atlasApplication.jobNotificationSync
+        )
+    }
+
+    private val offboardingViewModel:
+            OffboardingViewModel by viewModels {
+        OffboardingViewModelFactory(
+            shiftSessionManager = atlasApplication.shiftSessionManager,
+            telemetryProvider = atlasApplication.telemetryProvider,
+            connectedVehicleState =
+                atlasApplication.connectedVehicleManager.state,
+            logbookRepository = atlasApplication.logbookRepository,
+            sessionManager = atlasApplication.sessionManager
         )
     }
 
@@ -163,6 +179,10 @@ class MainActivity : ComponentActivity() {
 
                 val connectedVehicleState by
                     atlasApplication.connectedVehicleManager.state
+                        .collectAsStateWithLifecycle()
+
+                val offboardingState by
+                    offboardingViewModel.uiState
                         .collectAsStateWithLifecycle()
 
                 val jobNotificationState by
@@ -371,7 +391,45 @@ class MainActivity : ComponentActivity() {
                                                         .userId
                                         }
 
-                                RequiredLocationPermissionGate(
+                                if (
+                                    offboardingState
+                                        .isEndKilometerDialogVisible
+                                ) {
+                                    EndKilometerDialog(
+                                        value = offboardingState
+                                            .endKilometerInput,
+                                        isInvalid = offboardingState
+                                            .isEndKilometerInvalid,
+                                        onValueChanged =
+                                            offboardingViewModel::
+                                            updateEndKilometerInput,
+                                        onConfirm =
+                                            offboardingViewModel::
+                                            confirmEndKilometer,
+                                        onDismiss =
+                                            offboardingViewModel::
+                                            dismissEndKilometerDialog
+                                    )
+                                }
+
+                                if (offboardingState.isVisible) {
+                                    OffboardingScreen(
+                                        state = offboardingState,
+                                        onRevenueChanged =
+                                            offboardingViewModel::
+                                            updateRevenue,
+                                        onConfirmationChanged =
+                                            offboardingViewModel::
+                                            setConfirmed,
+                                        onSubmit =
+                                            offboardingViewModel::
+                                            submitAndLogout,
+                                        onBack =
+                                            offboardingViewModel::
+                                            cancelOffboarding
+                                    )
+                                } else {
+                                    RequiredLocationPermissionGate(
                                     locationProvider =
                                         atlasApplication
                                             .locationProvider
@@ -457,8 +515,10 @@ class MainActivity : ComponentActivity() {
                                         onAssignmentNavigationHandled = jobNotificationViewModel::assignmentNavigationHandled,
                                         onDismissDeclineConfirmation = jobNotificationViewModel::dismissDeclineConfirmation,
                                         onConfirmDecline = jobNotificationViewModel::confirmDecline,
-                                        onLogout = loginViewModel::logout
+                                        onLogout =
+                                            offboardingViewModel::requestLogout
                                     )
+                                }
                                 }
                             }
                         }
