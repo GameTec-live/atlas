@@ -179,7 +179,7 @@ jobs:
           name: atlas-os-${{ steps.version.outputs.value }}
           path: ${{ steps.files.outputs.directory }}/*
           if-no-files-found: error
-          compression-level: 0
+          compression-level: 9
           retention-days: 14
 
       - name: Publish GitHub Release assets
