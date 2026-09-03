@@ -74,6 +74,7 @@ When adding a layer or changing ordering:
 | Persistent SSH controller and hardening | `layer/atlas-ssh.rootfs-overlay/` |
 | Privileged management API and factory-reset boot unit | `apps/osManagementAPI/`, `layer/atlas-management.rootfs-overlay/` |
 | Root-only management CLI | `layer/atlas-management.rootfs-overlay/usr/local/sbin/atlas-sys` |
+| Local Cage/Chromium kiosk and retry extension | `layer/atlas-kiosk.rootfs-overlay/` |
 
 ## Invariants to preserve
 
@@ -135,6 +136,13 @@ When adding a layer or changing ordering:
 ### Security and persistence
 
 - SSH is disabled by default and only `atlas` is allowed.
+- Cage and Chromium run as the locked `atlas-kiosk` system account, never as
+  the administrative `atlas` account.
+- `atlas-kiosk` has no supplementary groups or persistent home, can reach only
+  loopback addresses, and retains Chromium's user-namespace/process sandbox
+  without allowing a setuid bootstrap.
+- The kiosk targets only `https://localhost/` and relaxes certificate checks
+  only for localhost.
 - SSH state is written atomically under `/persistent/atlas/system`.
 - Rootless secrets stay mode 0600 and are not regenerated on every boot.
 - Root and persistent ownership checks remain in the artifact audit.

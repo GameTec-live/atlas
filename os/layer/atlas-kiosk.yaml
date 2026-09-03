@@ -1,0 +1,30 @@
+# METABEGIN
+# X-Env-Layer-Name: atlas-kiosk
+# X-Env-Layer-Category: atlas
+# X-Env-Layer-Desc: Sandboxed local Cage and Chromium web appliance interface.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: atlas-containers-core
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - cage
+    - chromium
+    - libpam-systemd
+  customize-hooks:
+    - |-
+      set -eu
+      if ! chroot "$1" id atlas-kiosk >/dev/null 2>&1; then
+        chroot "$1" useradd \
+          --system \
+          --user-group \
+          --no-create-home \
+          --home-dir /run/atlas-kiosk \
+          --shell /usr/sbin/nologin \
+          atlas-kiosk
+      fi
+      chroot "$1" passwd --lock atlas-kiosk
+    - chmod 0644 "$1/usr/lib/systemd/system/atlas-kiosk.service"
+    - chmod 0644 "$1/usr/share/atlas/kiosk-retry/manifest.json"
+    - chmod 0644 "$1/usr/share/atlas/kiosk-retry/retry.js"
+    - $BDEBSTRAP_HOOKS/enable-units "$1" atlas-kiosk.service

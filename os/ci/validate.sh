@@ -114,6 +114,34 @@ fi
 rg -q -F "printf 'BETTER_AUTH_URL=%s\\n'" \
     "$source_root/layer/atlas-podman.rootfs-overlay/usr/local/libexec/atlas-auth-origins"
 
+kiosk_root="$source_root/layer/atlas-kiosk.rootfs-overlay"
+kiosk_unit="$kiosk_root/usr/lib/systemd/system/atlas-kiosk.service"
+kiosk_extension="$kiosk_root/usr/share/atlas/kiosk-retry"
+python3 -m json.tool "$kiosk_extension/manifest.json" >/dev/null
+rg -q -F 'ExecStart=/usr/bin/cage -s -- /usr/bin/chromium' "$kiosk_unit"
+rg -q -F 'User=atlas-kiosk' "$kiosk_unit"
+rg -q -F 'PAMName=login' "$kiosk_unit"
+rg -q -F -- '- libpam-systemd' "$source_root/layer/atlas-kiosk.yaml"
+rg -q -F 'DevicePolicy=closed' "$kiosk_unit"
+rg -q -F 'ProtectSystem=strict' "$kiosk_unit"
+rg -q -F 'IPAddressDeny=any' "$kiosk_unit"
+rg -q -F 'IPAddressAllow=localhost' "$kiosk_unit"
+rg -q -F 'NoNewPrivileges=yes' "$kiosk_unit"
+rg -q -F 'RestrictSUIDSGID=yes' "$kiosk_unit"
+rg -q -F -- '--disable-setuid-sandbox' "$kiosk_unit"
+rg -q -F -- '--allow-insecure-localhost' "$kiosk_unit"
+rg -q -F -- '--kiosk' "$kiosk_unit"
+rg -q -F 'https://localhost/' "$kiosk_unit" "$kiosk_extension/retry.js"
+rg -q -F 'const retryPeriodMinutes = 0.5;' "$kiosk_extension/retry.js"
+if rg -q -F -- '--ignore-certificate-errors' "$kiosk_unit"; then
+    echo "atlas-kiosk must only relax certificate checks for localhost" >&2
+    exit 1
+fi
+if rg -q -F -- '--no-sandbox' "$kiosk_unit"; then
+    echo "atlas-kiosk must keep Chromium's process sandbox enabled" >&2
+    exit 1
+fi
+
 while IFS= read -r image; do
     rg -q -F "Image=$image" "$quadlet_dir"
 done < "$source_root/images.txt"

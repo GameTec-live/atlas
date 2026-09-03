@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Atlas Kiosk Retry",
+  "version": "1.0.0",
+  "description": "Reloads the local Atlas UI while its containers start.",
+  "permissions": ["alarms", "tabs", "webNavigation", "webRequest"],
+  "host_permissions": ["https://localhost/*"],
+  "background": {
+    "service_worker": "retry.js"
+  }
+}

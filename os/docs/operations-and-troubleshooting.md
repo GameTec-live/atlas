@@ -10,11 +10,14 @@ A normal first boot roughly follows this order:
 3. systemd mounts the immutable root and persistent storage.
 4. NetworkManager obtains DHCP configuration; systemd-resolved and time sync
    become available.
-5. The lingering `atlas-containers` user manager starts.
-6. `atlas-container-init` imports the offline OCI archive, deletes it, creates
+5. Cage starts Chromium on the attached display and opens
+   `https://localhost/` in kiosk mode.
+6. The lingering `atlas-containers` user manager starts.
+7. `atlas-container-init` imports the offline OCI archive, deletes it, creates
    secrets and generates auth origins.
-7. Quadlets create networks/volumes and start containers in dependency order.
-8. Caddy becomes healthy and exposes the UI over HTTPS.
+8. Quadlets create networks/volumes and start containers in dependency order.
+9. Caddy becomes healthy and exposes the UI over HTTPS. Until then, the kiosk
+   retries the local page every 30 seconds.
 
 First boot is slower than later boots because importing roughly 2 GiB of image
 data and initializing PostgreSQL/storage are I/O intensive. Router, geocoder and
@@ -31,6 +34,13 @@ timeout.
 - Friendly origin: `https://atlas.local/`, only if that name resolves on the
   client network
 - SSH: disabled by default
+
+The attached display uses the primary virtual terminal for the kiosk. The
+locked `atlas-kiosk` system account runs Cage and Chromium; it has no login,
+sudo access, supplementary groups, persistent home, or non-loopback network
+access. The serial console remains available for recovery. Chromium accepts
+the appliance's local certificate only for localhost; remote clients still need
+to trust the local Caddy CA or use a publicly trusted domain.
 
 Change the initial password before enabling remote maintenance:
 
@@ -57,6 +67,7 @@ sudo atlas-ssh status
 systemctl is-active \
   NetworkManager \
   network-online.target \
+  atlas-kiosk.service \
   atlas-management.service
 ```
 
@@ -118,7 +129,7 @@ and HTTP 308.
 Host units:
 
 ```sh
-sudo journalctl -b -u NetworkManager -u atlas-management --no-pager
+sudo journalctl -b -u NetworkManager -u atlas-kiosk -u atlas-management --no-pager
 sudo journalctl -b -u atlas-ssh-state -u atlas-usb-boot-order --no-pager
 ```
 
@@ -350,6 +361,14 @@ Check whether HTTP returns 308, then use `curl -k` to separate certificate trust
 from service reachability. If `-k` succeeds, install the local CA or configure a
 trusted external certificate. If it does not, inspect `atlas-web` and its Caddy
 logs.
+
+### Local display does not show the kiosk
+
+Check `systemctl status atlas-kiosk` and `journalctl -b -u atlas-kiosk`. Cage
+owns `tty1`, so use the serial console for recovery. Confirm the display and
+input devices are detected and that `/usr/bin/cage` and `/usr/bin/chromium`
+exist. A temporary Chromium connection-error page is expected during first
+boot; it should retry every 30 seconds without restarting the kiosk service.
 
 ### `atlas-web` stays `activating`
 
