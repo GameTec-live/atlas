@@ -146,7 +146,19 @@ jobs:
       - name: Build recovery boot environment
         env:
           ATLAS_RECOVERY_STATE_DIR: ${{ runner.temp }}/atlas-recovery
-        run: ./atlas/recovery/scripts/build-boot.sh
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Ubuntu 24.04's AppArmor policy blocks the user namespace used by
+          # pi-gen-micro-sysroot. Its current FIFO handshake hangs if unshare
+          # is rejected, so enable namespaces explicitly on this ephemeral VM.
+          if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+          timeout --signal=TERM --kill-after=1m 60m \
+            ./atlas/recovery/scripts/build-boot.sh
 
       - name: Package recovery media
         env:
