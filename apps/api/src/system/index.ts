@@ -172,7 +172,7 @@ export const system = new Elysia({
             detail: {
                 summary: "Install an uploaded Atlas OS update",
                 description:
-                    "Starts installing a completed upload in the background.",
+                    "Forwards a completed upload and returns the management service response.",
             },
         },
     )

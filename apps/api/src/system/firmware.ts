@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, unlink } from "node:fs/promises";
+import { mkdir, open, readdir, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { env } from "@/env";
 import { applyUpdate, request } from "./management";
@@ -9,6 +9,8 @@ const MAX_UPDATE_BYTES = 4 * 1024 ** 3;
 const UPLOAD_CHUNK_BYTES = 8 * 1024 ** 2;
 const UPLOAD_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const updateAssetPattern = /^atlas-rpi5-.+-update\.tar\.zst$/;
+const stagedUpdatePattern =
+    /^update-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.tar\.zst$/i;
 let updateReserved = false;
 
 interface StagedUpload {
@@ -25,6 +27,33 @@ let stagedUpload: StagedUpload | undefined;
 function fail(status: number, code: string, message: string): never {
     throw Response.json({ error: { code, message } }, { status });
 }
+
+const stagingDirectory = () =>
+    resolve(env.DATA_STORAGE_PATH ?? "./data", "system-updates");
+
+/** Removes uploads that cannot be resumed after an API process restart. */
+export const reconcileStagedUploads = async () => {
+    const directory = stagingDirectory();
+    let entries: string[];
+    try {
+        entries = await readdir(directory);
+    } catch (error) {
+        if (
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "ENOENT"
+        ) {
+            return;
+        }
+        throw error;
+    }
+
+    await Promise.all(
+        entries
+            .filter((name) => stagedUpdatePattern.test(name))
+            .map((name) => unlink(resolve(directory, name))),
+    );
+};
 
 const releaseUpdate = () => {
     updateReserved = false;
@@ -108,15 +137,9 @@ const applyStream = async (
         const stream = getStream();
         if (!stream) fail(400, "empty_update", "Update file is empty");
 
-        const stagingDirectory = resolve(
-            env.DATA_STORAGE_PATH ?? "./data",
-            "system-updates",
-        );
-        await mkdir(stagingDirectory, { recursive: true });
-        const path = resolve(
-            stagingDirectory,
-            `update-${randomUUID()}.tar.zst`,
-        );
+        const directory = stagingDirectory();
+        await mkdir(directory, { recursive: true });
+        const path = resolve(directory, `update-${randomUUID()}.tar.zst`);
         const file = await open(path, "wx", 0o600);
         const reader = stream.getReader();
         let size = 0;
@@ -181,13 +204,10 @@ export const createUpload = async (size: number) => {
 
     let path: string | undefined;
     try {
-        const stagingDirectory = resolve(
-            env.DATA_STORAGE_PATH ?? "./data",
-            "system-updates",
-        );
-        await mkdir(stagingDirectory, { recursive: true });
+        const directory = stagingDirectory();
+        await mkdir(directory, { recursive: true });
         const id = randomUUID();
-        path = resolve(stagingDirectory, `update-${id}.tar.zst`);
+        path = resolve(directory, `update-${id}.tar.zst`);
         const file = await open(path, "wx", 0o600);
         await file.close();
 
@@ -330,7 +350,7 @@ export const appendUpload = async (id: string, request: Request) => {
     }
 };
 
-export const installUpload = (id: string) => {
+export const installUpload = async (id: string) => {
     const upload = activeUpload(id);
     if (upload.writing) {
         fail(409, "upload_busy", "A firmware chunk is still being written");
@@ -345,25 +365,12 @@ export const installUpload = (id: string) => {
 
     stagedUpload = undefined;
     if (upload.expiration) clearTimeout(upload.expiration);
-    void (async () => {
-        try {
-            const response = await applyUpdate(upload.path);
-            if (!response.ok) {
-                console.error(
-                    "Failed to apply uploaded firmware update",
-                    response.status,
-                    await response.text(),
-                );
-            }
-        } catch (error) {
-            console.error("Failed to apply uploaded firmware update", error);
-        } finally {
-            await unlink(upload.path).catch(() => undefined);
-            releaseUpdate();
-        }
-    })();
-
-    return Response.json({ status: "installing" }, { status: 202 });
+    try {
+        return await applyUpdate(upload.path);
+    } finally {
+        await unlink(upload.path).catch(() => undefined);
+        releaseUpdate();
+    }
 };
 
 export const cancelUpload = async (id: string) => {

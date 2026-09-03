@@ -51,10 +51,13 @@ export const SystemResponse = {
         500: SystemModel.error,
     },
     uploadInstall: {
-        202: SystemModel.uploadInstalling,
+        202: SystemModel.updateAccepted,
+        400: SystemModel.error,
         404: SystemModel.error,
         409: SystemModel.error,
+        422: SystemModel.error,
         500: SystemModel.error,
+        503: SystemModel.error,
     },
     uploadCancel: {
         200: SystemModel.ok,

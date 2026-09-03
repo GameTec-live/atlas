@@ -95,7 +95,6 @@ export const SystemModel = {
     uploadProgress: t.Object({
         received: t.Integer({ minimum: 1 }),
     }),
-    uploadInstalling: t.Object({ status: t.Literal("installing") }),
     ok,
     rebootAccepted: t.Object({ status: t.Literal("rebooting") }),
     poweroffAccepted: t.Object({ status: t.Literal("powering_off") }),

@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import {
+    existsSync,
+    mkdirSync,
+    mkdtempSync,
+    readdirSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Elysia } from "elysia";
@@ -45,7 +52,9 @@ mock.module("@/src/system/management", () => ({
     UNAVAILABLE_MESSAGE: "Atlas OS management is unavailable",
 }));
 
-const { fromLatestGitHub } = await import("@/src/system/firmware");
+const { fromLatestGitHub, reconcileStagedUploads } = await import(
+    "@/src/system/firmware"
+);
 const { system } = await import("@/src/system");
 const app = new Elysia().use(system);
 
@@ -232,6 +241,29 @@ describe("system management routes", () => {
 });
 
 describe("firmware updates", () => {
+    it("removes uploads orphaned by an API process restart", async () => {
+        const storageDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
+        try {
+            envMock.DATA_STORAGE_PATH = storageDirectory;
+            const updateDirectory = join(storageDirectory, "system-updates");
+            mkdirSync(updateDirectory);
+            writeFileSync(
+                join(
+                    updateDirectory,
+                    "update-00000000-0000-4000-8000-000000000000.tar.zst",
+                ),
+                "stale",
+            );
+            writeFileSync(join(updateDirectory, "keep.tar.zst"), "keep");
+
+            await reconcileStagedUploads();
+
+            expect(readdirSync(updateDirectory)).toEqual(["keep.tar.zst"]);
+        } finally {
+            rmSync(storageDirectory, { recursive: true, force: true });
+        }
+    });
+
     it("rejects an update already pending in management before staging", async () => {
         const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
         try {
@@ -344,12 +376,6 @@ describe("firmware updates", () => {
             envMock.DATA_STORAGE_PATH = stagingDirectory;
             getSessionMock.mockResolvedValue(adminSession);
             const update = new Uint8Array([0, 1, 2, 3, 4]);
-            let finishInstallation: (response: Response) => void = () =>
-                undefined;
-            applyUpdateResponder = () =>
-                new Promise((resolve) => {
-                    finishInstallation = resolve;
-                });
 
             const startResponse = await jsonRequest(
                 app,
@@ -388,27 +414,71 @@ describe("firmware updates", () => {
             );
             expect(installResponse.status).toBe(202);
             expect(await installResponse.json()).toEqual({
-                status: "installing",
+                status: "rebooting_into_candidate",
             });
             expect(applyUpdateMock).toHaveBeenCalledTimes(1);
-            finishInstallation(
-                Response.json(
-                    { status: "rebooting_into_candidate" },
-                    { status: 202 },
-                ),
-            );
-            await applyUpdateMock.mock.results[0]?.value;
-            for (
-                let attempt = 0;
-                attempt < 100 &&
-                readdirSync(join(stagingDirectory, "system-updates")).length >
-                    0;
-                attempt++
-            ) {
-                await Bun.sleep(1);
-            }
 
             expect(appliedBytes).toEqual(update);
+            expect(
+                readdirSync(join(stagingDirectory, "system-updates")),
+            ).toEqual([]);
+        } finally {
+            rmSync(stagingDirectory, { recursive: true, force: true });
+        }
+    });
+
+    it("forwards a management rejection after a completed upload", async () => {
+        const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
+        try {
+            envMock.DATA_STORAGE_PATH = stagingDirectory;
+            getSessionMock.mockResolvedValue(adminSession);
+            applyUpdateResponder = () =>
+                Response.json(
+                    {
+                        error: {
+                            code: "management_unavailable",
+                            message: "Atlas OS management is unavailable",
+                        },
+                    },
+                    { status: 503 },
+                );
+
+            const startResponse = await jsonRequest(
+                app,
+                "/update/upload/start",
+                "POST",
+                { size: 1 },
+            );
+            const { uploadId } = (await startResponse.json()) as {
+                uploadId: string;
+            };
+            const chunkResponse = await request(
+                app,
+                `/update/upload/${uploadId}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "content-type": "application/octet-stream",
+                        "content-range": "bytes 0-0/1",
+                    },
+                    body: new Uint8Array([1]),
+                },
+            );
+            expect(chunkResponse.status).toBe(200);
+
+            const installResponse = await request(
+                app,
+                `/update/upload/${uploadId}/install`,
+                { method: "POST" },
+            );
+
+            expect(installResponse.status).toBe(503);
+            expect(await installResponse.json()).toEqual({
+                error: {
+                    code: "management_unavailable",
+                    message: "Atlas OS management is unavailable",
+                },
+            });
             expect(
                 readdirSync(join(stagingDirectory, "system-updates")),
             ).toEqual([]);

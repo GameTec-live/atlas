@@ -18,10 +18,13 @@ import { roles } from "./role";
 import { setup } from "./setup";
 import { shortnames } from "./shortnames";
 import { system } from "./system";
+import { reconcileStagedUploads } from "./system/firmware";
 
 console.log("Applying database migrations...");
 await runMigrations();
 console.log("Database migrations complete.\n\n");
+
+await reconcileStagedUploads();
 
 const references =
     process.env.NODE_ENV === "production"
