@@ -5,6 +5,10 @@ configuration_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 mkdir -p build/etc/init.d
 install -m 0755 "$configuration_dir/rcS" build/etc/init.d/rcS
 
+# pi-gen-micro puts BusyBox applet links in /bin, but its stock inittab calls
+# /sbin/getty. Point both recovery consoles at the applet that is present.
+sed -i 's|/sbin/getty|/bin/getty|g' build/etc/inittab
+
 # kpartx forces apt to install udev and systemd, although recovery only needs
 # libudev/libsystemd for rpi-fastbootd's ABI. Keep those shared libraries and
 # discard the daemons, service-manager payload and hardware databases.

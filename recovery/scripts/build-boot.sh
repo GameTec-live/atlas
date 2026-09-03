@@ -60,7 +60,7 @@ for executable in \
 done
 
 test -x "$root/bin/busybox"
-for applet in blkid blockdev dd find sha256sum stat tar timeout; do
+for applet in blkid blockdev dd find getty ifconfig sha256sum stat tar timeout; do
     test "$(readlink "$root/usr/bin/$applet")" = /bin/busybox || {
         echo "BusyBox applet link missing from built root: $applet" >&2
         exit 1
@@ -68,6 +68,11 @@ for applet in blkid blockdev dd find sha256sum stat tar timeout; do
 done
 test "$(readlink "$root/init")" = /bin/busybox
 test -x "$root/etc/init.d/rcS"
+grep -q '/bin/getty' "$root/etc/inittab"
+if grep -q '/sbin/getty' "$root/etc/inittab"; then
+    echo "Recovery inittab still references missing /sbin/getty" >&2
+    exit 1
+fi
 test -e "$root/usr/lib/aarch64-linux-gnu/libsystemd.so.0"
 test -e "$root/usr/lib/aarch64-linux-gnu/libudev.so.1"
 test ! -d "$root/usr/lib/systemd"

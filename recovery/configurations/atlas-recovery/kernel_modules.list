@@ -6,6 +6,8 @@ nls-cp437
 nls-iso8859-1
 
 # IDP/FDE provisioning.
+# rpi-fastbootd's TCP transport listens on an AF_INET6 dual-stack socket.
+ipv6
 dm-crypt
 algif_skcipher
 crypto-xts(aes)

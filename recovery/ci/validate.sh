@@ -30,6 +30,8 @@ fi
 
 recovery=$project_dir/configurations/atlas-recovery/atlas-recover
 dpkg_args=$project_dir/configurations/atlas-recovery/dpkg_extra_args
+kernel_modules=$project_dir/configurations/atlas-recovery/kernel_modules.list
+post_creation=$project_dir/configurations/atlas-recovery/post_creation.sh
 
 # pi-gen-micro prefixes every non-comment line with `--`; an empty line would
 # consequently become dpkg's end-of-options marker before its action argument.
@@ -49,11 +51,13 @@ erase_line=$(grep -n 'fb 60 erase' "$recovery" | cut -d: -f1)
 grep -q '\[ "$target" != "$media_disk" \]' "$recovery"
 grep -q 'artifact_count" -eq 1' "$recovery"
 grep -q 'fastbootd -v -i tcp' "$recovery"
+grep -q 'ifconfig lo 127\.0\.0\.1' "$recovery"
+grep -qx 'ipv6' "$kernel_modules"
 grep -q 'kill -USR1 "\$dd_pid"' "$recovery"
 grep -q 'oem fwcrypto init' "$recovery"
 grep -q 'oem idpdone' "$recovery"
 ! grep -q 'secure.boot\|program_pubkey\|CUSTOMER_KEY' "$recovery"
-grep -q 'build/usr/lib/modules-load.d/fastbootd.conf' \
-    "$project_dir/configurations/atlas-recovery/post_creation.sh"
+grep -q 'build/usr/lib/modules-load.d/fastbootd.conf' "$post_creation"
+grep -q "s|/sbin/getty|/bin/getty|g" "$post_creation"
 
 echo "Atlas recovery source validation passed."

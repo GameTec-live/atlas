@@ -1,0 +1,3 @@
+recovery/**/*.sh text eol=lf
+recovery/configurations/atlas-recovery/atlas-recover text eol=lf
+recovery/configurations/atlas-recovery/installer_scripts.list text eol=lf

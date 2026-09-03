@@ -199,7 +199,10 @@ start_fastbootd() {
         /proc/mounts; then
         mount -t tmpfs -o size=128m tmpfs /data
     fi
-    ifconfig lo up
+    # rpi-fastbootd listens on an IPv6 dual-stack socket, while the local
+    # fastboot client connects to 127.0.0.1.
+    ifconfig lo 127.0.0.1 netmask 255.0.0.0 up || \
+        die "could not configure the loopback interface"
     log "Starting local IDP engine"
     LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/android \
         /usr/bin/fastbootd -v -i tcp >> /run/atlas-recovery/fastbootd.log 2>&1 &
