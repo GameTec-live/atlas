@@ -1,10 +1,17 @@
 #!/bin/sh
 set -eu
 
+# pam_systemd sets XDG_RUNTIME_DIR to /run/user/<uid>, which ProtectHome hides
+# inside this service. Keep the compositor socket in our writable runtime dir.
+XDG_RUNTIME_DIR=${RUNTIME_DIRECTORY:?missing runtime directory}
+export XDG_RUNTIME_DIR
+
 show_prompt() {
-    printf '\033[2J\033[H\033[?25h'
-    printf '\n  Atlas OS\n\n'
-    printf '  Press ENTER to launch Atlas\n\n'
+    {
+        printf '\033[2J\033[H\033[?25h'
+        printf '\n  Atlas OS\n\n'
+        printf '  Press ENTER to launch Atlas\n\n'
+    } > /dev/tty1
 }
 
 show_prompt

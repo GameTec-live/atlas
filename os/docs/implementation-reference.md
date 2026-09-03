@@ -143,6 +143,8 @@ When adding a layer or changing ordering:
 - `atlas-kiosk` has no supplementary groups or persistent home, can reach only
   loopback addresses, and retains Chromium's user-namespace/process sandbox
   without allowing a setuid bootstrap.
+- UID 1999 and `user-1999.slice` stay aligned because logind moves the PAM
+  session out of the original service cgroup.
 - The kiosk targets only `https://localhost/` and relaxes certificate checks
   only for localhost.
 - SSH state is written atomically under `/persistent/atlas/system`.

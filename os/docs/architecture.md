@@ -93,7 +93,7 @@ Change it before exposing SSH.
 
 ### `atlas-kiosk`
 
-- system account with a locked password and `/usr/sbin/nologin` shell;
+- UID 1999 system account with a locked password and `/usr/sbin/nologin` shell;
 - has no persistent home or state, supplementary groups, or sudo access;
 - runs only a small TTY launcher until ENTER is pressed, then replaces it with
   the Cage compositor and Chromium;
@@ -101,13 +101,12 @@ Change it before exposing SSH.
 - is limited by systemd to loopback networking, required display/input devices,
   and an ephemeral runtime directory.
 
-The waiting prompt uses a greeter-class logind session, so it does not start a
-separate per-user service manager for the kiosk account.
-
 Chromium keeps its process sandbox using unprivileged user namespaces; its
 legacy setuid bootstrap is disabled. The kiosk service prevents privilege
 gains, makes the host filesystem read-only, hides home directories and other
 users' processes, and isolates temporary files, IPC, mounts and its keyring.
+Because logind moves the graphical session into `user-1999.slice`, its user
+slice repeats the service's loopback and device cgroup restrictions.
 
 ### `atlas-containers`
 

@@ -377,6 +377,11 @@ confirm the display and input devices are detected and that `/usr/bin/cage` and
 expected when launched during first boot; it should retry every 30 seconds
 without restarting the kiosk service.
 
+If Cage reports `Unable to open Wayland socket`, confirm the launcher resets
+`XDG_RUNTIME_DIR` to `$RUNTIME_DIRECTORY`. `pam_systemd` points it at
+`/run/user/<uid>`, which is intentionally hidden by the service's
+`ProtectHome=yes` sandbox.
+
 ### `atlas-web` stays `activating`
 
 The Quadlet uses `Notify=healthy` and waits on API/map. Inspect all dependency

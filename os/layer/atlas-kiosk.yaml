@@ -17,6 +17,7 @@ mmdebstrap:
       if ! chroot "$1" id atlas-kiosk >/dev/null 2>&1; then
         chroot "$1" useradd \
           --system \
+          --uid 1999 \
           --user-group \
           --no-create-home \
           --home-dir /run/atlas-kiosk \
@@ -26,6 +27,7 @@ mmdebstrap:
       chroot "$1" passwd --lock atlas-kiosk
     - chmod 0755 "$1/usr/local/libexec/atlas-kiosk-launcher"
     - chmod 0644 "$1/usr/lib/systemd/system/atlas-kiosk.service"
+    - chmod 0644 "$1/usr/lib/systemd/system/user-1999.slice.d/50-atlas-kiosk.conf"
     - chmod 0644 "$1/usr/share/atlas/kiosk-retry/manifest.json"
     - chmod 0644 "$1/usr/share/atlas/kiosk-retry/retry.js"
     - $BDEBSTRAP_HOOKS/enable-units "$1" atlas-kiosk.service
