@@ -357,7 +357,7 @@
     "settings_system_tunnel_token": "Tunnel-Token",
     "settings_system_auth_key": "Auth-Schlüssel",
     "settings_system_hostname_optional": "Hostname (optional)",
-    "settings_system_public_origin_optional": "Öffentlicher Ursprung (optional)",
+    "settings_system_public_origin_optional": "Ursprung (optional)",
     "settings_system_remote_access_saved": "Fernzugriff aktualisiert",
     "settings_system_auth_origins": "Authentifizierungsursprünge",
     "settings_system_auth_origins_description": "HTTPS-Ursprünge, die Atlas-Authentifizierung verwenden dürfen.",
