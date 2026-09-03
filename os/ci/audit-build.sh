@@ -69,7 +69,7 @@ grep -q '^dtparam=pciex1_gen=3$' "$rootfs/boot/firmware/config.txt"
 [[ "$(readlink "$rootfs/etc/systemd/system/multi-user.target.wants/atlas-kiosk.service")" = /usr/lib/systemd/system/atlas-kiosk.service ]]
 grep -q -F 'Press ENTER to launch Atlas' \
     "$rootfs/usr/local/libexec/atlas-kiosk-launcher"
-grep -q -F 'XDG_RUNTIME_DIR=${RUNTIME_DIRECTORY:?missing runtime directory}' \
+grep -q -F "XDG_RUNTIME_DIR=\${RUNTIME_DIRECTORY:?missing runtime directory}" \
     "$rootfs/usr/local/libexec/atlas-kiosk-launcher"
 grep -q -F 'ExecStart=/usr/local/libexec/atlas-kiosk-launcher' \
     "$rootfs/usr/lib/systemd/system/atlas-kiosk.service"

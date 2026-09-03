@@ -123,7 +123,7 @@ python3 -m json.tool "$kiosk_extension/manifest.json" >/dev/null
 rg -q -F 'ExecStart=/usr/local/libexec/atlas-kiosk-launcher' "$kiosk_unit"
 rg -q -F 'Press ENTER to launch Atlas' "$kiosk_launcher"
 rg -q -F 'if ! IFS= read -r input; then' "$kiosk_launcher"
-rg -q -F 'XDG_RUNTIME_DIR=${RUNTIME_DIRECTORY:?missing runtime directory}' "$kiosk_launcher"
+rg -q -F "XDG_RUNTIME_DIR=\${RUNTIME_DIRECTORY:?missing runtime directory}" "$kiosk_launcher"
 rg -q -F '} > /dev/tty1' "$kiosk_launcher"
 rg -q -F 'exec /usr/bin/cage -s -- /usr/bin/chromium' "$kiosk_launcher"
 rg -q -F 'User=atlas-kiosk' "$kiosk_unit"
