@@ -91,6 +91,10 @@ internal class MapLibreSurfaceRenderer(
     private var jobQueueView: TextView? = null
     private var jobTitleView: TextView? = null
     private var jobSummaryView: TextView? = null
+    private var navigationCardView: LinearLayout? = null
+    private var navigationIconView: ImageView? = null
+    private var navigationInstructionView: TextView? = null
+    private var navigationDistanceView: TextView? = null
     private var dispatcherSidebarView: LinearLayout? = null
     private var dispatcherSidebarToggleView: TextView? = null
     private var dispatcherUserScrollView: ScrollView? = null
@@ -132,6 +136,10 @@ internal class MapLibreSurfaceRenderer(
     private var jobSummary = carContext.getString(
         org.gtlv.car_common.R.string.driver_loading_job,
     )
+    private var navigationIconResource: Int? = null
+    private var mirrorNavigationIconHorizontally = false
+    private var navigationInstruction: String? = null
+    private var navigationDistance: String? = null
     private var queuedJobCount = 0
     private var sidebarUsers: List<SidebarUser> = emptyList()
     private var liveMapUsers: List<LiveMapUser> = emptyList()
@@ -373,6 +381,19 @@ internal class MapLibreSurfaceRenderer(
         jobSummary = summary
         jobSummaryView?.text = summary
         jobCardView?.post(::positionJobCardToggle)
+    }
+
+    fun updateNavigationGuidance(
+        iconResource: Int?,
+        mirrorIconHorizontally: Boolean,
+        instruction: String?,
+        distance: String?,
+    ) {
+        navigationIconResource = iconResource
+        mirrorNavigationIconHorizontally = mirrorIconHorizontally
+        navigationInstruction = instruction?.trim()?.ifBlank { null }
+        navigationDistance = distance?.trim()?.ifBlank { null }
+        renderNavigationGuidance()
     }
 
     fun updateQueuedJobCount(count: Int) {
@@ -748,6 +769,7 @@ internal class MapLibreSurfaceRenderer(
             View.GONE
         }
         updateDispatcherSidebarToggleContent()
+        renderNavigationGuidance()
 
         (mapView?.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
             params.leftMargin = dispatcherSidebarWidth()
@@ -908,17 +930,23 @@ internal class MapLibreSurfaceRenderer(
             0,
         )
         mapCompassView?.bringToFront()
+        navigationCardView?.post(::positionNavigationCard)
     }
 
     private fun isMapCompassClick(x: Float, y: Float): Boolean {
-        val compass = mapCompassView ?: return false
-        val root = rootView ?: return false
+        val bounds = mapCompassBounds() ?: return false
+        return bounds.contains(x.toInt(), y.toInt())
+    }
+
+    private fun mapCompassBounds(): Rect? {
+        val compass = mapCompassView ?: return null
+        val root = rootView ?: return null
         if (!compass.isShown || compass.width <= 0 || compass.height <= 0) {
-            return false
+            return null
         }
         val bounds = Rect().also(compass::getDrawingRect)
         root.offsetDescendantRectToMyCoords(compass, bounds)
-        return bounds.contains(x.toInt(), y.toInt())
+        return bounds
     }
 
     private fun createMapLayout(
@@ -936,6 +964,84 @@ internal class MapLibreSurfaceRenderer(
                 leftMargin = dispatcherSidebarWidth()
             },
         )
+
+        val navigationCard = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(10), dp(16), dp(10))
+            background = roundedBackground(
+                color = Color.argb(238, 32, 33, 36),
+                radiusDp = 16,
+            )
+            elevation = dp(12).toFloat()
+            visibility = View.GONE
+        }
+        navigationCardView = navigationCard
+        val navigationIconContainer = FrameLayout(context)
+        val navigationIcon = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            imageTintList = ColorStateList.valueOf(Color.WHITE)
+            contentDescription = null
+        }
+        navigationIconView = navigationIcon
+        navigationIconContainer.addView(
+            navigationIcon,
+            FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER),
+        )
+        navigationCard.addView(
+            navigationIconContainer,
+            LinearLayout.LayoutParams(dp(58), dp(58)),
+        )
+        val navigationText = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val navigationInstructionLabel = TextView(context).apply {
+            setTextColor(Color.WHITE)
+            textSize = 21f
+            maxLines = Int.MAX_VALUE
+            ellipsize = null
+            includeFontPadding = false
+        }
+        navigationInstructionView = navigationInstructionLabel
+        navigationText.addView(navigationInstructionLabel)
+        val navigationDistanceLabel = TextView(context).apply {
+            setTextColor(Color.rgb(210, 213, 218))
+            textSize = 17f
+            maxLines = 2
+            includeFontPadding = false
+        }
+        navigationDistanceView = navigationDistanceLabel
+        navigationText.addView(
+            navigationDistanceLabel,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(4)
+            },
+        )
+        navigationCard.addView(
+            navigationText,
+            LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f,
+            ).apply {
+                marginStart = dp(8)
+            },
+        )
+        root.addView(
+            navigationCard,
+            FrameLayout.LayoutParams(
+                responsiveNavigationCardWidth(),
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.START,
+            ).apply {
+                leftMargin = navigationCardLeftMargin()
+                topMargin = navigationCardTopMargin()
+            },
+        )
+        renderNavigationGuidance()
 
         val jobCard = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -1078,6 +1184,7 @@ internal class MapLibreSurfaceRenderer(
         root.post {
             applyOverlayInsets()
             jobCard.bringToFront()
+            navigationCard.bringToFront()
             jobToggle.bringToFront()
             positionJobCardToggle()
             dispatcherSidebarView?.bringToFront()
@@ -1106,9 +1213,80 @@ internal class MapLibreSurfaceRenderer(
                 (jobSummaryView?.parent as? LinearLayout)?.layoutParams = this
             }
         jobCardView?.post(::positionJobCardToggle)
+        positionNavigationCard()
         applyResponsiveJobCardLayout()
         applyJobNotificationInsets()
     }
+
+    private fun renderNavigationGuidance() {
+        val iconResource = navigationIconResource
+        val instruction = navigationInstruction
+        navigationIconView?.apply {
+            if (iconResource != null) {
+                setImageResource(iconResource)
+            } else {
+                setImageDrawable(null)
+            }
+            scaleX = if (mirrorNavigationIconHorizontally) -1f else 1f
+        }
+        navigationInstructionView?.text = instruction.orEmpty()
+        navigationDistanceView?.text = navigationDistance.orEmpty()
+        navigationCardView?.visibility = if (
+            iconResource != null &&
+            instruction != null &&
+            areMainMapOverlaysVisible
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        navigationCardView?.post(::positionNavigationCard)
+    }
+
+    private fun positionNavigationCard() {
+        val card = navigationCardView ?: return
+        (card.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            params.width = responsiveNavigationCardWidth()
+            params.leftMargin = navigationCardLeftMargin()
+            params.topMargin = navigationCardTopMargin()
+            card.layoutParams = params
+        }
+    }
+
+    private fun responsiveNavigationCardWidth(): Int {
+        val left = navigationCardLeftMargin()
+        val safeRight = if (stableArea.isEmpty) {
+            surfaceWidth
+        } else {
+            stableArea.right.coerceAtMost(surfaceWidth)
+        }
+        val available = (safeRight - left - dp(OVERLAY_MARGIN_DP))
+            .coerceAtLeast(1)
+        return minOf(
+            dp(NAVIGATION_CARD_WIDTH_DP),
+            available,
+        )
+    }
+
+    private fun navigationCardLeftMargin(): Int {
+        val safeStart = if (stableArea.isEmpty) {
+            dispatcherSidebarWidth() + dp(OVERLAY_MARGIN_DP)
+        } else {
+            maxOf(stableArea.left, dispatcherSidebarWidth()) +
+                dp(OVERLAY_MARGIN_DP)
+        }
+        val fallbackCompassRight = safeStart +
+            dp(COMPASS_MARGIN_DP + COMPASS_FALLBACK_SIZE_DP)
+        return maxOf(
+            safeStart,
+            (mapCompassBounds()?.right ?: fallbackCompassRight) +
+                dp(NAVIGATION_COMPASS_GAP_DP),
+        )
+    }
+
+    private fun navigationCardTopMargin(): Int = mapCompassBounds()?.top
+        ?: ((if (stableArea.isEmpty) 0 else stableArea.top) +
+            dp(COMPASS_MARGIN_DP))
 
     private fun createJobNotificationView(context: Context): LinearLayout {
         val card = LinearLayout(context).apply {
@@ -1931,6 +2109,10 @@ internal class MapLibreSurfaceRenderer(
         jobQueueView = null
         jobTitleView = null
         jobSummaryView = null
+        navigationCardView = null
+        navigationIconView = null
+        navigationInstructionView = null
+        navigationDistanceView = null
         dispatcherSidebarView = null
         dispatcherSidebarToggleView = null
         dispatcherUserScrollView = null
@@ -2003,6 +2185,7 @@ internal class MapLibreSurfaceRenderer(
         const val SIDEBAR_COLLAPSE_CHEVRON = "\u2039"
         const val SIDEBAR_EXPAND_CHEVRON = "\u203A"
         const val JOB_CARD_WIDTH_DP = 240
+        const val NAVIGATION_CARD_WIDTH_DP = 520
         const val JOB_CARD_DRIVER_TOGGLE_GAP_DP = 12
         const val COMPACT_JOB_CARD_WIDTH_DP = 700
         const val COMPACT_JOB_CARD_HEIGHT_DP = 500
@@ -2038,6 +2221,8 @@ internal class MapLibreSurfaceRenderer(
         const val ADDRESS_FOCUS_ZOOM = 16.0
         const val NORTH_BEARING_DEGREES = 0.0
         const val COMPASS_MARGIN_DP = 16
+        const val COMPASS_FALLBACK_SIZE_DP = 48
+        const val NAVIGATION_COMPASS_GAP_DP = 10
         const val COMPASS_RESET_DURATION_MILLIS = 300
         const val MIN_USER_ZOOM = 3.0
         const val MAX_USER_ZOOM = 20.0

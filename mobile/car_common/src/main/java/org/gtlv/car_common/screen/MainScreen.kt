@@ -1,6 +1,5 @@
 package org.gtlv.car_common.screen
 
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.SystemClock
 import androidx.car.app.AppManager
@@ -66,6 +65,8 @@ import org.gtlv.core.pricing.PricingRepository
 import kotlin.time.Duration.Companion.milliseconds
 import org.gtlv.core.job.Job as AtlasJob
 import androidx.core.graphics.createBitmap
+import java.text.NumberFormat
+import kotlin.math.roundToInt
 
 class MainScreen(
     carContext: CarContext,
@@ -120,6 +121,8 @@ class MainScreen(
     private var routeTarget: AutomotiveRouteTarget? = null
     private var currentRoute: Route? = null
     private var routeProgress: RouteProgress? = null
+    private var navigationDisplayState:
+        AutomotiveNavigationDisplayState? = null
     private var routeRequestGeneration = 0L
     private var offRouteSampleCount = 0
     private var wrongWaySampleCount = 0
@@ -911,6 +914,7 @@ class MainScreen(
                     }
                 }
             }
+            refreshNavigationGuidance()
         }
     }
 
@@ -929,6 +933,7 @@ class MainScreen(
         )
         routeProgress = progress
         renderRemainingRoute()
+        refreshNavigationGuidance()
         evaluateAutomaticReroute(location, progress)
     }
 
@@ -1004,6 +1009,80 @@ class MainScreen(
         wrongWaySampleCount = 0
         lastAutomaticRerouteAtMillis = 0L
         mapRenderer.updateRoute(emptyList())
+        refreshNavigationGuidance()
+    }
+
+    private fun refreshNavigationGuidance() {
+        val newDisplayState = currentRoute?.let { route ->
+            automotiveNavigationGuidance(
+                route = route,
+                progress = routeProgress,
+            )?.displayState()
+        }
+        if (newDisplayState == navigationDisplayState) return
+
+        navigationDisplayState = newDisplayState
+        val icon = newDisplayState?.let { state ->
+            maneuverIcon(
+                valhallaType = state.maneuverType,
+                roundaboutTurnDegrees = state.roundaboutTurnDegrees,
+                roundaboutExitCount = state.roundaboutExitCount,
+            )
+        }
+        mapRenderer.updateNavigationGuidance(
+            iconResource = icon?.drawableResource,
+            mirrorIconHorizontally = icon?.mirrorHorizontally == true,
+            instruction = newDisplayState?.instruction,
+            distance = newDisplayState?.let(::formatNavigationSummary),
+        )
+    }
+
+    private fun formatNavigationSummary(
+        state: AutomotiveNavigationDisplayState,
+    ): String = carContext.getString(
+        R.string.navigation_maneuver_summary,
+        carContext.getString(
+            R.string.navigation_in_distance,
+            formatNavigationDistance(
+                state.distanceToManeuverDecameters / 100.0,
+            ),
+        ),
+        formatNavigationDuration(state.remainingRouteMinutes),
+        formatNavigationDistance(
+            state.remainingRouteHectometers / 10.0,
+        ),
+    )
+
+    private fun formatNavigationDuration(minutes: Int): String =
+        if (minutes < 60) {
+            carContext.getString(
+                R.string.navigation_duration_minutes,
+                minutes.coerceAtLeast(0),
+            )
+        } else {
+            carContext.getString(
+                R.string.navigation_duration_hours_minutes,
+                minutes / 60,
+                minutes % 60,
+            )
+        }
+
+    private fun formatNavigationDistance(kilometers: Double): String {
+        return if (kilometers < 1.0) {
+            carContext.getString(
+                R.string.navigation_distance_meters,
+                (kilometers * 1_000.0).roundToInt(),
+            )
+        } else {
+            val formatter = NumberFormat.getNumberInstance().apply {
+                maximumFractionDigits = 1
+                minimumFractionDigits = 0
+            }
+            carContext.getString(
+                R.string.navigation_distance_kilometers,
+                formatter.format(kilometers),
+            )
+        }
     }
 
     private fun AtlasLocation.toRoutePoint(): RoutePoint = RoutePoint(

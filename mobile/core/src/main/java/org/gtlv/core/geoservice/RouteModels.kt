@@ -25,7 +25,10 @@ data class RouteManeuver(
     val beginShapeIndex: Int?,
     val endShapeIndex: Int?,
     val travelMode: String?,
-    val travelType: String?
+    val travelType: String?,
+    val roundaboutExitCount: Int? = null,
+    val bearingBeforeDegrees: Int? = null,
+    val bearingAfterDegrees: Int? = null,
 )
 
 data class Route(
