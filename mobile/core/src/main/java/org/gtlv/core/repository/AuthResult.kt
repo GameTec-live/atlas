@@ -4,7 +4,8 @@ sealed interface AuthResult {
 
     data class Success(
         val userId: String,
-        val userName: String
+        val userName: String,
+        val isAdmin: Boolean = false
     ) : AuthResult
 
     data object InvalidCredentials : AuthResult

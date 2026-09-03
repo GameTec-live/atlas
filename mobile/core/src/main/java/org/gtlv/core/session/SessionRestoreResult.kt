@@ -4,7 +4,8 @@ sealed interface SessionRestoreResult {
 
     data class Valid(
         val userId: String,
-        val userName: String
+        val userName: String,
+        val isAdmin: Boolean = false
     ) : SessionRestoreResult
 
     data object NoStoredSession : SessionRestoreResult

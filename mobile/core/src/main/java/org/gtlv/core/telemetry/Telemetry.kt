@@ -42,6 +42,11 @@ class Telemetry(
     override val odometerKilometers: StateFlow<Double?> =
         _odometerKilometers.asStateFlow()
 
+    private val _vehicleFingerprint = MutableStateFlow<String?>(null)
+
+    override val vehicleFingerprint: StateFlow<String?> =
+        _vehicleFingerprint.asStateFlow()
+
     private var vehicleState = initialState
     private var vehicleId: String? = null
     private var location: AtlasLocation? = null
@@ -132,9 +137,14 @@ class Telemetry(
         connectedCarContext = carContext
         bluetoothMacProvider =
             ConnectedCarBluetoothMacProvider(carContext) { macAddress ->
-                vehicleId = macAddress?.let(
+                val fingerprint = macAddress?.let(
                     BluetoothVehicleId::fromMacAddress
                 )
+
+                if (_vehicleFingerprint.value != fingerprint) {
+                    _vehicleFingerprint.value = fingerprint
+                    vehicleId = null
+                }
                 publishTelemetry()
             }
 
@@ -147,6 +157,7 @@ class Telemetry(
         if (connectedCarContext !== context) return
 
         vehicleId = null
+        _vehicleFingerprint.value = null
         fuelLevel = null
         odometer = null
         _odometerKilometers.value = null
@@ -159,6 +170,12 @@ class Telemetry(
     @MainThread
     override fun setVehicleState(state: TelemetryVehicleState) {
         vehicleState = state
+        publishTelemetry()
+    }
+
+    @MainThread
+    override fun setResolvedVehicleId(vehicleId: String?) {
+        this.vehicleId = vehicleId
         publishTelemetry()
     }
 

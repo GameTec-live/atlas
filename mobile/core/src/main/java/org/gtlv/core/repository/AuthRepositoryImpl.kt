@@ -159,13 +159,15 @@ class AuthRepositoryImpl(
             val name = user
                 .optString("name")
                 .ifBlank { email }
+            val isAdmin = user.hasAdminRole()
 
             if (userId.isBlank() || name.isBlank()) {
                 SessionRestoreResult.InvalidResponse
             } else {
                 SessionRestoreResult.Valid(
                     userId = userId,
-                    userName = name
+                    userName = name,
+                    isAdmin = isAdmin
                 )
             }
         } catch (_: Exception) {
@@ -186,6 +188,7 @@ class AuthRepositoryImpl(
             val name = user
                 .optString("name")
                 .ifBlank { email }
+            val isAdmin = user.hasAdminRole()
 
             if (userId.isBlank() || name.isBlank()) {
                 return AuthResult.InvalidResponse
@@ -204,13 +207,19 @@ class AuthRepositoryImpl(
 
             AuthResult.Success(
                 userId = userId,
-                userName = name
+                userName = name,
+                isAdmin = isAdmin
             )
         } catch (_: Exception) {
             clearLocalSession()
             AuthResult.InvalidResponse
         }
     }
+
+    private fun JSONObject.hasAdminRole(): Boolean =
+        optString("role")
+            .split(',')
+            .any { role -> role.trim().equals("admin", ignoreCase = true) }
 
     private fun readServerMessage(
         responseText: String

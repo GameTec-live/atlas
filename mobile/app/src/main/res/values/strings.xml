@@ -65,6 +65,12 @@
     <string name="navigation_expand_steps">Show all route steps</string>
     <string name="navigation_collapse_steps">Hide route steps</string>
     <string name="logout">Log out</string>
+    <string name="pair_vehicle_title">Pair this car</string>
+    <string name="pair_vehicle_message">This car is not registered yet. Select the matching vehicle.</string>
+    <string name="pair_vehicle_item">%1$s · %2$s</string>
+    <string name="pair_vehicle_empty">There are no vehicles available for pairing.</string>
+    <string name="pair_vehicle_error">Could not load or pair the vehicle.</string>
+    <string name="pair_vehicle_retry">Retry</string>
 
     <string name="job_panel_load_error">Could not load jobs</string>
     <string name="job_panel_retry">Retry</string>

@@ -36,6 +36,7 @@ import org.gtlv.atlas.auth.LoginViewModelFactory
 import org.gtlv.atlas.assign.AssignJobViewModel
 import org.gtlv.atlas.assign.AssignJobViewModelFactory
 import org.gtlv.atlas.location.RequiredLocationPermissionGate
+import org.gtlv.atlas.fleet.PairVehicleDialog
 import org.gtlv.atlas.main.MainScreenViewModel
 import org.gtlv.atlas.main.MainScreenViewModelFactory
 import org.gtlv.atlas.navigation.AuthenticatedNavHost
@@ -54,6 +55,7 @@ import org.gtlv.atlas.unassigned.UnassignedJobsViewModelFactory
 import org.gtlv.core.session.SessionState
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.shift.ShiftSessionState
+import org.gtlv.core.fleet.ConnectedVehicleState
 
 class MainActivity : ComponentActivity() {
 
@@ -158,6 +160,10 @@ class MainActivity : ComponentActivity() {
                 val sessionState by
                 sessionManager.state
                     .collectAsStateWithLifecycle()
+
+                val connectedVehicleState by
+                    atlasApplication.connectedVehicleManager.state
+                        .collectAsStateWithLifecycle()
 
                 val jobNotificationState by
                 jobNotificationViewModel.uiState
@@ -458,6 +464,27 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
+                (connectedVehicleState as? ConnectedVehicleState.PairingRequired)
+                    ?.let { pairingState ->
+                        PairVehicleDialog(
+                            state = pairingState,
+                            onVehicleSelected = { vehicleId ->
+                                coroutineScope.launch {
+                                    atlasApplication.connectedVehicleManager
+                                        .pair(vehicleId)
+                                }
+                            },
+                            onRetry = {
+                                coroutineScope.launch {
+                                    atlasApplication.connectedVehicleManager
+                                        .retryPairingCandidates()
+                                }
+                            },
+                            onDismiss = atlasApplication
+                                .connectedVehicleManager::dismissPairing
+                        )
+                    }
             }
         }
     }
