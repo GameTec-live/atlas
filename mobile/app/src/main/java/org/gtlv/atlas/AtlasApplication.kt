@@ -35,6 +35,14 @@ import org.gtlv.core.job.JobNotification
 import org.gtlv.core.job.JobNotificationSyncProvider
 import org.gtlv.core.geoservice.GeoServiceRepositoryImpl
 import org.gtlv.core.geoservice.GeoServiceRepositoryProvider
+import org.gtlv.core.fleet.ConnectedVehicleManager
+import org.gtlv.core.fleet.ConnectedVehicleStore
+import org.gtlv.core.fleet.FleetRepository
+import org.gtlv.core.fleet.FleetRepositoryImpl
+import org.gtlv.core.fleet.FleetRepositoryProvider
+import org.gtlv.core.logbook.LogbookRepository
+import org.gtlv.core.logbook.LogbookRepositoryImpl
+import org.gtlv.core.logbook.LogbookRepositoryProvider
 import org.gtlv.core.telemetry.TelemetryWebSocketSender
 import org.gtlv.core.telemetry.LiveMapUsersProvider
 import org.gtlv.core.job.CollectedJobStore
@@ -56,7 +64,8 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     JobRepositoryProvider, CollectedJobStoreProvider,
     JobMileageStoreProvider, PricingRepositoryProvider,
     SessionManagerProvider, LiveMapUsersProvider,
-    GeoServiceRepositoryProvider, JobNotificationSyncProvider {
+    GeoServiceRepositoryProvider, JobNotificationSyncProvider,
+    FleetRepositoryProvider, LogbookRepositoryProvider {
 
     private val applicationScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate
@@ -192,6 +201,33 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         )
     }
 
+    override val fleetRepository: FleetRepository by lazy {
+        FleetRepositoryImpl(
+            networkClient = networkClient,
+            serverSettingsRepository = serverSettingsRepository
+        )
+    }
+
+    override val logbookRepository: LogbookRepository by lazy {
+        LogbookRepositoryImpl(
+            networkClient = networkClient,
+            serverSettingsRepository = serverSettingsRepository
+        )
+    }
+
+    private val connectedVehicleStore by lazy {
+        ConnectedVehicleStore(applicationContext)
+    }
+
+    val connectedVehicleManager by lazy {
+        ConnectedVehicleManager(
+            telemetryProvider = telemetryProvider,
+            sessionState = sessionManager.state,
+            fleetRepository = fleetRepository,
+            store = connectedVehicleStore
+        )
+    }
+
     override val sessionManager by lazy {
         SessionManager(
             authRepository = authRepository,
@@ -261,6 +297,7 @@ class AtlasApplication : Application(), ShiftSessionProvider,
             .createChannel()
 
         applicationTelemetry.start()
+        connectedVehicleManager.start(applicationScope)
         observeShiftStartKilometer()
         telemetryWebSocketSender.start()
         jobNotificationSync

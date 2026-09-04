@@ -36,12 +36,17 @@ import org.gtlv.atlas.auth.LoginViewModelFactory
 import org.gtlv.atlas.assign.AssignJobViewModel
 import org.gtlv.atlas.assign.AssignJobViewModelFactory
 import org.gtlv.atlas.location.RequiredLocationPermissionGate
+import org.gtlv.atlas.fleet.PairVehicleDialog
 import org.gtlv.atlas.main.MainScreenViewModel
 import org.gtlv.atlas.main.MainScreenViewModelFactory
 import org.gtlv.atlas.navigation.AuthenticatedNavHost
 import org.gtlv.atlas.notification.JobNotificationViewModel
 import org.gtlv.atlas.notification.JobNotificationViewModelFactory
 import org.gtlv.atlas.notification.JobSystemNotificationManager
+import org.gtlv.atlas.offboarding.composable.EndKilometerDialog
+import org.gtlv.atlas.offboarding.OffboardingScreen
+import org.gtlv.atlas.offboarding.OffboardingViewModel
+import org.gtlv.atlas.offboarding.OffboardingViewModelFactory
 import org.gtlv.atlas.newjob.NewJobViewModel
 import org.gtlv.atlas.newjob.NewJobViewModelFactory
 import org.gtlv.atlas.role.RoleSelectionScreen
@@ -54,6 +59,7 @@ import org.gtlv.atlas.unassigned.UnassignedJobsViewModelFactory
 import org.gtlv.core.session.SessionState
 import org.gtlv.core.shift.ShiftRole
 import org.gtlv.core.shift.ShiftSessionState
+import org.gtlv.core.fleet.ConnectedVehicleState
 
 class MainActivity : ComponentActivity() {
 
@@ -79,6 +85,19 @@ class MainActivity : ComponentActivity() {
         JobNotificationViewModelFactory(
             jobRepository = atlasApplication.jobRepository,
             notificationSync = atlasApplication.jobNotificationSync
+        )
+    }
+
+    private val offboardingViewModel:
+            OffboardingViewModel by viewModels {
+        OffboardingViewModelFactory(
+            shiftSessionManager = atlasApplication.shiftSessionManager,
+            telemetryProvider = atlasApplication.telemetryProvider,
+            connectedVehicleState =
+                atlasApplication.connectedVehicleManager.state,
+            fleetRepository = atlasApplication.fleetRepository,
+            logbookRepository = atlasApplication.logbookRepository,
+            sessionManager = atlasApplication.sessionManager
         )
     }
 
@@ -158,6 +177,14 @@ class MainActivity : ComponentActivity() {
                 val sessionState by
                 sessionManager.state
                     .collectAsStateWithLifecycle()
+
+                val connectedVehicleState by
+                    atlasApplication.connectedVehicleManager.state
+                        .collectAsStateWithLifecycle()
+
+                val offboardingState by
+                    offboardingViewModel.uiState
+                        .collectAsStateWithLifecycle()
 
                 val jobNotificationState by
                 jobNotificationViewModel.uiState
@@ -365,7 +392,51 @@ class MainActivity : ComponentActivity() {
                                                         .userId
                                         }
 
-                                RequiredLocationPermissionGate(
+                                if (
+                                    offboardingState
+                                        .isEndKilometerDialogVisible
+                                ) {
+                                    EndKilometerDialog(
+                                        value = offboardingState
+                                            .endKilometerInput,
+                                        isInvalid = offboardingState
+                                            .isEndKilometerInvalid,
+                                        onValueChanged =
+                                            offboardingViewModel::
+                                            updateEndKilometerInput,
+                                        onConfirm =
+                                            offboardingViewModel::
+                                            confirmEndKilometer,
+                                        onDismiss =
+                                            offboardingViewModel::
+                                            dismissEndKilometerDialog
+                                    )
+                                }
+
+                                if (offboardingState.isVisible) {
+                                    OffboardingScreen(
+                                        state = offboardingState,
+                                        onRevenueChanged =
+                                            offboardingViewModel::
+                                            updateRevenue,
+                                        onConfirmationChanged =
+                                            offboardingViewModel::
+                                            setConfirmed,
+                                        onVehicleSelected =
+                                            offboardingViewModel::
+                                            selectVehicle,
+                                        onRetryVehicles =
+                                            offboardingViewModel::
+                                            retryLoadVehicles,
+                                        onSubmit =
+                                            offboardingViewModel::
+                                            submitAndLogout,
+                                        onBack =
+                                            offboardingViewModel::
+                                            cancelOffboarding
+                                    )
+                                } else {
+                                    RequiredLocationPermissionGate(
                                     locationProvider =
                                         atlasApplication
                                             .locationProvider
@@ -451,13 +522,36 @@ class MainActivity : ComponentActivity() {
                                         onAssignmentNavigationHandled = jobNotificationViewModel::assignmentNavigationHandled,
                                         onDismissDeclineConfirmation = jobNotificationViewModel::dismissDeclineConfirmation,
                                         onConfirmDecline = jobNotificationViewModel::confirmDecline,
-                                        onLogout = loginViewModel::logout
+                                        onLogout =
+                                            offboardingViewModel::requestLogout
                                     )
+                                }
                                 }
                             }
                         }
                     }
                 }
+
+                (connectedVehicleState as? ConnectedVehicleState.PairingRequired)
+                    ?.let { pairingState ->
+                        PairVehicleDialog(
+                            state = pairingState,
+                            onVehicleSelected = { vehicleId ->
+                                coroutineScope.launch {
+                                    atlasApplication.connectedVehicleManager
+                                        .pair(vehicleId)
+                                }
+                            },
+                            onRetry = {
+                                coroutineScope.launch {
+                                    atlasApplication.connectedVehicleManager
+                                        .retryPairingCandidates()
+                                }
+                            },
+                            onDismiss = atlasApplication
+                                .connectedVehicleManager::dismissPairing
+                        )
+                    }
             }
         }
     }

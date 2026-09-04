@@ -38,7 +38,11 @@ class DataStoreShiftSessionStore(
         return ShiftSession(
             role = role,
             startTimeUtc = startTime,
-            startKilometer = preferences[START_KILOMETER_KEY]
+            startKilometer = preferences[START_KILOMETER_KEY],
+            endTimeUtc = preferences[END_TIME_KEY]?.let { value ->
+                runCatching { Instant.parse(value) }.getOrNull()
+            },
+            endKilometer = preferences[END_KILOMETER_KEY]
         )
     }
 
@@ -56,6 +60,18 @@ class DataStoreShiftSessionStore(
                 preferences[START_KILOMETER_KEY] =
                     session.startKilometer
             }
+
+            if (session.endTimeUtc == null) {
+                preferences.remove(END_TIME_KEY)
+            } else {
+                preferences[END_TIME_KEY] = session.endTimeUtc.toString()
+            }
+
+            if (session.endKilometer == null) {
+                preferences.remove(END_KILOMETER_KEY)
+            } else {
+                preferences[END_KILOMETER_KEY] = session.endKilometer
+            }
         }
     }
 
@@ -64,6 +80,8 @@ class DataStoreShiftSessionStore(
             preferences.remove(ROLE_KEY)
             preferences.remove(START_TIME_KEY)
             preferences.remove(START_KILOMETER_KEY)
+            preferences.remove(END_TIME_KEY)
+            preferences.remove(END_KILOMETER_KEY)
         }
     }
 
@@ -76,5 +94,11 @@ class DataStoreShiftSessionStore(
 
         val START_KILOMETER_KEY =
             doublePreferencesKey("shift_start_kilometer")
+
+        val END_TIME_KEY =
+            stringPreferencesKey("shift_end_time_utc")
+
+        val END_KILOMETER_KEY =
+            doublePreferencesKey("shift_end_kilometer")
     }
 }

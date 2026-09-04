@@ -70,8 +70,88 @@ class ShiftSessionManager(
         _state.value = ShiftSessionState.Active(updatedSession)
     }
 
+    suspend fun beginShiftEnd(
+        endKilometer: Double?
+    ) = mutationMutex.withLock {
+        requireValidKilometer(endKilometer, "endKilometer")
+
+        val currentSession =
+            (_state.value as? ShiftSessionState.Active)
+                ?.session
+                ?: return@withLock
+
+        require(
+            endKilometer == null ||
+                currentSession.startKilometer == null ||
+                endKilometer >= currentSession.startKilometer
+        ) {
+            "endKilometer must not be lower than startKilometer"
+        }
+
+        val updatedSession = currentSession.copy(
+            endTimeUtc = currentSession.endTimeUtc ?: Instant.now(clock),
+            endKilometer = currentSession.endKilometer ?: endKilometer
+        )
+
+        store.save(updatedSession)
+        _state.value = ShiftSessionState.Active(updatedSession)
+    }
+
+    suspend fun setEndKilometer(
+        endKilometer: Double
+    ) = mutationMutex.withLock {
+        requireValidKilometer(endKilometer, "endKilometer")
+
+        val currentSession =
+            (_state.value as? ShiftSessionState.Active)
+                ?.session
+                ?: return@withLock
+
+        require(
+            currentSession.startKilometer == null ||
+                endKilometer >= currentSession.startKilometer
+        ) {
+            "endKilometer must not be lower than startKilometer"
+        }
+
+        val updatedSession = currentSession.copy(
+            endTimeUtc = currentSession.endTimeUtc ?: Instant.now(clock),
+            endKilometer = endKilometer
+        )
+
+        store.save(updatedSession)
+        _state.value = ShiftSessionState.Active(updatedSession)
+    }
+
+    suspend fun cancelShiftEnd() = mutationMutex.withLock {
+        val currentSession =
+            (_state.value as? ShiftSessionState.Active)
+                ?.session
+                ?: return@withLock
+
+        if (
+            currentSession.endTimeUtc == null &&
+            currentSession.endKilometer == null
+        ) {
+            return@withLock
+        }
+
+        val updatedSession = currentSession.copy(
+            endTimeUtc = null,
+            endKilometer = null
+        )
+        store.save(updatedSession)
+        _state.value = ShiftSessionState.Active(updatedSession)
+    }
+
     suspend fun clear() = mutationMutex.withLock {
         store.clear()
         _state.value = ShiftSessionState.NoActiveShift
+    }
+
+    private fun requireValidKilometer(value: Double?, name: String) {
+        require(value == null || value.isFinite() && value >= 0.0) {
+            "$name must be a finite, non-negative value"
+        }
     }
 }

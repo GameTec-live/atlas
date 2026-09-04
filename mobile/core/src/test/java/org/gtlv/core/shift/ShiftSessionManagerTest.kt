@@ -57,6 +57,45 @@ class ShiftSessionManagerTest {
         manager.setStartKilometerIfAbsent(-1.0)
     }
 
+    @Test
+    fun `ending a shift persists its time and odometer`() = runBlocking {
+        val store = FakeShiftSessionStore()
+        val manager = ShiftSessionManager(store, clock)
+        manager.startShift(ShiftRole.DRIVER)
+        manager.setStartKilometerIfAbsent(12_345.0)
+
+        manager.beginShiftEnd(null)
+
+        assertEquals(startTime, manager.activeSession().endTimeUtc)
+        assertNull(manager.activeSession().endKilometer)
+
+        manager.setEndKilometer(12_695.0)
+
+        assertEquals(12_695.0, manager.activeSession().endKilometer)
+        assertEquals(manager.activeSession(), store.savedSession)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `end kilometer cannot be lower than start kilometer`() = runBlocking {
+        val manager = ShiftSessionManager(FakeShiftSessionStore(), clock)
+        manager.startShift(ShiftRole.DRIVER)
+        manager.setStartKilometerIfAbsent(100.0)
+
+        manager.beginShiftEnd(99.0)
+    }
+
+    @Test
+    fun `cancelling shift end clears completion values`() = runBlocking {
+        val manager = ShiftSessionManager(FakeShiftSessionStore(), clock)
+        manager.startShift(ShiftRole.DRIVER)
+        manager.beginShiftEnd(120.0)
+
+        manager.cancelShiftEnd()
+
+        assertNull(manager.activeSession().endTimeUtc)
+        assertNull(manager.activeSession().endKilometer)
+    }
+
     private fun ShiftSessionManager.activeSession(): ShiftSession {
         return (state.value as ShiftSessionState.Active).session
     }

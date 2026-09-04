@@ -33,7 +33,8 @@ class SessionManager(
             is SessionRestoreResult.Valid -> {
                 reconcileRole(
                     userId = result.userId,
-                    userName = result.userName
+                    userName = result.userName,
+                    isAdmin = result.isAdmin
                 )
             }
 
@@ -69,7 +70,8 @@ class SessionManager(
         if (result is AuthResult.Success) {
             reconcileRole(
                 userId = result.userId,
-                userName = result.userName
+                userName = result.userName,
+                isAdmin = result.isAdmin
             )
         }
 
@@ -85,13 +87,15 @@ class SessionManager(
 
         reconcileRole(
             userId = currentState.userId,
-            userName = currentState.userName
+            userName = currentState.userName,
+            isAdmin = currentState.isAdmin
         )
     }
 
     private suspend fun reconcileRole(
         userId: String,
-        userName: String
+        userName: String,
+        isAdmin: Boolean
     ) {
         _state.value = SessionState.Checking
 
@@ -146,7 +150,8 @@ class SessionManager(
 
                     _state.value = SessionState.SignedIn(
                         userId = userId,
-                        userName = userName
+                        userName = userName,
+                        isAdmin = isAdmin
                     )
                 }
 
@@ -160,7 +165,8 @@ class SessionManager(
                     _state.value =
                         SessionState.RoleCheckFailed(
                             userId = userId,
-                            userName = userName
+                            userName = userName,
+                            isAdmin = isAdmin
                         )
                 }
             }
@@ -177,7 +183,8 @@ class SessionManager(
              */
             _state.value = SessionState.RoleCheckFailed(
                 userId = userId,
-                userName = userName
+                userName = userName,
+                isAdmin = isAdmin
             )
         }
     }

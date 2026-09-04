@@ -595,10 +595,12 @@ private class FakeShiftSessionStore : ShiftSessionStore {
 private class FakeTelemetryProvider : TelemetryProvider {
     override val telemetry = MutableStateFlow<TelemetryData?>(null)
     override val odometerKilometers = MutableStateFlow<Double?>(null)
+    override val vehicleFingerprint = MutableStateFlow<String?>(null)
 
     override fun start() = Unit
     override fun stop() = Unit
     override fun setVehicleState(state: TelemetryVehicleState) = Unit
+    override fun setResolvedVehicleId(vehicleId: String?) = Unit
     override fun refreshVehicleId() = Unit
 }
 
