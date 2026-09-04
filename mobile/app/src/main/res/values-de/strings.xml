@@ -11,40 +11,40 @@
     <string name="button_cancel">Abbrechen</string>
     <string name="login_set_serveraddress">Serveradresse festlegen</string>
     <string name="server_address_edit">Serveradresse bearbeiten</string>
-    <string name="server_address_error">Gib eine gültige HTTP- oder HTTPS-Adresse ein</string>
+    <string name="server_address_error">Geben Sie eine gültige HTTP- oder HTTPS-Adresse ein</string>
     <string name="url_set_successfully">URL erfolgreich gespeichert</string>
     <string name="url_set_failed">URL konnte nicht gespeichert werden</string>
-    <string name="username_required">Gib deinen Benutzernamen ein</string>
-    <string name="password_required">Gib dein Passwort ein</string>
+    <string name="username_required">Geben Sie Ihren Benutzernamen ein</string>
+    <string name="password_required">Geben Sie Ihr Passwort ein</string>
     <string name="invalid_credentials">Benutzername oder Passwort ungültig</string>
     <string name="cannot_connect_to_server">Verbindung zum Server nicht möglich</string>
     <string name="invalid_server_response">Der Server hat eine ungültige Antwort gesendet</string>
     <string name="server_error_with_code">Serverfehler (%1$d)</string>
-    <string name="cannot_verify_session">Die gespeicherte Sitzung kann nicht überprüft werden. Prüfe deine Verbindung.</string>
+    <string name="cannot_verify_session">Die gespeicherte Sitzung kann nicht überprüft werden. Prüfen Sie Ihre Verbindung.</string>
     <string name="invalid_session_response">Der Server hat eine ungültige Sitzungsantwort gesendet</string>
     <string name="session_check_failed">Sitzungsprüfung fehlgeschlagen (%1$d)</string>
     <string name="role_load_error">Rollenverfügbarkeit konnte nicht geladen werden</string>
     <string name="role_network_error">Verbindung zum Server nicht möglich</string>
-    <string name="role_unauthorized">Deine Sitzung ist nicht mehr gültig</string>
+    <string name="role_unauthorized">Ihre Sitzung ist nicht mehr gültig</string>
     <string name="role_unavailable">Die ausgewählte Rolle ist nicht mehr verfügbar</string>
     <string name="dispatcher_unavailable">Die maximale Anzahl an Disponenten ist erreicht</string>
     <string name="role_selection_error">Die Rolle konnte nicht ausgewählt werden</string>
     <string name="shift_save_error">Die Rolle wurde ausgewählt, aber die Schicht konnte nicht gespeichert werden</string>
-    <string name="select_role_title">Wähle deine Rolle</string>
-    <string name="select_role_description">Wähle die Rolle für deine aktuelle Schicht</string>
+    <string name="select_role_title">Wählen Sie Ihre Rolle</string>
+    <string name="select_role_description">Wählen Sie die Rolle für Ihre aktuelle Schicht</string>
     <string name="role_dispatcher">Disponent</string>
     <string name="role_driver">Fahrer</string>
     <string name="dispatcher_spots_available">%1$d Plätze für Disponenten verfügbar</string>
     <string name="dispatcher_spot_available">1 Platz für Disponenten verfügbar</string>
     <string name="role_retry">Erneut versuchen</string>
-    <string name="role_check_failed">Deine aktuelle Rolle konnte nicht überprüft werden.</string>
+    <string name="role_check_failed">Ihre aktuelle Rolle konnte nicht überprüft werden.</string>
     <string name="location_permission_title">Standort erforderlich</string>
-    <string name="location_permission_retry_message">Atlas benötigt Zugriff auf deinen Standort. Sie können den genauen oder ungefähren Standort freigeben.</string>
-    <string name="location_permission_settings_message">Die Standortberechtigung ist für Atlas erforderlich. Öffne die App-Einstellungen und erlaube den Standortzugriff.</string>
+    <string name="location_permission_retry_message">Atlas benötigt Zugriff auf Ihren Standort. Sie können den genauen oder ungefähren Standort freigeben.</string>
+    <string name="location_permission_settings_message">Die Standortberechtigung ist für Atlas erforderlich. Öffnen Sie die App-Einstellungen und erlauben Sie den Standortzugriff.</string>
     <string name="location_permission_allow_button">Standort erlauben</string>
     <string name="location_permission_settings_button">Einstellungen öffnen</string>
     <string name="map_load_error">Die Karte konnte nicht geladen werden.</string>
-    <string name="map_location_display_error">Dein Standort konnte auf der Karte nicht angezeigt werden.</string>
+    <string name="map_location_display_error">Ihr Standort konnte auf der Karte nicht angezeigt werden.</string>
     <string name="map_recenter_location">Zum aktuellen Standort zurückkehren</string>
     <string name="navigation_route">Route</string>
     <string name="navigation_to_pickup">Fahrt zur Abholung</string>
@@ -52,8 +52,8 @@
     <string name="navigation_loading">Route wird berechnet…</string>
     <string name="navigation_waiting_location">Aktueller Standort wird abgewartet, bevor die Route zur Abholung berechnet wird.</string>
     <string name="navigation_pickup_unavailable">Die Koordinaten des Abholorts sind nicht verfügbar.</string>
-    <string name="navigation_waiting_destination">Wähle ein Ziel aus, um die Navigation fortzusetzen.</string>
-    <string name="navigation_error_unauthorized">Deine Sitzung ist für die Routenplanung nicht mehr gültig.</string>
+    <string name="navigation_waiting_destination">Wählen Sie ein Ziel aus, um die Navigation fortzusetzen.</string>
+    <string name="navigation_error_unauthorized">Ihre Sitzung ist für die Routenplanung nicht mehr gültig.</string>
     <string name="navigation_error_network">Verbindung zum Routendienst nicht möglich.</string>
     <string name="navigation_error_router">Es wurde keine geeignete Route gefunden.</string>
     <string name="navigation_error_server">Der Routendienst hat einen Fehler gemeldet.</string>
@@ -74,14 +74,14 @@
     <string name="profile_language_english">Englisch ausgewählt</string>
     <string name="profile_language_german">Deutsch ausgewählt</string>
     <string name="pair_vehicle_title">Dieses Fahrzeug koppeln</string>
-    <string name="pair_vehicle_message">Dieses Fahrzeug ist noch nicht registriert. Wähle das passende Fahrzeug aus.</string>
+    <string name="pair_vehicle_message">Dieses Fahrzeug ist noch nicht registriert. Wählen Sie das passende Fahrzeug aus.</string>
     <string name="pair_vehicle_item">%1$s · %2$s</string>
     <string name="pair_vehicle_empty">Es sind keine Fahrzeuge zum Koppeln verfügbar.</string>
     <string name="pair_vehicle_error">Das Fahrzeug konnte nicht geladen oder gekoppelt werden.</string>
     <string name="pair_vehicle_retry">Erneut versuchen</string>
-    <string name="end_kilometer_dialog_title">Verbinde ein Fahrzeug oder gib den Kilometerstand am Schichtende ein</string>
+    <string name="end_kilometer_dialog_title">Verbinden Sie ein Fahrzeug oder geben Sie den Kilometerstand am Schichtende ein</string>
     <string name="end_kilometer_label">Kilometerstand am Schichtende</string>
-    <string name="end_kilometer_invalid">Gib einen gültigen Kilometerstand ein, der nicht unter dem Startwert liegt</string>
+    <string name="end_kilometer_invalid">Geben Sie einen gültigen Kilometerstand ein, der nicht unter dem Startwert liegt</string>
     <string name="offboarding_title">Schicht beendet</string>
     <string name="offboarding_back">Zurück zur Schicht</string>
     <string name="offboarding_mileage_section">Kilometerstand</string>
@@ -97,19 +97,19 @@
     <string name="offboarding_total_time">Gesamtzeit:</string>
     <string name="offboarding_cash_report">Barabrechnung</string>
     <string name="offboarding_revenue">Umsatz</string>
-    <string name="offboarding_revenue_hint">Gib den gesamten Barumsatz dieser Schicht ein.</string>
-    <string name="offboarding_revenue_invalid">Gib einen gültigen Umsatzbetrag ein</string>
+    <string name="offboarding_revenue_hint">Geben Sie den gesamten Barumsatz dieser Schicht ein.</string>
+    <string name="offboarding_revenue_invalid">Geben Sie einen gültigen Umsatzbetrag ein</string>
     <string name="offboarding_confirmation">Ich bestätige, dass diese Daten korrekt sind</string>
     <string name="offboarding_log_off">Abmelden</string>
     <string name="offboarding_unavailable">Nicht verfügbar</string>
     <string name="offboarding_select_vehicle">Fahrzeug auswählen</string>
-    <string name="offboarding_vehicle_required">Wähle vor dem Abmelden ein Fahrzeug aus.</string>
+    <string name="offboarding_vehicle_required">Wählen Sie vor dem Abmelden ein Fahrzeug aus.</string>
     <string name="offboarding_loading_vehicles">Fahrzeuge werden geladen…</string>
     <string name="offboarding_vehicles_load_failed">Fahrzeuge konnten nicht geladen werden.</string>
     <string name="offboarding_no_vehicles">Keine Fahrzeuge verfügbar.</string>
     <string name="offboarding_retry">Erneut versuchen</string>
     <string name="offboarding_start_kilometer_unavailable">Der Kilometerstand zu Schichtbeginn ist nicht verfügbar.</string>
-    <string name="offboarding_submit_failed">Das Fahrtenbuch konnte nicht übermittelt werden. Versuche es erneut.</string>
+    <string name="offboarding_submit_failed">Das Fahrtenbuch konnte nicht übermittelt werden. Versuchen Sie es erneut.</string>
 
     <string name="job_panel_load_error">Aufträge konnten nicht geladen werden</string>
     <string name="job_panel_retry">Erneut versuchen</string>
@@ -127,10 +127,10 @@
     </plurals>
 
     <string name="job_action_next_job">Nächster Auftrag</string>
-    <string name="start_kilometer_dialog_title">Verbinde ein Fahrzeug oder gib den Kilometerstand ein</string>
+    <string name="start_kilometer_dialog_title">Verbinden Sie ein Fahrzeug oder geben Sie den Kilometerstand ein</string>
     <string name="start_kilometer_label">Kilometerstand</string>
     <string name="kilometers_unit">km</string>
-    <string name="start_kilometer_invalid">Gib einen gültigen, nicht negativen Kilometerstand ein</string>
+    <string name="start_kilometer_invalid">Geben Sie einen gültigen, nicht negativen Kilometerstand ein</string>
     <string name="start_kilometer_continue">Weiter</string>
     <string name="job_action_person_collected">Fahrgast abgeholt</string>
     <string name="job_action_cancel">Aktuellen Auftrag abbrechen</string>
@@ -155,7 +155,7 @@
     <string name="new_job_back">Zurück zur Disponentenkarte</string>
     <string name="new_job_pickup_placeholder">Abholadresse eingeben</string>
     <string name="new_job_destination_placeholder">Ziel eingeben (optional)</string>
-    <string name="new_job_pickup_required">Wähle eine Abholadresse aus, um Empfehlungen zu laden</string>
+    <string name="new_job_pickup_required">Wählen Sie eine Abholadresse aus, um Empfehlungen zu laden</string>
     <string name="new_job_note">Notiz</string>
     <string name="new_job_note_placeholder">Optionale Notiz</string>
     <string name="new_job_note_count">%1$d/%2$d</string>
@@ -165,7 +165,7 @@
     <string name="new_job_confirm_driver">Diesen Auftrag erstellen und %1$s zuweisen?</string>
     <string name="new_job_create">Erstellen</string>
     <string name="new_job_creating">Wird erstellt…</string>
-    <string name="new_job_create_failed">Der Auftrag konnte nicht erstellt werden. Versuche es erneut.</string>
+    <string name="new_job_create_failed">Der Auftrag konnte nicht erstellt werden. Versuchen Sie es erneut.</string>
 
     <plurals name="dispatcher_action_unassigned_jobs_count">
         <item quantity="one">%1$d nicht zugewiesener Auftrag</item>
@@ -190,7 +190,7 @@
     <string name="unassigned_jobs_delete_title">Auftrag löschen?</string>
     <string name="unassigned_jobs_delete_message">Den nicht zugewiesenen Auftrag von %1$s löschen?</string>
     <string name="unassigned_jobs_delete_confirm">Löschen</string>
-    <string name="unassigned_jobs_delete_error">Der Auftrag konnte nicht gelöscht werden. Versuche es erneut.</string>
+    <string name="unassigned_jobs_delete_error">Der Auftrag konnte nicht gelöscht werden. Versuchen Sie es erneut.</string>
 
     <string name="assign_job_title">Auftrag zuweisen</string>
     <string name="assign_job_back">Zurück zu nicht zugewiesenen Aufträgen</string>
@@ -217,7 +217,7 @@
     <string name="assign_job_confirm_title">Auftrag zuweisen?</string>
     <string name="assign_job_confirm_message">Diesen Auftrag %1$s zuweisen?</string>
     <string name="assign_job_confirm">Zuweisen</string>
-    <string name="assign_job_failed">Der Auftrag konnte nicht zugewiesen werden. Versuche es erneut.</string>
+    <string name="assign_job_failed">Der Auftrag konnte nicht zugewiesen werden. Versuchen Sie es erneut.</string>
 
     <string name="job_notification_channel">Aufträge</string>
     <string name="job_notification_channel_description">Benachrichtigungen über zugewiesene und nicht zugewiesene Aufträge</string>

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="waiting_screen_title">Auf dem Smartphone fortfahren</string>
-    <string name="waiting_screen_explanation">Melde dich in der Atlas-App auf dem verbundenen Smartphone an und wähle deine Rolle aus. \n Dieser Bildschirm wird automatisch fortgesetzt, sobald deine Rolle verfügbar ist.</string>
+    <string name="waiting_screen_explanation">Melden Sie sich in der Atlas-App auf Ihrem verbundenen Smartphone an und wählen Sie Ihre Rolle aus.\nSobald Ihre Rolle verfügbar ist, geht es automatisch weiter.</string>
     <string name="main_screen_title">Atlas</string>
-    <string name="main_screen_message">Du bist angemeldet.</string>
+    <string name="main_screen_message">Sie sind angemeldet.</string>
     <string name="driver_current_job">Aktueller Auftrag</string>
     <string name="driver_hide_job_card">Aktuellen Auftrag ausblenden</string>
     <string name="driver_show_job_card">Aktuellen Auftrag anzeigen</string>
@@ -14,16 +14,16 @@
     <string name="driver_job_pickup">Abholung: %1$s</string>
     <string name="driver_job_destination">Ziel: %1$s</string>
     <string name="driver_next_job">Nächster Auftrag</string>
-    <string name="driver_enter_odometer_on_phone">Gib den Kilometerstand auf deinem Smartphone ein</string>
+    <string name="driver_enter_odometer_on_phone">Geben Sie den Kilometerstand auf Ihrem Smartphone ein</string>
     <plurals name="driver_jobs_in_queue">
-        <item quantity="one">%1$d in der Warteschlange</item>
-        <item quantity="other">%1$d in der Warteschlange</item>
+        <item quantity="one">%1$d Auftrag in der Warteschlange</item>
+        <item quantity="other">%1$d Aufträge in der Warteschlange</item>
     </plurals>
     <string name="driver_person_collected">Fahrgast abgeholt</string>
     <string name="driver_job_finished">Auftrag beendet</string>
     <string name="driver_cancel_job_error">Der aktuelle Auftrag konnte nicht abgebrochen werden</string>
     <string name="driver_finish_job_error">Der aktuelle Auftrag konnte nicht beendet werden</string>
-    <string name="driver_finish_job_changed">Der aktuelle Auftrag wurde geändert. Prüfe ihn, bevor du ihn beendest.</string>
+    <string name="driver_finish_job_changed">Der aktuelle Auftrag wurde geändert. Prüfen Sie ihn, bevor Sie ihn beenden.</string>
     <string name="driver_finish_confirmation_title">Auftrag beenden?</string>
     <string name="driver_finish_total_label">Gesamtstrecke</string>
     <string name="driver_finish_passenger_label">Mit Fahrgast</string>
@@ -34,7 +34,7 @@
     <string name="driver_finish_yes">Ja</string>
     <string name="driver_person_collected_error">Der Fahrgast konnte nicht als abgeholt markiert werden</string>
     <string name="driver_no_next_job">Es wartet kein zugewiesener Auftrag</string>
-    <string name="driver_job_already_active">Beende zuerst den aktuellen Auftrag</string>
+    <string name="driver_job_already_active">Beenden Sie zuerst den aktuellen Auftrag</string>
     <string name="driver_starting_job">Nächster Auftrag wird gestartet…</string>
     <string name="driver_start_job_error">Der nächste Auftrag konnte nicht gestartet werden</string>
     <string name="driver_unknown_address">Unbekannte Adresse</string>
@@ -69,17 +69,17 @@
     <string name="assign_job_address_search_unavailable">Die Adresssuche ist nicht verfügbar</string>
     <string name="address_search_error">Adressvorschläge konnten nicht geladen werden</string>
     <string name="address_search_no_results">Keine passenden Adressen gefunden</string>
-    <string name="address_search_recent">Letzte Adresse</string>
+    <string name="address_search_recent">Zuletzt verwendete Adresse</string>
     <string name="assign_job_recommended_drivers">&#8212; Empfohlene Fahrer &#8212;</string>
-    <string name="assign_job_pickup_required">Wähle eine Abholadresse aus, um Empfehlungen zu laden</string>
+    <string name="assign_job_pickup_required">Wählen Sie eine Abholadresse aus, um Empfehlungen zu laden</string>
     <string name="assign_job_loading_candidates">Fahrerempfehlungen werden geladen&#8230;</string>
     <string name="assign_job_candidates_error">Fahrerempfehlungen konnten nicht geladen werden</string>
     <string name="assign_job_retry_candidates">Zum Wiederholen tippen</string>
     <string name="assign_job_no_available_drivers">Keine verfügbaren Fahrer</string>
     <string name="assign_job_driver_rank">%1$d. %2$s</string>
     <string name="assign_job_selected_driver_rank">&#9679; %1$d. %2$s</string>
-    <string name="assign_job_create_unassigned">Nicht zugewiesen erstellen</string>
-    <string name="assign_job_create_unassigned_selected">&#9679; Nicht zugewiesen erstellen</string>
+    <string name="assign_job_create_unassigned">Ohne Zuweisung erstellen</string>
+    <string name="assign_job_create_unassigned_selected">&#9679; Ohne Zuweisung erstellen</string>
     <string name="assign_job_pickup_in_minutes">Abholung in %1$d Min.</string>
     <string name="assign_job_pickup_in_hours">Abholung in %1$d Std.</string>
     <string name="assign_job_pickup_in_hours_minutes">Abholung in %1$d Std. %2$d Min.</string>
@@ -88,10 +88,10 @@
     <string name="assign_job_creating">Wird erstellt&#8230;</string>
     <string name="assign_job_assigned">Auftrag zugewiesen</string>
     <string name="assign_job_created_unassigned">Nicht zugewiesener Auftrag erstellt</string>
-    <string name="assign_job_submission_failed">Der Auftrag konnte nicht gespeichert werden. Versuche es erneut.</string>
-    <string name="assign_job_requires_car_api_7">Zum Zuweisen von Aufträgen ist eine neuere Android-Auto-Version erforderlich</string>
+    <string name="assign_job_submission_failed">Der Auftrag konnte nicht gespeichert werden. Versuchen Sie es erneut.</string>
+    <string name="assign_job_requires_car_api_7">Zum Zuweisen von Aufträgen ist eine neuere Version von Android Auto erforderlich</string>
     <string name="dispatcher_active_users">Aktive Fahrer (%1$d)</string>
-    <string name="dispatcher_no_active_users">Keine anderen aktiven Benutzer</string>
+    <string name="dispatcher_no_active_users">Keine weiteren aktiven Fahrer</string>
     <string name="dispatcher_hide_sidebar">Aktive Fahrer ausblenden</string>
     <string name="dispatcher_show_sidebar">Aktive Fahrer anzeigen</string>
     <string name="driver_status_free">Frei</string>
@@ -99,8 +99,8 @@
     <string name="driver_status_occupied">Besetzt</string>
     <string name="driver_status_away">Abwesend</string>
     <string name="telemetry_permission_title">Fahrzeugdaten</string>
-    <string name="telemetry_permission_explanation">Erlaube den Zugriff auf verbundene Bluetooth-Geräte, Tankfüllstand und Kilometerstand, damit Atlas Fahrzeugdaten bereitstellen kann.</string>
-    <string name="telemetry_permission_waiting">Auf die Berechtigungen für Fahrzeugdaten auf deinem Smartphone wird gewartet.</string>
+    <string name="telemetry_permission_explanation">Erlauben Sie den Zugriff auf verbundene Bluetooth-Geräte sowie auf Kraftstoffstand und Kilometerstand, damit Atlas Fahrzeugdaten bereitstellen kann.</string>
+    <string name="telemetry_permission_waiting">Warten Sie auf die Freigabe der Fahrzeugdaten auf Ihrem Smartphone.</string>
     <string name="telemetry_permission_denied">Nicht alle Berechtigungen für Fahrzeugdaten wurden erteilt. Fehlende Werte können nicht bereitgestellt werden.</string>
-    <string name="telemetry_permission_action">Fahrzeugdaten erlauben</string>
+    <string name="telemetry_permission_action">Zugriff auf Fahrzeugdaten erlauben</string>
 </resources>
