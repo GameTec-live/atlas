@@ -10,6 +10,8 @@
     <string name="button_cancel">Cancel</string>
     <string name="login_set_serveraddress">Set server address</string>
     <string name="server_address_error">Enter a valid HTTP or HTTPS address</string>
+    <string name="url_set_successfully">URL set successfully</string>
+    <string name="url_set_failed">Could not set URL</string>
     <string name="username_required">Enter your username</string>
     <string name="password_required">Enter your password</string>
     <string name="invalid_credentials">Invalid username or password</string>
