@@ -46,6 +46,9 @@ Always verify the artifact against the release `SHA256SUMS` before using it.
 - The current API image requires `BETTER_AUTH_URL`. Atlas therefore generates
   it from the current interface addresses; simply deleting the variable makes
   the API fail its environment validation and restart repeatedly.
+- The attached display prompts for ENTER before starting Cage/Chromium. Once
+  launched, Chromium opens `https://localhost/` and retries it while first-boot
+  containers initialize.
 - `https://atlas.local` is always a trusted origin, but trusting an origin does
   not make its name resolve. Resolution still depends on the client and the
   network's DNS/mDNS policy.

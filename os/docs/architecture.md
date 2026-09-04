@@ -10,6 +10,7 @@ state:
 - one persistent data area holds application state and device policy;
 - all application workloads run as rootless Podman containers;
 - the only normal host ingress is Caddy on ports 80 and 443;
+- an on-demand local Cage session presents that HTTPS UI full-screen in Chromium;
 - SSH is an explicitly enabled maintenance path, not a default service.
 
 The `os` directory is an external source tree and does not patch or vendor
@@ -90,6 +91,23 @@ container auto-update or configuration change can survive an OS rollback.
 The default password is a provisioning convenience, not a production secret.
 Change it before exposing SSH.
 
+### `atlas-kiosk`
+
+- UID 1999 system account with a locked password and `/usr/sbin/nologin` shell;
+- has no persistent home or state, supplementary groups, or sudo access;
+- runs only a small TTY launcher until ENTER is pressed, then replaces it with
+  the Cage compositor and Chromium;
+- receives temporary access to the active DRM/input seat through logind;
+- is limited by systemd to loopback networking, required display/input devices,
+  and an ephemeral runtime directory.
+
+Chromium keeps its process sandbox using unprivileged user namespaces; its
+legacy setuid bootstrap is disabled. The kiosk service prevents privilege
+gains, makes the host filesystem read-only, hides home directories and other
+users' processes, and isolates temporary files, IPC, mounts and its keyring.
+Because logind moves the graphical session into `user-1999.slice`, its user
+slice repeats the service's loopback and device cgroup restrictions.
+
 ### `atlas-containers`
 
 - UID/GID 2000;
@@ -109,6 +127,7 @@ capability sets and filesystems.
 System services handle host-level policy:
 
 - NetworkManager, systemd-resolved and network-online coordination;
+- the on-demand Cage/Chromium launcher on the primary virtual terminal;
 - persistent SSH state;
 - one-time Raspberry Pi EEPROM boot-order policy;
 - the authenticated Unix-socket management API and early-boot factory reset.
@@ -141,6 +160,7 @@ The configuration deliberately avoids one monolithic custom layer:
 | `atlas-device-policy` | Serial console, PCIe Gen 3 and EEPROM boot order |
 | `atlas-ssh` | Hardened, persistent, disabled-by-default SSH |
 | `atlas-management` | Privileged Unix-socket API, A/B health commit and factory reset |
+| `atlas-kiosk` | On-demand TTY launcher, Cage/Chromium kiosk and localhost retry extension |
 | `atlas-branding` | Console/SSH branding and `os-release` identity |
 
 Keep future features in the narrowest sensible layer. Cross-layer ordering is

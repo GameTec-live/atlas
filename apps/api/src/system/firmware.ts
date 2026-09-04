@@ -1,22 +1,84 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, unlink } from "node:fs/promises";
+import {
+    appendFile,
+    mkdir,
+    open,
+    readdir,
+    stat,
+    unlink,
+} from "node:fs/promises";
 import { resolve } from "node:path";
 import { env } from "@/env";
 import { applyUpdate, request } from "./management";
 
 const DEFAULT_REPOSITORY = "GameTec-live/atlas";
 const MAX_UPDATE_BYTES = 4 * 1024 ** 3;
+const UPLOAD_CHUNK_BYTES = 8 * 1024 ** 2;
+const UPLOAD_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const updateAssetPattern = /^atlas-rpi5-.+-update\.tar\.zst$/;
+const stagedUpdatePattern =
+    /^update-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.tar\.zst$/i;
 let updateReserved = false;
+
+interface StagedUpload {
+    id: string;
+    path: string;
+    size: number;
+    received: number;
+    writing: boolean;
+    expiration?: ReturnType<typeof setTimeout>;
+}
+
+let stagedUpload: StagedUpload | undefined;
 
 function fail(status: number, code: string, message: string): never {
     throw Response.json({ error: { code, message } }, { status });
 }
 
-const applyStream = async (
-    getStream: () => ReadableStream<Uint8Array> | null,
-    declaredLength?: number,
-) => {
+const stagingDirectory = () =>
+    resolve(env.DATA_STORAGE_PATH ?? "./data", "system-updates");
+
+/** Removes uploads that cannot be resumed after an API process restart. */
+export const reconcileStagedUploads = async () => {
+    const startedAt = Date.now();
+    const directory = stagingDirectory();
+    let entries: string[];
+    try {
+        entries = await readdir(directory);
+    } catch (error) {
+        if (
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "ENOENT"
+        ) {
+            return;
+        }
+        console.error(
+            `Could not inspect staged firmware uploads in ${directory}`,
+            error,
+        );
+        return;
+    }
+
+    await Promise.all(
+        entries
+            .filter((name) => stagedUpdatePattern.test(name))
+            .map(async (name) => {
+                const path = resolve(directory, name);
+                try {
+                    if ((await stat(path)).mtimeMs >= startedAt) return;
+                    await unlink(path);
+                } catch (error) {
+                    console.error(
+                        `Could not remove stale firmware upload ${path}`,
+                        error,
+                    );
+                }
+            }),
+    );
+};
+
+const reserveUpdate = async () => {
     if (updateReserved) {
         fail(
             409,
@@ -28,7 +90,8 @@ const applyStream = async (
 
     try {
         const management = await request("/api/v1/update");
-        if (!management.ok) return management;
+        if (!management.ok) throw management;
+
         const updateStatus = (await management.json()) as {
             update?: { pending?: string };
         };
@@ -39,6 +102,43 @@ const applyStream = async (
                 "An Atlas OS update is already pending",
             );
         }
+    } catch (error) {
+        updateReserved = false;
+        throw error;
+    }
+};
+
+const discardUpload = async (upload: StagedUpload) => {
+    if (stagedUpload !== upload) return;
+    stagedUpload = undefined;
+    if (upload.expiration) clearTimeout(upload.expiration);
+    updateReserved = false;
+    await unlink(upload.path).catch(() => undefined);
+};
+
+const scheduleUploadExpiration = (upload: StagedUpload) => {
+    if (upload.expiration) clearTimeout(upload.expiration);
+    upload.expiration = setTimeout(
+        () => void discardUpload(upload),
+        UPLOAD_IDLE_TIMEOUT_MS,
+    );
+};
+
+const activeUpload = (id: string) => {
+    const upload = stagedUpload;
+    if (!upload || upload.id !== id) {
+        fail(404, "upload_not_found", "Firmware upload was not found");
+    }
+    return upload;
+};
+
+const applyStream = async (
+    getStream: () => ReadableStream<Uint8Array> | null,
+    declaredLength?: number,
+) => {
+    await reserveUpdate();
+
+    try {
         if (declaredLength !== undefined && declaredLength > MAX_UPDATE_BYTES) {
             fail(
                 413,
@@ -49,15 +149,9 @@ const applyStream = async (
         const stream = getStream();
         if (!stream) fail(400, "empty_update", "Update file is empty");
 
-        const stagingDirectory = resolve(
-            env.DATA_STORAGE_PATH ?? "./data",
-            "system-updates",
-        );
-        await mkdir(stagingDirectory, { recursive: true });
-        const path = resolve(
-            stagingDirectory,
-            `update-${randomUUID()}.tar.zst`,
-        );
+        const directory = stagingDirectory();
+        await mkdir(directory, { recursive: true });
+        const path = resolve(directory, `update-${randomUUID()}.tar.zst`);
         const file = await open(path, "wx", 0o600);
         const reader = stream.getReader();
         let size = 0;
@@ -92,17 +186,115 @@ const applyStream = async (
     }
 };
 
-export const fromUpload = async (request: Request) => {
-    const contentLength = request.headers.get("content-length");
-    const declaredLength = Number(contentLength);
-    return applyStream(
-        () => request.body,
-        contentLength !== null &&
-            Number.isSafeInteger(declaredLength) &&
-            declaredLength >= 0
-            ? declaredLength
-            : undefined,
-    );
+export const createUpload = async (size: number) => {
+    if (!Number.isSafeInteger(size) || size <= 0) {
+        fail(400, "invalid_update_size", "Update file size is invalid");
+    }
+    if (size > MAX_UPDATE_BYTES) {
+        fail(
+            413,
+            "update_too_large",
+            `Update file exceeds the ${MAX_UPDATE_BYTES}-byte size limit`,
+        );
+    }
+
+    await reserveUpdate();
+
+    let path: string | undefined;
+    try {
+        const directory = stagingDirectory();
+        await mkdir(directory, { recursive: true });
+        const id = randomUUID();
+        path = resolve(directory, `update-${id}.tar.zst`);
+        const file = await open(path, "wx", 0o600);
+        await file.close();
+
+        const upload: StagedUpload = {
+            id,
+            path,
+            size,
+            received: 0,
+            writing: false,
+        };
+        stagedUpload = upload;
+        scheduleUploadExpiration(upload);
+
+        return Response.json(
+            { uploadId: id, chunkSize: UPLOAD_CHUNK_BYTES },
+            { status: 201 },
+        );
+    } catch (error) {
+        updateReserved = false;
+        if (path) await unlink(path).catch(() => undefined);
+        throw error;
+    }
+};
+
+export const appendUpload = async (id: string, request: Request) => {
+    const upload = activeUpload(id);
+    if (upload.writing) {
+        fail(409, "upload_busy", "A firmware chunk is already being written");
+    }
+
+    const offsetHeader = request.headers.get("upload-offset");
+    const offset = Number(offsetHeader);
+    if (
+        offsetHeader === null ||
+        !Number.isSafeInteger(offset) ||
+        offset !== upload.received
+    ) {
+        fail(
+            409,
+            "unexpected_upload_offset",
+            `Expected the next chunk to start at byte ${upload.received}`,
+        );
+    }
+
+    upload.writing = true;
+    if (upload.expiration) clearTimeout(upload.expiration);
+    try {
+        const chunk = new Uint8Array(await request.arrayBuffer());
+        if (chunk.byteLength === 0) {
+            fail(400, "empty_update_chunk", "Update chunk is empty");
+        }
+        if (
+            chunk.byteLength > UPLOAD_CHUNK_BYTES ||
+            upload.received + chunk.byteLength > upload.size
+        ) {
+            fail(
+                413,
+                "invalid_chunk_size",
+                `Update chunks cannot exceed ${UPLOAD_CHUNK_BYTES} bytes`,
+            );
+        }
+
+        await appendFile(upload.path, chunk);
+        upload.received += chunk.byteLength;
+        if (upload.received < upload.size) {
+            return Response.json({ received: upload.received });
+        }
+
+        stagedUpload = undefined;
+        if (upload.expiration) clearTimeout(upload.expiration);
+        try {
+            return await applyUpdate(upload.path);
+        } finally {
+            await unlink(upload.path).catch(() => undefined);
+            updateReserved = false;
+        }
+    } finally {
+        upload.writing = false;
+        if (stagedUpload === upload) scheduleUploadExpiration(upload);
+    }
+};
+
+export const cancelUpload = async (id: string) => {
+    const upload = activeUpload(id);
+    if (upload.writing) {
+        fail(409, "upload_busy", "A firmware chunk is still being written");
+    }
+    await discardUpload(upload);
+    return Response.json({ status: "ok" });
 };
 
 export const fromURL = async (value: string) => {

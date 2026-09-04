@@ -1,5 +1,12 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import {
+    existsSync,
+    mkdirSync,
+    mkdtempSync,
+    readdirSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Elysia } from "elysia";
@@ -14,9 +21,11 @@ const adminSession = {
 type RecordedRequest = { path: string; init?: RequestInit };
 const managementRequests: RecordedRequest[] = [];
 let appliedBytes: Uint8Array | undefined;
-let stagedPathExisted = false;
 let managementResponder:
     | ((path: string, init?: RequestInit) => Response)
+    | undefined;
+let applyUpdateResponder:
+    | ((path: string) => Response | Promise<Response>)
     | undefined;
 
 const managementRequestMock = mock(async (path: string, init?: RequestInit) => {
@@ -27,11 +36,11 @@ const managementRequestMock = mock(async (path: string, init?: RequestInit) => {
     );
 });
 const applyUpdateMock = mock(async (path: string) => {
-    stagedPathExisted = existsSync(path);
+    const response = applyUpdateResponder?.(path);
     appliedBytes = await Bun.file(path).bytes();
-    return Response.json(
-        { status: "rebooting_into_candidate" },
-        { status: 202 },
+    return (
+        (await response) ??
+        Response.json({ status: "rebooting_into_candidate" }, { status: 202 })
     );
 });
 
@@ -41,7 +50,9 @@ mock.module("@/src/system/management", () => ({
     UNAVAILABLE_MESSAGE: "Atlas OS management is unavailable",
 }));
 
-const { fromLatestGitHub } = await import("@/src/system/firmware");
+const { fromLatestGitHub, reconcileStagedUploads } = await import(
+    "@/src/system/firmware"
+);
 const { system } = await import("@/src/system");
 const app = new Elysia().use(system);
 
@@ -73,8 +84,8 @@ beforeEach(() => {
     resetAuthMocks();
     managementRequests.length = 0;
     appliedBytes = undefined;
-    stagedPathExisted = false;
     managementResponder = undefined;
+    applyUpdateResponder = undefined;
     managementRequestMock.mockClear();
     applyUpdateMock.mockClear();
     envMock.DATA_STORAGE_PATH = undefined;
@@ -227,7 +238,43 @@ describe("system management routes", () => {
 });
 
 describe("firmware updates", () => {
-    it("rejects an update already pending in management before staging", async () => {
+    it("reconciles orphaned uploads as best-effort cleanup", async () => {
+        const storageDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
+        const consoleError = spyOn(console, "error").mockImplementation(
+            () => undefined,
+        );
+        try {
+            envMock.DATA_STORAGE_PATH = storageDirectory;
+            const updateDirectory = join(storageDirectory, "system-updates");
+            mkdirSync(updateDirectory);
+            writeFileSync(
+                join(
+                    updateDirectory,
+                    "update-00000000-0000-4000-8000-000000000000.tar.zst",
+                ),
+                "stale",
+            );
+            const undeletableName =
+                "update-11111111-1111-4111-8111-111111111111.tar.zst";
+            mkdirSync(join(updateDirectory, undeletableName));
+            writeFileSync(join(updateDirectory, "keep.tar.zst"), "keep");
+
+            await reconcileStagedUploads();
+
+            expect(readdirSync(updateDirectory).sort()).toEqual(
+                ["keep.tar.zst", undeletableName].sort(),
+            );
+            expect(consoleError).toHaveBeenCalledTimes(1);
+            expect(String(consoleError.mock.calls[0]?.[0])).toContain(
+                undeletableName,
+            );
+        } finally {
+            consoleError.mockRestore();
+            rmSync(storageDirectory, { recursive: true, force: true });
+        }
+    });
+
+    it("rejects an upload when an update is already pending", async () => {
         const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
         try {
             envMock.DATA_STORAGE_PATH = stagingDirectory;
@@ -243,25 +290,9 @@ describe("firmware updates", () => {
                           monitor: { phase: "monitoring" },
                       })
                     : Response.json({ status: "ok" });
-            let bodyAcquired = false;
-            const uploadRequest = new Request(
-                "http://localhost/system/update/upload",
-                {
-                    method: "POST",
-                    headers: {
-                        authorization: "Bearer test-token",
-                        "content-type": "application/octet-stream",
-                    },
-                },
-            );
-            Object.defineProperty(uploadRequest, "body", {
-                get() {
-                    bodyAcquired = true;
-                    throw new Error("pending update acquired the request body");
-                },
+            const response = await jsonRequest(app, "/update/upload", "POST", {
+                size: 3,
             });
-
-            const response = await app.handle(uploadRequest);
 
             expect(response.status).toBe(409);
             expect(await response.json()).toEqual({
@@ -270,7 +301,6 @@ describe("firmware updates", () => {
                     message: "An Atlas OS update is already pending",
                 },
             });
-            expect(bodyAcquired).toBe(false);
             expect(applyUpdateMock).not.toHaveBeenCalled();
             expect(existsSync(join(stagingDirectory, "system-updates"))).toBe(
                 false,
@@ -280,51 +310,129 @@ describe("firmware updates", () => {
         }
     });
 
-    it("reserves staging so concurrent uploads cannot both consume disk", async () => {
+    it("allows only one upload at a time", async () => {
         const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
         try {
             envMock.DATA_STORAGE_PATH = stagingDirectory;
             getSessionMock.mockResolvedValue(adminSession);
             const upload = () =>
-                request(app, "/update/upload", {
-                    method: "POST",
-                    headers: { "content-type": "application/octet-stream" },
-                    body: new Uint8Array([1, 2, 3]),
-                });
+                jsonRequest(app, "/update/upload", "POST", { size: 3 });
 
             const responses = await Promise.all([upload(), upload()]);
 
             expect(responses.map(({ status }) => status).sort()).toEqual([
-                202, 409,
+                201, 409,
             ]);
-            expect(applyUpdateMock).toHaveBeenCalledTimes(1);
+            const accepted = responses.find(({ status }) => status === 201);
+            if (!accepted) throw new Error("Expected one accepted upload");
+            const { uploadId } = (await accepted.json()) as {
+                uploadId: string;
+            };
+            expect(
+                (
+                    await request(app, `/update/upload/${uploadId}`, {
+                        method: "DELETE",
+                    })
+                ).status,
+            ).toBe(200);
         } finally {
             rmSync(stagingDirectory, { recursive: true, force: true });
         }
     });
 
-    it("streams raw uploads through a temporary disk file and removes it", async () => {
+    it("uploads firmware in bounded chunks before starting installation", async () => {
         const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
         try {
             envMock.DATA_STORAGE_PATH = stagingDirectory;
             getSessionMock.mockResolvedValue(adminSession);
-            const update = new Uint8Array([0, 1, 2, 3, 255]);
+            const update = new Uint8Array([0, 1, 2, 3, 4]);
 
-            const response = await request(app, "/update/upload", {
-                method: "POST",
-                headers: { "content-type": "application/octet-stream" },
-                body: new ReadableStream({
-                    start(controller) {
-                        controller.enqueue(update.slice(0, 2));
-                        controller.enqueue(update.slice(2));
-                        controller.close();
+            const startResponse = await jsonRequest(
+                app,
+                "/update/upload",
+                "POST",
+                { size: update.byteLength },
+            );
+            expect(startResponse.status).toBe(201);
+            const started = (await startResponse.json()) as {
+                uploadId: string;
+                chunkSize: number;
+            };
+            expect(started.chunkSize).toBeGreaterThan(0);
+
+            const uploadChunk = (start: number, end: number) =>
+                request(app, `/update/upload/${started.uploadId}`, {
+                    method: "PUT",
+                    headers: {
+                        "content-type": "application/octet-stream",
+                        "upload-offset": String(start),
                     },
-                }),
-            });
+                    body: update.slice(start, end),
+                });
 
-            expect(response.status).toBe(202);
-            expect(stagedPathExisted).toBe(true);
+            const firstChunk = await uploadChunk(0, 2);
+            expect(firstChunk.status).toBe(200);
+            expect(await firstChunk.json()).toEqual({ received: 2 });
+            const secondChunk = await uploadChunk(2, update.byteLength);
+            expect(secondChunk.status).toBe(202);
+            expect(await secondChunk.json()).toEqual({
+                status: "rebooting_into_candidate",
+            });
+            expect(applyUpdateMock).toHaveBeenCalledTimes(1);
+
             expect(appliedBytes).toEqual(update);
+            expect(
+                readdirSync(join(stagingDirectory, "system-updates")),
+            ).toEqual([]);
+        } finally {
+            rmSync(stagingDirectory, { recursive: true, force: true });
+        }
+    });
+
+    it("forwards a management rejection after a completed upload", async () => {
+        const stagingDirectory = mkdtempSync(join(tmpdir(), "atlas-update-"));
+        try {
+            envMock.DATA_STORAGE_PATH = stagingDirectory;
+            getSessionMock.mockResolvedValue(adminSession);
+            applyUpdateResponder = () =>
+                Response.json(
+                    {
+                        error: {
+                            code: "management_unavailable",
+                            message: "Atlas OS management is unavailable",
+                        },
+                    },
+                    { status: 503 },
+                );
+
+            const startResponse = await jsonRequest(
+                app,
+                "/update/upload",
+                "POST",
+                { size: 1 },
+            );
+            const { uploadId } = (await startResponse.json()) as {
+                uploadId: string;
+            };
+            const chunkResponse = await request(
+                app,
+                `/update/upload/${uploadId}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "content-type": "application/octet-stream",
+                        "upload-offset": "0",
+                    },
+                    body: new Uint8Array([1]),
+                },
+            );
+            expect(chunkResponse.status).toBe(503);
+            expect(await chunkResponse.json()).toEqual({
+                error: {
+                    code: "management_unavailable",
+                    message: "Atlas OS management is unavailable",
+                },
+            });
             expect(
                 readdirSync(join(stagingDirectory, "system-updates")),
             ).toEqual([]);

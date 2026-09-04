@@ -16,6 +16,9 @@
     "misty_tired_jay_heal": "System",
     "sleek_cuddly_maggot_hush": "Design ändern",
     "antsy_fuzzy_platypus_trim": "Abmelden",
+    "navigation_menu": "Navigation",
+    "navigation_open_menu": "Navigationsmenü öffnen",
+    "navigation_close_menu": "Navigationsmenü schließen",
     "plain_topical_ant_compose": "Start",
     "simple_awful_coyote_quiz": "Karte",
     "cool_only_manatee_pout": "Flotte",
@@ -354,7 +357,7 @@
     "settings_system_tunnel_token": "Tunnel-Token",
     "settings_system_auth_key": "Auth-Schlüssel",
     "settings_system_hostname_optional": "Hostname (optional)",
-    "settings_system_public_origin_optional": "Öffentlicher Ursprung (optional)",
+    "settings_system_public_origin_optional": "Ursprung (optional)",
     "settings_system_remote_access_saved": "Fernzugriff aktualisiert",
     "settings_system_auth_origins": "Authentifizierungsursprünge",
     "settings_system_auth_origins_description": "HTTPS-Ursprünge, die Atlas-Authentifizierung verwenden dürfen.",
@@ -477,5 +480,6 @@
     "setup_finish": "Einrichtung abschließen",
     "setup_step_progress": "Schritt {current} von {total}",
     "setup_resume_title": "Zum Fortfahren anmelden",
-    "setup_resume_description": "Das Administratorkonto existiert bereits. Melde dich damit an, um die Einrichtung abzuschließen."
+    "setup_resume_description": "Das Administratorkonto existiert bereits. Melde dich damit an, um die Einrichtung abzuschließen.",
+    "spicy_fresh_vulture_learn": "Standard Nutzername und Passwort: {username}"
 }

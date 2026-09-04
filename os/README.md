@@ -4,7 +4,7 @@ This directory is an out-of-tree `rpi-image-gen` source tree. In the Atlas
 repository build it also compiles the sibling `apps/osManagementAPI` module. It
 builds a minimal Raspberry Pi 5 appliance with an immutable A/B root, persistent
 data, rootless Podman Quadlets, NetworkManager, optional Cloudflare Tunnel,
-Tailscale and SSH, and text branding.
+Tailscale and SSH, text branding, and an on-demand Cage/Chromium web kiosk.
 
 Detailed design, build, provisioning, operation and troubleshooting guidance is
 in [the documentation index](docs/README.md). Start there before flashing,

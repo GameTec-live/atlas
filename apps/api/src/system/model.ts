@@ -88,6 +88,13 @@ export const SystemModel = {
     updateAccepted: t.Object({
         status: t.Literal("rebooting_into_candidate"),
     }),
+    uploadStart: t.Object({
+        uploadId: t.String({ format: "uuid" }),
+        chunkSize: t.Integer({ minimum: 1 }),
+    }),
+    uploadProgress: t.Object({
+        received: t.Integer({ minimum: 1 }),
+    }),
     ok,
     rebootAccepted: t.Object({ status: t.Literal("rebooting") }),
     poweroffAccepted: t.Object({ status: t.Literal("powering_off") }),
@@ -174,6 +181,12 @@ export const SystemModel = {
                 examples: ["GameTec-live/atlas"],
             }),
         ),
+    }),
+    uploadSize: t.Object({
+        size: t.Integer({ minimum: 1 }),
+    }),
+    uploadId: t.Object({
+        uploadId: t.String({ format: "uuid" }),
     }),
     uuid: t.Object({
         uuid: t.String({ format: "uuid" }),

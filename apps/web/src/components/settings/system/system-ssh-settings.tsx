@@ -41,7 +41,11 @@ export function SystemSSHSettings() {
         <SystemSummary
             icon={KeyRoundIcon}
             title={m.settings_system_ssh_access()}
-            description={m.settings_system_ssh_disclaimer()}
+            description={
+                enabled
+                    ? m.spicy_fresh_vulture_learn({ username: "atlas" })
+                    : m.settings_system_ssh_disclaimer()
+            }
         >
             <Button
                 type="button"
