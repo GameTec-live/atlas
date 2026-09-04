@@ -92,12 +92,15 @@ To delete a shortname, simply click into the cell and delete the shortname.
 This page consists of core system settings, most of which have already been configured in the setup wizard.
 
 - Users
+
     Create accounts for additional admins and your drivers and dispatchers here. They will authenticate using username and password.
 - General settings
+
     Configure behaviour and general settings here. Customize the logo shown on mobile devices, set the maximum number of dispatchers at a time and the price per kilometre.
 
     The default language is only used for routing and navigation and only gets used when no other language is supplied. Usually the language of the end device gets used (phone, web-ui).
 - System
+
     If Atlas has been deployed via docker or not on AtlasOS, this card only shows some API version information.
 
     This card shows detailed information and offers system management options.
@@ -105,6 +108,7 @@ This page consists of core system settings, most of which have already been conf
     Detailed information allows you to see various details like exact version numbers and system health.
 
     Manage connections allows for managing the network connection and remote access options.
+    
     - Network connection
 
         Are you running a advanced deployment? Do you have special networking requirements? Configure static addresses and other settings for the network interface here.
@@ -125,5 +129,7 @@ This page consists of core system settings, most of which have already been conf
         If you choose to simply enable portforwarding on your router or have multiple remote addresses pointing at your deployment, do not forget to add said addresses to the additional remote origins or otherwise authentication may fail.
     
     Last but not least theres the option to change the systems timezone (which affects time scheduled actions like driver role reset, etc) and the option power off, restart or factory reset the device.
+    
 - Map data
+
     Download a dataset (or multiple) that will be used for routing, search and maps. Note that downloading and processing can take quite a while. You are free to complete the setup, leave the page or come back later. The download will process in the background, but Atlas will not be fully functional until atleast one dataset has been downloaded and initialized.

@@ -56,15 +56,15 @@ Falls der Benutzer die Systemempfehlung übersteuern möchte, weil der gewünsch
 
 Durch das Zuweisen eines Auftrags wird nahezu sofort eine Benachrichtigung an den betreffenden Fahrer gesendet und die Datensätze werden aktualisiert.
 
-## Fuhrpark
+## Flotte
 
-Auf dieser Seite können Sie Ihren Fuhrpark verwalten. Jedes Fahrzeug sollte hier registriert werden.
+Auf dieser Seite können Sie Ihren Flotte verwalten. Jedes Fahrzeug sollte hier registriert werden.
 
 Kilometerstand und Kraftstoffstand müssen nicht manuell aktuell gehalten werden, da das System diese Werte nach Möglichkeit selbst aktualisiert.
 
-Die Fuhrparkverwaltung bietet eine einfache Möglichkeit, Wartungseinträge nachzuverfolgen. Klicken Sie auf das Schraubenschlüssel-Symbol, um einen neuen Eintrag zu erstellen. Klicken Sie auf einen Eintrag unter "Letzte Wartung" oder "Nächste Wartung", um den Verlauf aufzurufen.
+Die Flottenverwaltung bietet eine einfache Möglichkeit, Wartungseinträge nachzuverfolgen. Klicken Sie auf das Schraubenschlüssel-Symbol, um einen neuen Eintrag zu erstellen. Klicken Sie auf einen Eintrag unter "Letzte Wartung" oder "Nächste Wartung", um den Verlauf aufzurufen.
 
-Der Fingerabdruck dient dazu, das Fahrzeug gegenüber der mobilen Anwendung zu identifizieren. Er muss nicht manuell festgelegt werden. Wenn sich ein Administrator zum ersten Mal in der mobilen Anwendung anmeldet und ein neues Fahrzeug verbindet, erscheint ein Dialog, über den der Fingerabdruck des neuen Fahrzeugs einem Fahrzeug in der Fuhrparkdatenbank zugeordnet werden kann.
+Der Fingerabdruck dient dazu, das Fahrzeug gegenüber der mobilen Anwendung zu identifizieren. Er muss nicht manuell festgelegt werden. Wenn sich ein Administrator zum ersten Mal in der mobilen Anwendung anmeldet und ein neues Fahrzeug verbindet, erscheint ein Dialog, über den der Fingerabdruck des neuen Fahrzeugs einem Fahrzeug in der Flottendatenbank zugeordnet werden kann.
 
 > [!TIP]
 > Nehmen Sie ein Telefon und melden Sie sich als Administrator an. Nachdem Sie die Fahrzeuge in der Web-UI angelegt haben, gehen Sie zu jedem Fahrzeug, schließen das Telefon an, stellen eine Android-Auto-Verbindung her und ordnen das Fahrzeug seinem Fingerabdruck zu. Einfach und schnell.
@@ -93,11 +93,15 @@ Diese Seite enthält die zentralen Systemeinstellungen, von denen die meisten be
 
 - Benutzer
     Erstellen Sie hier Konten für zusätzliche Administratoren sowie für Ihre Fahrer und Disponenten. Sie melden sich mit Benutzername und Passwort an.
+
 - Allgemeine Einstellungen
+
     Konfigurieren Sie hier das Verhalten und die allgemeinen Einstellungen. Passen Sie das auf Mobilgeräten angezeigte Logo an, legen Sie die maximale Anzahl gleichzeitig verfügbarer Disponenten sowie den Preis pro Kilometer fest.
 
     Die Standardsprache wird nur für Routenführung und Navigation verwendet, und auch nur dann, wenn keine andere Sprache angegeben wurde. Normalerweise wird die Sprache des Endgeräts verwendet (Telefon, Web-UI).
+
 - System
+
     Wenn Atlas über Docker oder nicht auf AtlasOS bereitgestellt wurde, zeigt diese Karte nur einige Informationen zur API-Version.
 
     Diese Karte zeigt detaillierte Informationen und bietet Optionen zur Systemverwaltung.
@@ -105,6 +109,7 @@ Diese Seite enthält die zentralen Systemeinstellungen, von denen die meisten be
     Unter "Detaillierte Informationen" können Sie verschiedene Angaben wie exakte Versionsnummern und den Systemzustand einsehen.
 
     Unter "Verbindungen verwalten" können Sie die Netzwerkverbindung und die Optionen für den Fernzugriff verwalten.
+
     - Netzwerkverbindung
 
         Betreiben Sie eine erweiterte Installation? Haben Sie besondere Netzwerkanforderungen? Konfigurieren Sie hier statische Adressen und weitere Einstellungen für die Netzwerkschnittstelle.
@@ -125,5 +130,7 @@ Diese Seite enthält die zentralen Systemeinstellungen, von denen die meisten be
         Wenn Sie stattdessen einfach Portweiterleitung auf Ihrem Router aktivieren oder mehrere externe Adressen auf Ihre Installation verweisen lassen, vergessen Sie nicht, diese Adressen den zusätzlichen externen Ursprüngen hinzuzufügen. Andernfalls kann die Authentifizierung fehlschlagen.
     
     Abschließend gibt es die Möglichkeit, die Zeitzone des Systems zu ändern (diese wirkt sich auf zeitgesteuerte Aktionen wie das Zurücksetzen der Fahrerrolle aus) sowie das Gerät auszuschalten, neu zu starten oder auf Werkseinstellungen zurückzusetzen.
+
 - Kartendaten
+
     Laden Sie einen oder mehrere Datensätze herunter, die für Routenführung, Suche und Karten verwendet werden. Beachten Sie, dass Download und Verarbeitung längere Zeit dauern können. Sie können die Einrichtung abschließen, die Seite verlassen oder später zurückkehren. Der Download wird im Hintergrund verarbeitet; Atlas ist jedoch erst vollständig funktionsfähig, nachdem mindestens ein Datensatz heruntergeladen und initialisiert wurde.
