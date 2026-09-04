@@ -103,4 +103,19 @@
     <string name="telemetry_permission_waiting">Warten Sie auf die Freigabe der Fahrzeugdaten auf Ihrem Smartphone.</string>
     <string name="telemetry_permission_denied">Nicht alle Berechtigungen für Fahrzeugdaten wurden erteilt. Fehlende Werte können nicht bereitgestellt werden.</string>
     <string name="telemetry_permission_action">Zugriff auf Fahrzeugdaten erlauben</string>
+    <string name="telemetry_diagnostics_title">Telemetriediagnose (tempor&#228;r)</string>
+    <string name="telemetry_diagnostics_message">Car App API: %1$s\nBerechtigungen: %2$s\nHardware-API: %3$s\nEnergie-Listener: %4$s\nBatterie: %5$s\nKraftstoff: %6$s\nKilometer-Listener: %7$s\nKilometerstand: %8$s</string>
+    <string name="telemetry_diagnostics_permissions_granted">Erteilt</string>
+    <string name="telemetry_diagnostics_permissions_missing">Fehlt: %1$s</string>
+    <string name="telemetry_diagnostics_not_connected">Nicht verbunden</string>
+    <string name="telemetry_diagnostics_waiting">Warte auf ersten Wert</string>
+    <string name="telemetry_diagnostics_success">OK</string>
+    <string name="telemetry_diagnostics_unsupported">Nicht unterst&#252;tzte API-Version</string>
+    <string name="telemetry_diagnostics_unimplemented">Vom Fahrzeug nicht implementiert</string>
+    <string name="telemetry_diagnostics_unavailable">Vor&#252;bergehend nicht verf&#252;gbar</string>
+    <string name="telemetry_diagnostics_unknown">Unbekannter Status</string>
+    <string name="telemetry_diagnostics_failed">Fehlgeschlagen</string>
+    <string name="telemetry_diagnostics_status_detail">%1$s: %2$s</string>
+    <string name="telemetry_diagnostics_percent_value">%1$s%%</string>
+    <string name="telemetry_diagnostics_kilometer_value">%1$s km</string>
 </resources>

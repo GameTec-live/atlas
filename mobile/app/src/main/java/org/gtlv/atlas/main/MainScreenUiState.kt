@@ -4,9 +4,12 @@ import org.gtlv.atlas.address.AddressSearchUiState
 import org.gtlv.core.job.Job
 import org.gtlv.core.job.JobFareQuote
 import org.gtlv.core.job.JobLocationField
+import org.gtlv.core.telemetry.TelemetryDiagnostics
 
 data class MainScreenUiState(
     val isLoading: Boolean = true,
+    val currentOdometerKilometers: Double? = null,
+    val telemetryDiagnostics: TelemetryDiagnostics? = null,
     val currentJob: Job? = null,
     val queuedJobs: List<Job> = emptyList(),
     val isJobListExpanded: Boolean = false,

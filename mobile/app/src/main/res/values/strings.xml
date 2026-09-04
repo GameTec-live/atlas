@@ -117,6 +117,27 @@
     <string name="job_panel_total_jobs">Total: %1$d</string>
     <string name="job_panel_current_job">Current Job</string>
     <string name="job_panel_edit_destination">Edit destination</string>
+    <string name="debug_odometer_title">Vehicle telemetry diagnostics (temporary)</string>
+    <string name="debug_odometer_value">%1$s km</string>
+    <string name="debug_odometer_unavailable">Unavailable</string>
+    <string name="debug_car_api">Car App API</string>
+    <string name="debug_hardware_api">Hardware API</string>
+    <string name="debug_energy_listener">Energy listener</string>
+    <string name="debug_battery">Battery</string>
+    <string name="debug_fuel">Fuel</string>
+    <string name="debug_mileage_listener">Mileage listener</string>
+    <string name="debug_odometer">Odometer</string>
+    <string name="debug_value">%1$s: %2$s</string>
+    <string name="debug_percent_value">%1$s%%</string>
+    <string name="debug_status_disconnected">Not connected</string>
+    <string name="debug_status_waiting">Waiting for first value</string>
+    <string name="debug_status_success">OK</string>
+    <string name="debug_status_unsupported">Unsupported API level</string>
+    <string name="debug_status_unimplemented">Not implemented by head unit</string>
+    <string name="debug_status_unavailable">Temporarily unavailable</string>
+    <string name="debug_status_unknown">Unknown status</string>
+    <string name="debug_status_failed">Failed</string>
+    <string name="debug_status_detail">%1$s: %2$s</string>
 
     <plurals name="job_panel_next_job">
         <item quantity="one">Next Job (%1$d in queue)</item>

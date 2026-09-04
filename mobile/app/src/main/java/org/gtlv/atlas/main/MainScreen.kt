@@ -49,6 +49,7 @@ import org.gtlv.atlas.main.composable.JobActionButtons
 import org.gtlv.atlas.main.composable.JobPanel
 import org.gtlv.atlas.main.composable.FinishJobConfirmationDialog
 import org.gtlv.atlas.main.composable.NavigationPanel
+import org.gtlv.atlas.main.composable.OdometerDebugPanel
 import org.gtlv.atlas.main.composable.ProfileButton
 import org.gtlv.atlas.main.composable.ProfileSidebar
 import org.gtlv.atlas.main.composable.StartKilometerDialog
@@ -487,6 +488,12 @@ internal fun MainScreen(
                 verticalArrangement =
                     Arrangement.spacedBy(8.dp)
             ) {
+                OdometerDebugPanel(
+                    odometerKilometers =
+                        jobState.currentOdometerKilometers,
+                    diagnostics = jobState.telemetryDiagnostics,
+                )
+
                 SnackbarHost(
                     hostState =
                         jobErrorSnackbarHostState

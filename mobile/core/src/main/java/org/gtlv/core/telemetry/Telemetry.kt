@@ -31,7 +31,7 @@ import org.gtlv.core.location.LocationState
 class Telemetry(
     private val locationProvider: LocationProvider,
     initialState: TelemetryVehicleState = TelemetryVehicleState.FREE
-) : TelemetryProvider {
+) : TelemetryProvider, TelemetryDiagnosticsProvider {
     private val _telemetry = MutableStateFlow<TelemetryData?>(null)
 
     override val telemetry: StateFlow<TelemetryData?> =
@@ -46,6 +46,12 @@ class Telemetry(
 
     override val vehicleFingerprint: StateFlow<String?> =
         _vehicleFingerprint.asStateFlow()
+
+    private val _telemetryDiagnostics =
+        MutableStateFlow(TelemetryDiagnostics())
+
+    override val telemetryDiagnostics: StateFlow<TelemetryDiagnostics> =
+        _telemetryDiagnostics.asStateFlow()
 
     private var vehicleState = initialState
     private var vehicleId: String? = null
@@ -65,11 +71,29 @@ class Telemetry(
 
     private val mileageListener =
         OnCarDataAvailableListener<Mileage> { mileage ->
+            val odometerValue = mileage.odometerMeters
+
+            updateDiagnostics {
+                copy(
+                    odometerKilometers =
+                        odometerValue.toTelemetryDiagnosticValue()
+                )
+            }
+
             // Despite its legacy name, AndroidX returns this in kilometres.
-            odometer = mileage.odometerMeters
+            odometer = odometerValue
                 .successfulValue()
                 ?.toDouble()
-                ?.takeIf { it >= 0.0 }
+                ?.takeIf { it.isFinite() && it >= 0.0 }
+
+            if (odometer == null) {
+                Log.w(
+                    TAG,
+                    "Odometer update unavailable: " +
+                        "status=${odometerValue.status}, " +
+                        "value=${odometerValue.value}"
+                )
+            }
 
             _odometerKilometers.value = odometer
 
@@ -78,10 +102,32 @@ class Telemetry(
 
     private val fuelListener =
         OnCarDataAvailableListener<EnergyLevel> { energyLevel ->
-            fuelLevel = energyLevel.fuelPercent
-                .successfulValue()
+            val batteryPercent = energyLevel.batteryPercent
+            val fuelPercent = energyLevel.fuelPercent
+
+            updateDiagnostics {
+                copy(
+                    batteryPercent =
+                        batteryPercent.toTelemetryDiagnosticValue(),
+                    fuelPercent =
+                        fuelPercent.toTelemetryDiagnosticValue(),
+                )
+            }
+
+            // The server field is named fuelLevel, but for an EV the usable
+            // energy percentage is supplied as batteryPercent instead.
+            fuelLevel = (
+                fuelPercent.successfulValue()
+                    ?: batteryPercent.successfulValue()
+                )
                 ?.toDouble()
                 ?.takeIf { it in TelemetryData.FUEL_LEVEL_RANGE }
+
+            Log.i(
+                TAG,
+                "Energy update: batteryStatus=${batteryPercent.status}, " +
+                    "fuelStatus=${fuelPercent.status}"
+            )
 
             publishTelemetry()
         }
@@ -126,7 +172,17 @@ class Telemetry(
     /** Adds optional vehicle information without changing location selection. */
     @MainThread
     fun connectCar(context: Context) {
-        val carContext = context as? CarContext ?: return
+        val carContext = context as? CarContext
+        if (carContext == null) {
+            Log.w(TAG, "Ignoring telemetry connection without a CarContext")
+            return
+        }
+
+        Log.i(
+            TAG,
+            "Connecting car telemetry at Car App API " +
+                carContext.carAppApiLevel
+        )
 
         if (connectedCarContext === carContext) {
             startCarTelemetryIfConnected()
@@ -135,6 +191,12 @@ class Telemetry(
 
         connectedCarContext?.let(::disconnectCar)
         connectedCarContext = carContext
+        _telemetryDiagnostics.value = TelemetryDiagnostics(
+            carAppApiLevel = carContext.carAppApiLevel,
+            hardware = TelemetryDiagnosticValue(
+                TelemetryDiagnosticStatus.WAITING
+            ),
+        )
         bluetoothMacProvider =
             ConnectedCarBluetoothMacProvider(carContext) { macAddress ->
                 val fingerprint = macAddress?.let(
@@ -156,6 +218,8 @@ class Telemetry(
     fun disconnectCar(context: Context) {
         if (connectedCarContext !== context) return
 
+        Log.i(TAG, "Disconnecting car telemetry")
+
         vehicleId = null
         _vehicleFingerprint.value = null
         fuelLevel = null
@@ -164,6 +228,7 @@ class Telemetry(
         stopCarTelemetry()
         connectedCarContext = null
         bluetoothMacProvider = null
+        _telemetryDiagnostics.value = TelemetryDiagnostics()
         publishTelemetry()
     }
 
@@ -192,40 +257,93 @@ class Telemetry(
 
         bluetoothMacProvider?.start()
 
-        if (carInfo != null) return
+        val info = carInfo ?: run {
+            if (carContext.carAppApiLevel < MIN_CAR_API_LEVEL) {
+                Log.w(TAG, "Vehicle telemetry requires Car App API level 3")
+                updateDiagnostics {
+                    copy(
+                        hardware = TelemetryDiagnosticValue(
+                            status = TelemetryDiagnosticStatus.UNSUPPORTED,
+                            detail = "Requires Car App API level 3 or newer",
+                        )
+                    )
+                }
+                return
+            }
 
-        if (carContext.carAppApiLevel < MIN_CAR_API_LEVEL) {
-            Log.w(TAG, "Vehicle telemetry requires Car App API level 3")
-            return
+            val hardwareResult = runCatching {
+                carContext
+                    .getCarService(CarHardwareManager::class.java)
+                    .carInfo
+            }.onFailure {
+                Log.w(TAG, "Car hardware information is unavailable", it)
+            }
+
+            hardwareResult.exceptionOrNull()?.let { error ->
+                updateDiagnostics {
+                    copy(
+                        hardware = error.toFailedDiagnostic()
+                    )
+                }
+            }
+
+            hardwareResult.getOrNull()?.also {
+                carInfo = it
+                updateDiagnostics {
+                    copy(
+                        hardware = TelemetryDiagnosticValue(
+                            TelemetryDiagnosticStatus.SUCCESS
+                        )
+                    )
+                }
+            } ?: return
         }
 
-        val info = runCatching {
-            carContext
-                .getCarService(CarHardwareManager::class.java)
-                .carInfo
-        }.onFailure {
-            Log.w(TAG, "Car hardware information is unavailable", it)
-        }.getOrNull() ?: return
+        if (!fuelListenerRegistered) {
+            val listenerResult = runCatching {
+                info.addEnergyLevelListener(
+                    carContext.mainExecutor,
+                    fuelListener
+                )
+            }.onFailure {
+                Log.w(TAG, "Fuel level is unavailable", it)
+            }
+            fuelListenerRegistered = listenerResult.isSuccess
 
-        carInfo = info
+            updateDiagnostics {
+                copy(
+                    energyListener = listenerResult.toListenerDiagnostic()
+                )
+            }
 
-        fuelListenerRegistered = runCatching {
-            info.addEnergyLevelListener(
-                carContext.mainExecutor,
-                fuelListener
+            Log.i(
+                TAG,
+                "Fuel listener registered=$fuelListenerRegistered"
             )
-        }.onFailure {
-            Log.w(TAG, "Fuel level is unavailable", it)
-        }.isSuccess
+        }
 
-        mileageListenerRegistered = runCatching {
-            info.addMileageListener(
-                carContext.mainExecutor,
-                mileageListener
+        if (!mileageListenerRegistered) {
+            val listenerResult = runCatching {
+                info.addMileageListener(
+                    carContext.mainExecutor,
+                    mileageListener
+                )
+            }.onFailure {
+                Log.w(TAG, "Odometer is unavailable", it)
+            }
+            mileageListenerRegistered = listenerResult.isSuccess
+
+            updateDiagnostics {
+                copy(
+                    mileageListener = listenerResult.toListenerDiagnostic()
+                )
+            }
+
+            Log.i(
+                TAG,
+                "Odometer listener registered=$mileageListenerRegistered"
             )
-        }.onFailure {
-            Log.w(TAG, "Odometer is unavailable", it)
-        }.isSuccess
+        }
     }
 
     @MainThread
@@ -268,6 +386,13 @@ class Telemetry(
         _telemetry.value = updatedTelemetry
     }
 
+    private inline fun updateDiagnostics(
+        transform: TelemetryDiagnostics.() -> TelemetryDiagnostics
+    ) {
+        _telemetryDiagnostics.value =
+            _telemetryDiagnostics.value.transform()
+    }
+
     companion object {
         const val CAR_FUEL_PERMISSION =
             "com.google.android.gms.permission.CAR_FUEL"
@@ -287,4 +412,40 @@ class Telemetry(
 
 private fun <T> CarValue<T>.successfulValue(): T? {
     return value.takeIf { status == CarValue.STATUS_SUCCESS }
+}
+
+private fun CarValue<Float>.toTelemetryDiagnosticValue():
+        TelemetryDiagnosticValue {
+    val diagnosticStatus = when (status) {
+        CarValue.STATUS_SUCCESS -> TelemetryDiagnosticStatus.SUCCESS
+        CarValue.STATUS_UNIMPLEMENTED ->
+            TelemetryDiagnosticStatus.UNIMPLEMENTED
+        CarValue.STATUS_UNAVAILABLE -> TelemetryDiagnosticStatus.UNAVAILABLE
+        else -> TelemetryDiagnosticStatus.UNKNOWN
+    }
+
+    return TelemetryDiagnosticValue(
+        status = diagnosticStatus,
+        value = successfulValue()?.toDouble(),
+    )
+}
+
+private fun Result<Unit>.toListenerDiagnostic(): TelemetryDiagnosticValue {
+    return exceptionOrNull()?.toFailedDiagnostic()
+        ?: TelemetryDiagnosticValue(TelemetryDiagnosticStatus.SUCCESS)
+}
+
+private fun Throwable.toFailedDiagnostic(): TelemetryDiagnosticValue {
+    val description = buildString {
+        append(this@toFailedDiagnostic::class.java.simpleName)
+        message?.takeIf { it.isNotBlank() }?.let { message ->
+            append(": ")
+            append(message)
+        }
+    }
+
+    return TelemetryDiagnosticValue(
+        status = TelemetryDiagnosticStatus.FAILED,
+        detail = description,
+    )
 }

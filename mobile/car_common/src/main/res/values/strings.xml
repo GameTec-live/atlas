@@ -103,4 +103,19 @@
     <string name="telemetry_permission_waiting">Waiting for vehicle data permissions on your phone.</string>
     <string name="telemetry_permission_denied">Not all vehicle data permissions were granted. Missing values cannot be provided.</string>
     <string name="telemetry_permission_action">Allow vehicle data</string>
+    <string name="telemetry_diagnostics_title">Telemetry diagnostics (temporary)</string>
+    <string name="telemetry_diagnostics_message">Car App API: %1$s\nPermissions: %2$s\nHardware API: %3$s\nEnergy listener: %4$s\nBattery: %5$s\nFuel: %6$s\nMileage listener: %7$s\nOdometer: %8$s</string>
+    <string name="telemetry_diagnostics_permissions_granted">Granted</string>
+    <string name="telemetry_diagnostics_permissions_missing">Missing: %1$s</string>
+    <string name="telemetry_diagnostics_not_connected">Not connected</string>
+    <string name="telemetry_diagnostics_waiting">Waiting for first value</string>
+    <string name="telemetry_diagnostics_success">OK</string>
+    <string name="telemetry_diagnostics_unsupported">Unsupported API level</string>
+    <string name="telemetry_diagnostics_unimplemented">Not implemented by head unit</string>
+    <string name="telemetry_diagnostics_unavailable">Temporarily unavailable</string>
+    <string name="telemetry_diagnostics_unknown">Unknown status</string>
+    <string name="telemetry_diagnostics_failed">Failed</string>
+    <string name="telemetry_diagnostics_status_detail">%1$s: %2$s</string>
+    <string name="telemetry_diagnostics_percent_value">%1$s%%</string>
+    <string name="telemetry_diagnostics_kilometer_value">%1$s km</string>
 </resources>

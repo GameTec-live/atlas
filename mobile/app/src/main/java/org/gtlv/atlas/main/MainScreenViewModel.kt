@@ -34,6 +34,8 @@ import org.gtlv.core.location.VehicleHeadingEstimator
 import org.gtlv.core.shift.ShiftSessionManager
 import org.gtlv.core.shift.ShiftSessionState
 import org.gtlv.core.telemetry.TelemetryProvider
+import org.gtlv.core.telemetry.TelemetryDiagnostics
+import org.gtlv.core.telemetry.TelemetryDiagnosticsProvider
 import org.gtlv.core.telemetry.TelemetryVehicleState
 import org.gtlv.core.pricing.PriceResult
 import org.gtlv.core.pricing.PricingRepository
@@ -91,6 +93,37 @@ class MainScreenViewModel(
 
     init {
         observeShiftStartKilometer()
+        observeCurrentOdometer()
+        observeTelemetryDiagnostics()
+    }
+
+    private fun observeCurrentOdometer() {
+        viewModelScope.launch {
+            telemetryProvider.odometerKilometers.collectLatest { odometer ->
+                _uiState.update {
+                    it.copy(
+                        currentOdometerKilometers = odometer?.takeIf {
+                            value -> value.isFinite() && value >= 0.0
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun observeTelemetryDiagnostics() {
+        val diagnosticsProvider =
+            telemetryProvider as? TelemetryDiagnosticsProvider
+            ?: return
+
+        viewModelScope.launch {
+            diagnosticsProvider.telemetryDiagnostics.collectLatest {
+                    diagnostics ->
+                _uiState.update {
+                    it.copy(telemetryDiagnostics = diagnostics)
+                }
+            }
+        }
     }
 
     private fun observeShiftStartKilometer() {
@@ -156,7 +189,10 @@ class MainScreenViewModel(
         collectedJobId =
             collectedJobStore.getCollectedJobId(userId)
 
-        _uiState.value = MainScreenUiState()
+        _uiState.value = MainScreenUiState(
+            currentOdometerKilometers = currentOdometerKilometers(),
+            telemetryDiagnostics = currentTelemetryDiagnostics(),
+        )
         observeCollectedJobState(userId)
         observeJobLifecycle()
 
@@ -1730,7 +1766,9 @@ class MainScreenViewModel(
         cancelAllTasks()
 
         _uiState.value = MainScreenUiState(
-            isLoading = false
+            isLoading = false,
+            currentOdometerKilometers = currentOdometerKilometers(),
+            telemetryDiagnostics = currentTelemetryDiagnostics(),
         )
     }
 
@@ -1781,6 +1819,12 @@ class MainScreenViewModel(
     private fun currentOdometerKilometers(): Double? {
         return telemetryProvider.odometerKilometers.value
             ?.takeIf { it.isFinite() && it >= 0.0 }
+    }
+
+    private fun currentTelemetryDiagnostics(): TelemetryDiagnostics? {
+        return (telemetryProvider as? TelemetryDiagnosticsProvider)
+            ?.telemetryDiagnostics
+            ?.value
     }
 
     private companion object {

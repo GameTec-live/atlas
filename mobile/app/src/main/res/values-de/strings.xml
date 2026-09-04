@@ -117,6 +117,27 @@
     <string name="job_panel_total_jobs">Gesamt: %1$d</string>
     <string name="job_panel_current_job">Aktueller Auftrag</string>
     <string name="job_panel_edit_destination">Ziel bearbeiten</string>
+    <string name="debug_odometer_title">Fahrzeugtelemetrie-Diagnose (tempor&#228;r)</string>
+    <string name="debug_odometer_value">%1$s km</string>
+    <string name="debug_odometer_unavailable">Nicht verfügbar</string>
+    <string name="debug_car_api">Car App API</string>
+    <string name="debug_hardware_api">Hardware-API</string>
+    <string name="debug_energy_listener">Energie-Listener</string>
+    <string name="debug_battery">Batterie</string>
+    <string name="debug_fuel">Kraftstoff</string>
+    <string name="debug_mileage_listener">Kilometer-Listener</string>
+    <string name="debug_odometer">Kilometerstand</string>
+    <string name="debug_value">%1$s: %2$s</string>
+    <string name="debug_percent_value">%1$s%%</string>
+    <string name="debug_status_disconnected">Nicht verbunden</string>
+    <string name="debug_status_waiting">Warte auf ersten Wert</string>
+    <string name="debug_status_success">OK</string>
+    <string name="debug_status_unsupported">Nicht unterst&#252;tzte API-Version</string>
+    <string name="debug_status_unimplemented">Vom Fahrzeug nicht implementiert</string>
+    <string name="debug_status_unavailable">Vor&#252;bergehend nicht verf&#252;gbar</string>
+    <string name="debug_status_unknown">Unbekannter Status</string>
+    <string name="debug_status_failed">Fehlgeschlagen</string>
+    <string name="debug_status_detail">%1$s: %2$s</string>
 
     <plurals name="job_panel_next_job">
         <item quantity="one">Nächster Auftrag (%1$d in der Warteschlange)</item>

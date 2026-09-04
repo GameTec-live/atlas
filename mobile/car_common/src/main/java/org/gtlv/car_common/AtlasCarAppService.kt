@@ -6,10 +6,12 @@ import androidx.car.app.Screen
 import androidx.car.app.ScreenManager
 import androidx.car.app.Session
 import androidx.car.app.SessionInfo
+import androidx.car.app.SessionInfo.DISPLAY_TYPE_MAIN
 import androidx.car.app.validation.HostValidator
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import org.gtlv.car_common.screen.MainScreen
+import org.gtlv.car_common.screen.TelemetryDiagnosticsScreen
 import org.gtlv.car_common.screen.TelemetryPermissionScreen
 import org.gtlv.car_common.screen.WaitingScreen
 import org.gtlv.car_common.screen.missingVehicleTelemetryPermissions
@@ -29,6 +31,7 @@ import org.gtlv.core.session.SessionManagerProvider
 import org.gtlv.core.session.SessionState
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryProviderRegistry
+import org.gtlv.core.telemetry.TelemetryDiagnosticsProvider
 import org.gtlv.core.telemetry.LiveMapUsersProvider
 import org.gtlv.core.pricing.PricingRepositoryProvider
 
@@ -39,20 +42,30 @@ class AtlasCarAppService : CarAppService() {
     }
 
     override fun onCreateSession(sessionInfo: SessionInfo): Session {
-        return AtlasSession()
+        return AtlasSession(
+            managesCarConnection =
+                sessionInfo.displayType == DISPLAY_TYPE_MAIN
+        )
     }
 }
 
-class AtlasSession : Session(), DefaultLifecycleObserver {
+class AtlasSession(
+    private val managesCarConnection: Boolean = true
+) : Session(), DefaultLifecycleObserver {
     private var carLocationProvider: CarLocationProvider? = null
     private var carLocationProviderRegistry: CarLocationProviderRegistry? = null
     private var telemetryProvider: TelemetryProvider? = null
     private var telemetryProviderRegistry: TelemetryProviderRegistry? = null
     private var telemetryPermissionScreen: TelemetryPermissionScreen? = null
+    private var hasShownTelemetryDiagnostics = false
 
     override fun onCreateScreen(intent: Intent): Screen {
-        connectCarLocationProvider()
-        connectTelemetryProvider()
+        if (managesCarConnection) {
+            connectCarLocationProvider()
+            connectTelemetryProvider()
+            telemetryProviderRegistry
+                ?.connectCarTelemetry(carContext)
+        }
 
         val shiftSessionManager =
             (carContext.applicationContext as? ShiftSessionProvider)
@@ -133,22 +146,33 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                 )
 
                 carContext.getCarService(ScreenManager::class.java).push(roleScreen)
+                showTelemetryDiagnosticsScreen()
             },
         )
     }
 
     override fun onStart(owner: LifecycleOwner) {
+        if (!managesCarConnection) return
+
         carLocationProvider?.start()
+        // Calling this again is safe and lets a transient host setup failure
+        // retry when the car app becomes visible.
         telemetryProviderRegistry?.connectCarTelemetry(carContext)
         showTelemetryPermissionScreenIfNeeded()
     }
 
     override fun onStop(owner: LifecycleOwner) {
-        telemetryProviderRegistry?.disconnectCarTelemetry(carContext)
+        if (!managesCarConnection) return
+
         carLocationProvider?.stop()
     }
 
     override fun onDestroy(owner: LifecycleOwner) {
+        if (!managesCarConnection) {
+            lifecycle.removeObserver(this)
+            return
+        }
+
         val currentLocationProvider = carLocationProvider
         telemetryProviderRegistry?.disconnectCarTelemetry(carContext)
 
@@ -163,6 +187,7 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
         telemetryProvider = null
         telemetryProviderRegistry = null
         telemetryPermissionScreen = null
+        hasShownTelemetryDiagnostics = false
         lifecycle.removeObserver(this)
     }
 
@@ -224,5 +249,24 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
         carContext
             .getCarService(ScreenManager::class.java)
             .push(permissionScreen)
+    }
+
+    /** Automatically opens once per session on this temporary test branch. */
+    private fun showTelemetryDiagnosticsScreen() {
+        if (hasShownTelemetryDiagnostics) return
+
+        val diagnosticsProvider =
+            telemetryProvider as? TelemetryDiagnosticsProvider
+            ?: return
+
+        hasShownTelemetryDiagnostics = true
+        carContext
+            .getCarService(ScreenManager::class.java)
+            .push(
+                TelemetryDiagnosticsScreen(
+                    carContext = carContext,
+                    provider = diagnosticsProvider,
+                )
+            )
     }
 }
