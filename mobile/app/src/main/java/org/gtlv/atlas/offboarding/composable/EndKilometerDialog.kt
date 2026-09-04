@@ -1,4 +1,4 @@
-package org.gtlv.atlas.offboarding
+package org.gtlv.atlas.offboarding.composable
 
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog

@@ -40,6 +40,7 @@ class LogbookRepositoryTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
         val submission = LogbookSubmission(
             vehicleId = "7bb0de4d-bcdd-4c99-a852-a17a4bbdb3de",
+            vehicleFingerprint = null,
             startedAt = Instant.parse("2026-09-03T07:30:00Z"),
             startOdometer = 12_345,
             endOdometer = 12_695,
@@ -57,6 +58,26 @@ class LogbookRepositoryTest {
         assertEquals(12_345L, body.getLong("startOdometer"))
         assertEquals(12_695L, body.getLong("endOdometer"))
         assertEquals(325.5, body.getDouble("revenue"), 0.0)
+    }
+
+    @Test
+    fun `includes fingerprint when it is available`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+        val submission = LogbookSubmission(
+            vehicleId = "7bb0de4d-bcdd-4c99-a852-a17a4bbdb3de",
+            vehicleFingerprint = "056ae5bc",
+            startedAt = Instant.parse("2026-09-03T07:30:00Z"),
+            startOdometer = 12_345,
+            endOdometer = 12_695,
+            endedAt = Instant.parse("2026-09-03T17:00:00Z"),
+            revenue = 0.0
+        )
+
+        assertEquals(SubmitLogbookResult.Success, repository.submit(submission))
+
+        val body = JSONObject(server.takeRequest().body.readUtf8())
+        assertEquals(submission.vehicleId, body.getString("vehicleId"))
+        assertEquals("056ae5bc", body.getString("vehicleFingerprint"))
     }
 
     private class FakeServerSettingsRepository(

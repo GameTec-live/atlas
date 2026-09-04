@@ -1,6 +1,7 @@
 package org.gtlv.atlas.offboarding
 
 import java.time.Instant
+import org.gtlv.atlas.offboarding.composable.formatDuration
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

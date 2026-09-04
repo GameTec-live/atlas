@@ -10,6 +10,9 @@ data class OffboardingUiState(
     val isEndKilometerInvalid: Boolean = false,
     val session: ShiftSession? = null,
     val vehicle: Vehicle? = null,
+    val availableVehicles: List<Vehicle> = emptyList(),
+    val isLoadingVehicles: Boolean = false,
+    val vehicleLoadFailed: Boolean = false,
     val revenueInput: String = "",
     val isRevenueInvalid: Boolean = false,
     val isConfirmed: Boolean = false,
@@ -18,7 +21,7 @@ data class OffboardingUiState(
 )
 
 enum class OffboardingError {
-    VEHICLE_UNAVAILABLE,
+    VEHICLE_REQUIRED,
     START_KILOMETER_UNAVAILABLE,
     SUBMISSION_FAILED
 }

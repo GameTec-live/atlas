@@ -28,13 +28,19 @@ class LogbookRepositoryImpl(
             ?.build()
             ?: return@withContext SubmitLogbookResult.InvalidResponse
 
-        val requestBody = JSONObject()
-            .put("vehicleId", submission.vehicleId)
+        val requestJson = JSONObject()
             .put("startedAt", submission.startedAt.toString())
             .put("startOdometer", submission.startOdometer)
             .put("endOdometer", submission.endOdometer)
             .put("endedAt", submission.endedAt.toString())
             .put("revenue", submission.revenue)
+
+        requestJson.put("vehicleId", submission.vehicleId)
+        submission.vehicleFingerprint?.let {
+            requestJson.put("vehicleFingerprint", it)
+        }
+
+        val requestBody = requestJson
             .toString()
             .toRequestBody(JSON_MEDIA_TYPE)
 

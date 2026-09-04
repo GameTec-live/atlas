@@ -4,6 +4,7 @@ import java.time.Instant
 
 data class LogbookSubmission(
     val vehicleId: String,
+    val vehicleFingerprint: String?,
     val startedAt: Instant,
     val startOdometer: Long,
     val endOdometer: Long,

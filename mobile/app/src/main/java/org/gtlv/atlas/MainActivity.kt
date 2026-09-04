@@ -43,7 +43,7 @@ import org.gtlv.atlas.navigation.AuthenticatedNavHost
 import org.gtlv.atlas.notification.JobNotificationViewModel
 import org.gtlv.atlas.notification.JobNotificationViewModelFactory
 import org.gtlv.atlas.notification.JobSystemNotificationManager
-import org.gtlv.atlas.offboarding.EndKilometerDialog
+import org.gtlv.atlas.offboarding.composable.EndKilometerDialog
 import org.gtlv.atlas.offboarding.OffboardingScreen
 import org.gtlv.atlas.offboarding.OffboardingViewModel
 import org.gtlv.atlas.offboarding.OffboardingViewModelFactory
@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
             telemetryProvider = atlasApplication.telemetryProvider,
             connectedVehicleState =
                 atlasApplication.connectedVehicleManager.state,
+            fleetRepository = atlasApplication.fleetRepository,
             logbookRepository = atlasApplication.logbookRepository,
             sessionManager = atlasApplication.sessionManager
         )
@@ -421,6 +422,12 @@ class MainActivity : ComponentActivity() {
                                         onConfirmationChanged =
                                             offboardingViewModel::
                                             setConfirmed,
+                                        onVehicleSelected =
+                                            offboardingViewModel::
+                                            selectVehicle,
+                                        onRetryVehicles =
+                                            offboardingViewModel::
+                                            retryLoadVehicles,
                                         onSubmit =
                                             offboardingViewModel::
                                             submitAndLogout,

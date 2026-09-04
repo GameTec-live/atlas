@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.gtlv.core.fleet.ConnectedVehicleState
+import org.gtlv.core.fleet.FleetRepository
+import org.gtlv.core.fleet.Vehicle
+import org.gtlv.core.fleet.VehiclesResult
 import org.gtlv.core.logbook.LogbookRepository
 import org.gtlv.core.logbook.LogbookSubmission
 import org.gtlv.core.logbook.SubmitLogbookResult
@@ -22,11 +25,13 @@ class OffboardingViewModel(
     private val shiftSessionManager: ShiftSessionManager,
     private val telemetryProvider: TelemetryProvider,
     private val connectedVehicleState: StateFlow<ConnectedVehicleState>,
+    private val fleetRepository: FleetRepository,
     private val logbookRepository: LogbookRepository,
     private val logout: suspend () -> Unit
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(OffboardingUiState())
     val uiState: StateFlow<OffboardingUiState> = _uiState.asStateFlow()
+    private var hasLoadedVehicles = false
 
     init {
         observeShiftSession()
@@ -35,6 +40,14 @@ class OffboardingViewModel(
 
     fun requestLogout() {
         val session = activeSession() ?: return
+        val connectedVehicle =
+            (connectedVehicleState.value as? ConnectedVehicleState.Connected)
+                ?.vehicle
+        if (connectedVehicle != null) {
+            _uiState.update { it.copy(vehicle = connectedVehicle) }
+        } else if (_uiState.value.vehicle == null) {
+            loadVehicles()
+        }
         val startKilometer = session.startKilometer
         val endKilometer = telemetryProvider.odometerKilometers.value
             ?.takeIf { value ->
@@ -130,6 +143,17 @@ class OffboardingViewModel(
         _uiState.update { it.copy(isConfirmed = confirmed, error = null) }
     }
 
+    fun selectVehicle(vehicle: Vehicle) {
+        _uiState.update {
+            it.copy(vehicle = vehicle, error = null)
+        }
+    }
+
+    fun retryLoadVehicles() {
+        hasLoadedVehicles = false
+        loadVehicles()
+    }
+
     fun submitAndLogout() {
         val state = _uiState.value
         if (state.isSubmitting || !state.isConfirmed) return
@@ -143,12 +167,10 @@ class OffboardingViewModel(
         val session = state.session ?: return
         val vehicle = state.vehicle
         if (vehicle == null) {
-            _uiState.update {
-                it.copy(error = OffboardingError.VEHICLE_UNAVAILABLE)
-            }
+            _uiState.update { it.copy(error = OffboardingError.VEHICLE_REQUIRED) }
+            loadVehicles()
             return
         }
-
         val startKilometer = session.startKilometer
         if (startKilometer == null) {
             _uiState.update {
@@ -159,9 +181,13 @@ class OffboardingViewModel(
 
         val endKilometer = session.endKilometer ?: return
         val endTime = session.endTimeUtc ?: return
+        val vehicleId = vehicle.id
+        val vehicleFingerprint = telemetryProvider.vehicleFingerprint.value
+            ?.takeIf(String::isNotBlank)
 
         val submission = LogbookSubmission(
-            vehicleId = vehicle.id,
+            vehicleId = vehicleId,
+            vehicleFingerprint = vehicleFingerprint,
             startedAt = session.startTimeUtc,
             startOdometer = startKilometer.roundToLong(),
             endOdometer = endKilometer.roundToLong(),
@@ -211,6 +237,43 @@ class OffboardingViewModel(
                 val connected = state as? ConnectedVehicleState.Connected
                     ?: return@collect
                 _uiState.update { it.copy(vehicle = connected.vehicle) }
+            }
+        }
+    }
+
+    private fun loadVehicles() {
+        val state = _uiState.value
+        if (state.vehicle != null || state.isLoadingVehicles || hasLoadedVehicles) {
+            return
+        }
+        hasLoadedVehicles = true
+        _uiState.update {
+            it.copy(isLoadingVehicles = true, vehicleLoadFailed = false)
+        }
+        viewModelScope.launch {
+            val result = try {
+                fleetRepository.getVehicles()
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                VehiclesResult.NetworkError
+            }
+            when (result) {
+                is VehiclesResult.Success -> _uiState.update {
+                    it.copy(
+                        availableVehicles = result.vehicles.sortedBy { vehicle ->
+                            vehicle.displayName.lowercase()
+                        },
+                        isLoadingVehicles = false,
+                        vehicleLoadFailed = false
+                    )
+                }
+                else -> _uiState.update {
+                    it.copy(
+                        isLoadingVehicles = false,
+                        vehicleLoadFailed = true
+                    )
+                }
             }
         }
     }
