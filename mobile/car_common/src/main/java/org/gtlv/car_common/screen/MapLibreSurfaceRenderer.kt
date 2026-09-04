@@ -1287,10 +1287,18 @@ internal class MapLibreSurfaceRenderer(
             (surfaceWidth * NAVIGATION_TOP_ROW_END_FRACTION).roundToInt(),
         )
         val availableWidth = (actionStripBoundary - left).coerceAtLeast(1)
+        val defaultTop = compass?.top
+            ?: ((if (visibleArea.isEmpty) 0 else visibleArea.top) + margin)
+        val contentHeightDp =
+            surfaceHeight / renderDensity.coerceAtLeast(MIN_LAYOUT_DENSITY)
+        val top = if (contentHeightDp <= COMPACT_NAVIGATION_HEIGHT_DP) {
+            0
+        } else {
+            defaultTop
+        }
         return NavigationCardPlacement(
             left = left,
-            top = compass?.top
-                ?: ((if (visibleArea.isEmpty) 0 else visibleArea.top) + margin),
+            top = top,
             width = minOf(dp(NAVIGATION_CARD_WIDTH_DP), availableWidth),
         )
     }
@@ -2220,6 +2228,7 @@ internal class MapLibreSurfaceRenderer(
         const val JOB_CARD_WIDTH_DP = 240
         const val NAVIGATION_CARD_WIDTH_DP = 520
         const val NAVIGATION_TOP_ROW_END_FRACTION = 0.48f
+        const val COMPACT_NAVIGATION_HEIGHT_DP = 600f
         const val JOB_CARD_DRIVER_TOGGLE_GAP_DP = 12
         const val COMPACT_JOB_CARD_WIDTH_DP = 700
         const val COMPACT_JOB_CARD_HEIGHT_DP = 500
