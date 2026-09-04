@@ -70,9 +70,6 @@
     <string name="navigation_collapse_steps">Hide route steps</string>
     <string name="logout">Log out</string>
     <string name="profile_close">Close profile</string>
-    <string name="profile_language">Language</string>
-    <string name="profile_language_english">English selected</string>
-    <string name="profile_language_german">German selected</string>
     <string name="pair_vehicle_title">Pair this car</string>
     <string name="pair_vehicle_message">This car is not registered yet. Select the matching vehicle.</string>
     <string name="pair_vehicle_item">%1$s · %2$s</string>

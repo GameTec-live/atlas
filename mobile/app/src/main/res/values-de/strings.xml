@@ -70,9 +70,6 @@
     <string name="navigation_collapse_steps">Routenschritte ausblenden</string>
     <string name="logout">Abmelden</string>
     <string name="profile_close">Profil schließen</string>
-    <string name="profile_language">Sprache</string>
-    <string name="profile_language_english">Englisch ausgewählt</string>
-    <string name="profile_language_german">Deutsch ausgewählt</string>
     <string name="pair_vehicle_title">Dieses Fahrzeug koppeln</string>
     <string name="pair_vehicle_message">Dieses Fahrzeug ist noch nicht registriert. Wählen Sie das passende Fahrzeug aus.</string>
     <string name="pair_vehicle_item">%1$s · %2$s</string>
