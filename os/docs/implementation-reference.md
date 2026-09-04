@@ -83,7 +83,10 @@ When adding a layer or changing ordering:
   explicitly.
 - Production `pmap` remains `crypt`; development raw image remains clearly
   labeled unencrypted.
-- Persistent partition has `expand-to-fit` in the generated provisioning map.
+- Persistent partition has `expand-to-fit` in the generated provisioning map,
+  and recovery grows its ext4 filesystem before finalising IDP.
+- Raw-image recovery grows the GPT `persistent` partition and its ext4
+  filesystem after writing the image.
 - Both boot and system are A/B components.
 - Update bundle member allowlist stays narrow.
 - System is written before boot, and tryboot metadata is written last.

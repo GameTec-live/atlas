@@ -250,6 +250,103 @@ extract_idp() {
         }
     done
     [ "$missing" -eq 0 ] || die "IDP archive is incomplete"
+
+    grow_images=/run/atlas-recovery/grow-images.list
+    jq -r '
+        . as $root
+        | .layout.provisionmap
+        | ..
+        | objects
+        | select(."expand-to-fit" == true and (.image | type == "string"))
+        | $root.layout.partitionimages[.image].simage // empty
+    ' "$idp_json" > "$grow_images"
+}
+
+resolve_local_block_device() {
+    device_name=$1
+    case "$device_name" in
+        /dev/*) printf '%s\n' "$device_name" ;;
+        mapper/*) printf '/dev/%s\n' "$device_name" ;;
+        *)
+            if [ -b "/dev/mapper/$device_name" ]; then
+                printf '/dev/mapper/%s\n' "$device_name"
+            else
+                printf '/dev/%s\n' "$device_name"
+            fi
+            ;;
+    esac
+}
+
+grow_ext4_filesystem() {
+    local_device=$1
+
+    [ -b "$local_device" ] || \
+        die "filesystem has no local block device: $local_device"
+
+    filesystem_info=$(blkid "$local_device" 2>/dev/null || true)
+    case "$filesystem_info" in
+        *'TYPE="ext4"'*) ;;
+        *) die "filesystem on $local_device is not recognized as ext4" ;;
+    esac
+
+    log "Growing ext4 filesystem on $local_device"
+    resize2fs "$local_device" >> "$log_file" 2>&1 || \
+        die "could not grow ext4 filesystem on $local_device"
+}
+
+grow_idp_ext4_filesystem() {
+    block_device=$1
+    sparse_image=$2
+
+    grep -Fqx "$sparse_image" "$grow_images" || return 0
+
+    local_device=$(resolve_local_block_device "$block_device")
+    grow_ext4_filesystem "$local_device"
+}
+
+reread_partition_table() {
+    reread_target=$1
+    reread_attempt=0
+    while [ "$reread_attempt" -lt 10 ]; do
+        if blockdev --rereadpt "$reread_target" 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+        reread_attempt=$((reread_attempt + 1))
+    done
+    return 1
+}
+
+wait_for_block_device() {
+    wait_device=$1
+    wait_attempt=0
+    while [ "$wait_attempt" -lt 10 ]; do
+        [ -b "$wait_device" ] && return 0
+        sleep 1
+        wait_attempt=$((wait_attempt + 1))
+    done
+    return 1
+}
+
+grow_raw_persistent_partition() {
+    partition_table=$(parted --script --fix --machine "$target" unit s print \
+        2>> "$log_file") || die "could not inspect the restored GPT on $target"
+    persistent_number=$(printf '%s\n' "$partition_table" | \
+        awk -F: '$6 == "persistent" { print $1; exit }')
+    [ -n "$persistent_number" ] || \
+        die "restored image has no GPT partition named persistent"
+    persistent_device=${target}p${persistent_number}
+
+    log "Growing $persistent_device to fill $target"
+    parted --script --fix "$target" resizepart "$persistent_number" 100% \
+        >> "$log_file" 2>&1 || \
+        die "could not grow the persistent partition on $target"
+    sync
+    reread_partition_table "$target" || \
+        die "could not reread the expanded partition table on $target"
+    wait_for_block_device "$persistent_device" || \
+        die "expanded persistent partition did not appear: $persistent_device"
+    grow_ext4_filesystem "$persistent_device"
 }
 
 select_idp_target() {
@@ -317,6 +414,7 @@ provision_idp() {
         log "Flashing IDP partition $partition_index: $sparse_image -> $block_device"
         fb 900 flash "$block_device" "$flash_source" || \
             die "flashing $sparse_image failed"
+        grow_idp_ext4_filesystem "$block_device" "$sparse_image"
     done
 
     [ "$partition_index" -gt 0 ] || die "IDP descriptor produced no flashable partitions"
@@ -375,7 +473,7 @@ provision_raw() {
     fi
     rm -f "$fifo"
     sync
-    blockdev --rereadpt "$target" 2>/dev/null || true
+    grow_raw_persistent_partition
     log "Unencrypted Atlas restore completed"
 }
 

@@ -35,12 +35,14 @@ imported rootless image store.
 
 Production provisioning uses the `crypt` provisioning map. The provisioner
 creates a device-sized LUKS2 data container and expands the persistent
-partition to consume the remaining target storage. The firmware-readable boot
-partitions cannot be encrypted because Raspberry Pi firmware must read them
-before Linux and the encrypted data path are available.
+partition to consume the remaining target storage. Atlas recovery then grows
+the persistent ext4 filesystem to the expanded partition size. The
+firmware-readable boot partitions cannot be encrypted because Raspberry Pi
+firmware must read them before Linux and the encrypted data path are available.
 
-The development whole-disk image is different: it is unencrypted and retains
-the build-time partition sizing. See
+The development whole-disk image is different: it is unencrypted. Atlas
+recovery expands its persistent partition and ext4 filesystem after writing the
+image; direct writes with other tools retain the build-time sizing. See
 [Provisioning and security](provisioning-and-security.md).
 
 ## A/B boot model

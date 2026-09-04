@@ -412,9 +412,10 @@ NetworkManager does not necessarily pull the target into the boot transaction.
 ### First boot runs out of persistent space
 
 The compressed archive and imported store coexist until import succeeds. Check
-the provisioning expansion result and free space under the rootless home. The
-8 GiB configured data size is a minimum, not arbitrary overhead. Do not reduce
-it without measuring current image archive/import sizes.
+that both the persistent partition and its ext4 filesystem expanded, then check
+free space under the rootless home. The 8 GiB configured data size is a minimum,
+not arbitrary overhead. Do not reduce it without measuring current image
+archive/import sizes.
 
 ### Update refuses because one is already pending
 

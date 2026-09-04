@@ -6,7 +6,8 @@
 
 Use `atlas-rpi5-<version>-provisioning.tar.zst` with the Raspberry Pi IDP/
 `rpi-sb-provisioner` flow. This applies `provisionmap.json`, creates the
-encrypted device layout and expands persistent data to the remaining storage.
+encrypted device layout, expands the persistent partition to the remaining
+storage and grows its ext4 filesystem to match.
 
 The archive is not a raw image. Do not decompress it and write it to an SD card
 with `dd`, Raspberry Pi Imager, Etcher or similar tools. Follow the provisioner
@@ -24,7 +25,9 @@ zstd -d atlas-rpi5-<version>-development.img.zst
 
 Flash the resulting `.img` with Raspberry Pi Imager's custom-image option,
 Etcher, or a carefully targeted `dd`. Confirm the target device twice; flashing
-overwrites it.
+overwrites it. These direct-write tools retain the 8 GiB persistent partition;
+deploying the same artifact through Atlas recovery expands the partition and
+its ext4 filesystem to the target size.
 
 This route is unencrypted by design. It does not execute production IDP
 provisioning and should not be represented as a production full-disk-encrypted
@@ -41,7 +44,7 @@ With production provisioning:
 
 - system and persistent data reside inside the device-sized LUKS2 data path;
 - the persistent partition expands to available space not occupied by fixed
-  boot/system requirements;
+  boot/system requirements, and its ext4 filesystem grows to match;
 - Raspberry Pi firmware-readable boot partitions remain plaintext;
 - dm-verity protects the immutable EROFS system contents from undetected
   modification;

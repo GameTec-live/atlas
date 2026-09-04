@@ -1,4 +1,6 @@
+e2fsprogs
 fastboot
 jq
+parted
 rpi-fastbootd
 zstd

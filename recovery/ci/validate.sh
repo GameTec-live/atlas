@@ -30,6 +30,7 @@ if command -v shellcheck >/dev/null 2>&1; then
 fi
 
 recovery=$project_dir/configurations/atlas-recovery/atlas-recover
+packages=$project_dir/configurations/atlas-recovery/packages.list
 dpkg_args=$project_dir/configurations/atlas-recovery/dpkg_extra_args
 kernel_modules=$project_dir/configurations/atlas-recovery/kernel_modules.list
 post_creation=$project_dir/configurations/atlas-recovery/post_creation.sh
@@ -49,7 +50,17 @@ grep -q '^/usr/local/sbin/atlas-recover$' \
 # ensure the recovery source can never be selected as a target.
 extract_line=$(grep -n 'extract_idp$' "$recovery" | cut -d: -f1)
 erase_line=$(grep -n 'fb 60 erase' "$recovery" | cut -d: -f1)
+flash_line=$(grep -n 'fb 900 flash' "$recovery" | cut -d: -f1)
+grow_line=$(grep -n 'grow_idp_ext4_filesystem "$block_device" "$sparse_image"' "$recovery" | cut -d: -f1)
+done_line=$(grep -n 'fb 120 oem idpdone' "$recovery" | cut -d: -f1)
+raw_partition_line=$(grep -n 'parted --script --fix "$target" resizepart' "$recovery" | cut -d: -f1)
+raw_filesystem_line=$(grep -n 'grow_ext4_filesystem "$persistent_device"' "$recovery" | cut -d: -f1)
+raw_done_line=$(grep -n 'Unencrypted Atlas restore completed' "$recovery" | cut -d: -f1)
 [ "$extract_line" -lt "$erase_line" ]
+[ "$flash_line" -lt "$grow_line" ]
+[ "$grow_line" -lt "$done_line" ]
+[ "$raw_partition_line" -lt "$raw_filesystem_line" ]
+[ "$raw_filesystem_line" -lt "$raw_done_line" ]
 grep -q '\[ "$target" != "$media_disk" \]' "$recovery"
 grep -q 'artifact_count" -eq 1' "$recovery"
 grep -q 'fastbootd -v -i tcp' "$recovery"
@@ -58,6 +69,10 @@ grep -qx 'ipv6' "$kernel_modules"
 grep -q 'kill -USR1 "\$dd_pid"' "$recovery"
 grep -q 'oem fwcrypto init' "$recovery"
 grep -q 'oem idpdone' "$recovery"
+grep -q 'resize2fs "$local_device"' "$recovery"
+! grep -q 'blkid -p' "$recovery"
+grep -qx 'e2fsprogs' "$packages"
+grep -qx 'parted' "$packages"
 ! grep -q 'secure.boot\|program_pubkey\|CUSTOMER_KEY' "$recovery"
 grep -q 'build/usr/lib/modules-load.d/fastbootd.conf' "$post_creation"
 grep -q "s|/sbin/getty|/bin/getty|g" "$post_creation"

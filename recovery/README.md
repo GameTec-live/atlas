@@ -9,8 +9,8 @@ It supports two deliberately distinct artifact formats:
 
 | Artifact on USB | Result |
 | --- | --- |
-| `*.img.zst` | The uncompressed disk image is streamed directly to SD or NVMe. The result is a normal, unencrypted Atlas installation. |
-| `*provision*.tar.zst` | The `rpi-image-gen` IDP archive is extracted to tmpfs and applied with the on-device IDP engine. Atlas' `pmap: crypt` creates its device-bound LUKS2 layout. |
+| `*.img.zst` | The uncompressed disk image is streamed directly to SD or NVMe. The persistent partition and ext4 filesystem are expanded to the target size, producing a normal, unencrypted Atlas installation. |
+| `*provision*.tar.zst` | The `rpi-image-gen` IDP archive is extracted to tmpfs and applied with the on-device IDP engine. Atlas' `pmap: crypt` creates its device-bound LUKS2 layout, and ext4 filesystems marked `expand-to-fit` are grown to their resulting partition size. |
 
 Secure boot is never enabled. FDE provisioning does initialize and lock the
 Pi firmware-crypto device key used to derive the LUKS key; it does not program a

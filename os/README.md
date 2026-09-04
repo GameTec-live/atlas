@@ -59,8 +59,9 @@ Quadlets use `Pull=missing`; `atlas-container-init.service` starts the rootless
 boots.
 
 The 8 GiB persistent filesystem is a minimum needed for the compressed archive
-and imported image store to coexist on first boot. IDP provisioning expands the
-encrypted persistent partition to consume all remaining target storage.
+and imported image store to coexist on first boot. Atlas recovery expands the
+persistent partition and its ext4 filesystem to consume all remaining target
+storage for both encrypted IDP and unencrypted raw-image deployments.
 
 ## Provisioning and encryption
 
@@ -69,8 +70,10 @@ Raspberry Pi provisioning creates a device-sized LUKS2 container holding both
 system slots and persistent data. Firmware-readable boot partitions remain
 unencrypted.
 
-The whole-disk `.img` is an unencrypted development image. Flashing it directly
-does not apply the provisioning map or expand data to the physical device.
+The whole-disk `.img` is an unencrypted development image. Atlas recovery grows
+its persistent partition and filesystem after writing it. Flashing it directly
+with another tool does not apply that recovery step and retains the build-time
+data size.
 
 Secure boot is deliberately not provisioned. End users may choose secure boot
 with `rpi-sb-provisioner`, accepting its OTP changes and the need to sign future
