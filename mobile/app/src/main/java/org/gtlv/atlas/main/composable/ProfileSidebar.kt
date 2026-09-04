@@ -67,7 +67,9 @@ internal fun ProfileSidebar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Close profile"
+                        contentDescription = stringResource(
+                            R.string.profile_close
+                        )
                     )
                 }
             }

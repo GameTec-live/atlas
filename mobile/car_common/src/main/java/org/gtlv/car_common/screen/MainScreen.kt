@@ -879,7 +879,9 @@ class MainScreen(
                 origin = request.origin,
                 destination = request.target.destination,
                 headingDegrees = request.headingDegrees,
-                language = DEFAULT_ROUTE_LANGUAGE,
+                language = carContext.getString(
+                    R.string.navigation_route_language
+                ),
             )
             currentCoroutineContext().ensureActive()
             if (
@@ -1435,7 +1437,6 @@ class MainScreen(
         const val MINIMUM_OFF_ROUTE_DISTANCE_KILOMETERS = 0.03
         const val GPS_ACCURACY_MULTIPLIER = 2.5
         const val DEVIATION_SAMPLES_FOR_REROUTE = 2
-        const val DEFAULT_ROUTE_LANGUAGE = "en"
         const val CAR_ICON_SIZE_DP = 48
     }
 }
