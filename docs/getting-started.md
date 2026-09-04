@@ -12,7 +12,9 @@
 
 2. Plug in power and ethernet
    
-   Connect your Atlas appliance to the network and power. 
+   Connect your Atlas appliance to the network and power.
+
+   Wait. The device will take a few minutes to fully boot and get ready.
 
 3. Visit [https://atlas.local](https://atlas.local) in a web-browser to start the setup-wizard
 
