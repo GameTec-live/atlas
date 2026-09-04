@@ -1,12 +1,6 @@
-import {
-    DownloadIcon,
-    ExternalLinkIcon,
-    LinkIcon,
-    SmartphoneIcon,
-} from "lucide-react";
+import { ExternalLinkIcon, SmartphoneIcon } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Card,
