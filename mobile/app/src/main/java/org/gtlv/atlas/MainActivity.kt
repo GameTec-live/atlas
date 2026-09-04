@@ -733,8 +733,9 @@ private fun RoleCheckFailedScreen(
             Arrangement.Center
     ) {
         Text(
-            text =
-                "Could not check your current role.",
+            text = stringResource(
+                R.string.role_check_failed
+            ),
             style =
                 MaterialTheme.typography.bodyLarge
         )
@@ -742,13 +743,13 @@ private fun RoleCheckFailedScreen(
         Button(
             onClick = onRetry
         ) {
-            Text(text = "Retry")
+            Text(text = stringResource(R.string.role_retry))
         }
 
         Button(
             onClick = onLogout
         ) {
-            Text(text = "Log out")
+            Text(text = stringResource(R.string.logout))
         }
     }
 }

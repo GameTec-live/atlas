@@ -9,6 +9,7 @@
     <string name="buttom_save">Save</string>
     <string name="button_cancel">Cancel</string>
     <string name="login_set_serveraddress">Set server address</string>
+    <string name="server_address_edit">Edit server address</string>
     <string name="server_address_error">Enter a valid HTTP or HTTPS address</string>
     <string name="url_set_successfully">URL set successfully</string>
     <string name="url_set_failed">Could not set URL</string>
@@ -35,6 +36,7 @@
     <string name="dispatcher_spots_available">%1$d dispatcher spots available</string>
     <string name="dispatcher_spot_available">1 dispatcher spot available</string>
     <string name="role_retry">Retry</string>
+    <string name="role_check_failed">Could not check your current role.</string>
     <string name="location_permission_title">Location required</string>
     <string name="location_permission_retry_message">Atlas requires location access to operate. You can allow precise or approximate location.</string>
     <string name="location_permission_settings_message">
@@ -67,6 +69,10 @@
     <string name="navigation_expand_steps">Show all route steps</string>
     <string name="navigation_collapse_steps">Hide route steps</string>
     <string name="logout">Log out</string>
+    <string name="profile_close">Close profile</string>
+    <string name="profile_language">Language</string>
+    <string name="profile_language_english">English selected</string>
+    <string name="profile_language_german">German selected</string>
     <string name="pair_vehicle_title">Pair this car</string>
     <string name="pair_vehicle_message">This car is not registered yet. Select the matching vehicle.</string>
     <string name="pair_vehicle_item">%1$s · %2$s</string>

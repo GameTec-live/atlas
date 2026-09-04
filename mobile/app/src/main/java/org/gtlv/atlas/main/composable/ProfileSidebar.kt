@@ -1,5 +1,7 @@
 package org.gtlv.atlas.main.composable
 
+import android.app.LocaleManager
+import android.os.LocaleList
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.HorizontalDivider
@@ -22,7 +25,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,6 +51,17 @@ internal fun ProfileSidebar(
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val currentLanguage =
+        if (
+            LocalConfiguration.current.locales[0]
+                .language == GERMAN_LANGUAGE_TAG
+        ) {
+            GERMAN_LANGUAGE_TAG
+        } else {
+            ENGLISH_LANGUAGE_TAG
+        }
+
     Surface(
         modifier = modifier.width(224.dp),
         shape = RoundedCornerShape(
@@ -67,7 +88,9 @@ internal fun ProfileSidebar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Close profile"
+                        contentDescription = stringResource(
+                            R.string.profile_close
+                        )
                     )
                 }
             }
@@ -134,6 +157,27 @@ internal fun ProfileSidebar(
                 )
             )
 
+            Text(
+                text = stringResource(R.string.profile_language),
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.align(
+                    Alignment.CenterHorizontally
+                )
+            )
+
+            LanguageSwitch(
+                currentLanguage = currentLanguage,
+                onLanguageChange = { language ->
+                    context
+                        .getSystemService(LocaleManager::class.java)
+                        .applicationLocales =
+                        LocaleList.forLanguageTags(language)
+                },
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 8.dp, bottom = 16.dp)
+            )
+
             OutlinedButton(
                 onClick = onLogout,
                 modifier = Modifier.fillMaxWidth()
@@ -145,3 +189,82 @@ internal fun ProfileSidebar(
         }
     }
 }
+
+@Composable
+private fun LanguageSwitch(
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isGerman = currentLanguage == GERMAN_LANGUAGE_TAG
+    val selectedLanguage = stringResource(
+        if (isGerman) {
+            R.string.profile_language_german
+        } else {
+            R.string.profile_language_english
+        }
+    )
+
+    Surface(
+        modifier = modifier
+            .toggleable(
+                value = isGerman,
+                role = Role.Switch,
+                onValueChange = { useGerman ->
+                    onLanguageChange(
+                        if (useGerman) {
+                            GERMAN_LANGUAGE_TAG
+                        } else {
+                            ENGLISH_LANGUAGE_TAG
+                        }
+                    )
+                }
+            )
+            .semantics {
+                stateDescription = selectedLanguage
+            },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(
+                horizontal = 16.dp,
+                vertical = 8.dp
+            )
+        ) {
+            Text(
+                text = "en",
+                color = if (!isGerman) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                fontWeight = if (!isGerman) {
+                    FontWeight.Bold
+                } else {
+                    FontWeight.Normal
+                }
+            )
+            Text(text = "|")
+            Text(
+                text = "de",
+                color = if (isGerman) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                fontWeight = if (isGerman) {
+                    FontWeight.Bold
+                } else {
+                    FontWeight.Normal
+                }
+            )
+        }
+    }
+}
+
+private const val ENGLISH_LANGUAGE_TAG = "en"
+private const val GERMAN_LANGUAGE_TAG = "de"

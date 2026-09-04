@@ -2,13 +2,17 @@ package org.gtlv.atlas.main.composable
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -17,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
 
@@ -111,7 +116,12 @@ internal fun JobActionButtons(
                     hasNextJob &&
                             !isStartingNextJob,
                 modifier = Modifier.widthIn(
-                    min = 108.dp
+                    min = 108.dp,
+                    max = 176.dp
+                ),
+                contentPadding = PaddingValues(
+                    horizontal = 16.dp,
+                    vertical = 8.dp
                 )
             ) {
                 if (isStartingNextJob) {
@@ -123,13 +133,27 @@ internal fun JobActionButtons(
                     Text(
                         text = stringResource(
                             R.string.job_action_next_job
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(
+                            max = 116.dp
+                        )
+                    )
+
+                    Spacer(
+                        modifier = Modifier.width(
+                            ButtonDefaults.IconSpacing
                         )
                     )
 
                     Icon(
                         imageVector =
                             Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null
+                        contentDescription = null,
+                        modifier = Modifier.size(
+                            ButtonDefaults.IconSize
+                        )
                     )
                 }
             }

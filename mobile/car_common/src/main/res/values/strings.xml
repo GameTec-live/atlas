@@ -44,6 +44,7 @@
     <string name="navigation_distance_kilometers">%1$s km</string>
     <string name="navigation_duration_minutes">%1$d min</string>
     <string name="navigation_duration_hours_minutes">%1$d h %2$d min</string>
+    <string name="navigation_route_language">en</string>
     <string name="job_notification_title">New job</string>
     <string name="job_notification_unassigned_title">New unassigned job</string>
     <string name="job_notification_from">From: %1$s</string>

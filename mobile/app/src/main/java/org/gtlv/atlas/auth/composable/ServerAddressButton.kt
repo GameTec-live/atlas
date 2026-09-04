@@ -37,7 +37,9 @@ internal fun ServerAddressButton(
 
         Icon(
             imageVector = Icons.Default.Edit,
-            contentDescription = "Edit server address"
+            contentDescription = stringResource(
+                R.string.server_address_edit
+            )
         )
     }
 }
