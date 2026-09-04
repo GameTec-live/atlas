@@ -845,6 +845,7 @@ class MainScreen(
             wrongWaySampleCount = 0
             lastAutomaticRerouteAtMillis = 0L
             mapRenderer.updateRoute(emptyList())
+            refreshNavigationGuidance()
         }
 
         if (currentRoute != null || routeRequestJob?.isActive == true) return
