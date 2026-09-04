@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -29,6 +30,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.gtlv.atlas.auth.LoginScreen
 import org.gtlv.atlas.auth.LoginViewModel
@@ -163,8 +167,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
-        handleJobNotificationIntent(intent)
+        lifecycleScope.launch {
+            handleAtlasUrlIntent(intent)
+            handleJobNotificationIntent(intent)
+            showAppContent()
+        }
+    }
 
+    private fun showAppContent() {
         setContent {
             AtlasTheme {
                 val coroutineScope =
@@ -562,7 +572,72 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
 
         setIntent(intent)
-        handleJobNotificationIntent(intent)
+        lifecycleScope.launch {
+            handleAtlasUrlIntent(intent)
+            handleJobNotificationIntent(intent)
+        }
+    }
+
+    private suspend fun handleAtlasUrlIntent(
+        intent: Intent?
+    ) {
+        if (
+            intent?.action != Intent.ACTION_VIEW ||
+            !intent.data?.scheme.equals(
+                other = "atlas",
+                ignoreCase = true
+            )
+        ) {
+            return
+        }
+
+        val serverAddress =
+            AtlasUrlProtocol.serverAddressFrom(
+                intent.dataString
+            )
+
+        // Consume the deep link so an activity recreation cannot apply it
+        // and show the result a second time.
+        intent.action = null
+        intent.data = null
+
+        if (serverAddress == null) {
+            Toast.makeText(
+                applicationContext,
+                R.string.server_address_error,
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        try {
+            val currentAddress =
+                atlasApplication
+                    .serverSettingsRepository
+                    .serverAddress
+                    .first()
+
+            if (serverAddress != currentAddress) {
+                sessionManager.logout()
+                atlasApplication
+                    .serverSettingsRepository
+                    .setServerAddress(serverAddress)
+            }
+
+            Toast.makeText(
+                applicationContext,
+                R.string.url_set_successfully,
+                Toast.LENGTH_SHORT
+            ).show()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            Toast.makeText(
+                applicationContext,
+                R.string.url_set_failed,
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     private fun handleJobNotificationIntent(
