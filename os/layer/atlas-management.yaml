@@ -16,7 +16,12 @@
 ---
 mmdebstrap:
   packages:
+    - dmsetup
+    - e2fsprogs
+    - fdisk
+    - kpartx
     - tzdata
+    - util-linux
   customize-hooks:
     - |-
       install -d -m 0755 "$1/persistent/atlas/timezone"

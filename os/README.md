@@ -168,6 +168,7 @@ Host administrators can use the authenticated Unix-socket client directly:
 ```sh
 sudo atlas-sys status
 sudo atlas-sys update apply /path/to/atlas-rpi5-update.tar.zst
+sudo atlas-sys resize
 sudo atlas-sys timezone set Europe/Vienna
 sudo atlas-sys cloudflare-tunnel provision /path/to/cloudflare-token
 sudo atlas-sys tailscale provision /path/to/tailscale-auth-key atlas-1

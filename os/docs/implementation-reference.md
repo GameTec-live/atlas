@@ -130,7 +130,9 @@ When adding a layer or changing ordering:
   five continuous minutes.
 - Factory reset preserves the encryption container and OCI image layers, but
   removes application data, credentials, host policy and network profiles.
-- `atlas-sys` remains a narrow Unix-socket client and keeps destructive reset
+- `atlas-sys` remains a narrow root-only management CLI. Most operations use
+  the Unix-socket API; `resize` locally expands direct partitions or the full
+  outer-partition/LUKS/inner-partition/ext4 stack, and destructive reset keeps
   confirmation in front of the API call.
 - Management API SSH changes delegate to `atlas-ssh`; they do not introduce a
   second persistent SSH policy.

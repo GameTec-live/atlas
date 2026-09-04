@@ -27,7 +27,8 @@ Flash the resulting `.img` with Raspberry Pi Imager's custom-image option,
 Etcher, or a carefully targeted `dd`. Confirm the target device twice; flashing
 overwrites it. These direct-write tools retain the 8 GiB persistent partition;
 deploying the same artifact through Atlas recovery expands the partition and
-its ext4 filesystem to the target size.
+its ext4 filesystem to the target size. After a direct write, run
+`sudo atlas-sys resize` on the booted device to perform the same expansion.
 
 This route is unencrypted by design. It does not execute production IDP
 provisioning and should not be represented as a production full-disk-encrypted
@@ -131,6 +132,13 @@ disabled.
 
 Host keys and enablement state must be treated as persistent device identity.
 Cloning a populated persistent filesystem can clone identity and secrets.
+
+An encrypted installation may be cloned to larger media for use in the same
+Pi. Run `sudo atlas-sys resize`, reboot when requested, then run the command
+again to expand the outer partition, reopened LUKS mapping, inner persistent
+partition and ext4 filesystem. Moving that clone to a different Pi is not a
+supported migration: its LUKS key is derived from the original device's
+firmware-crypto identity.
 
 ## TLS behavior
 
