@@ -9,6 +9,7 @@ import org.gtlv.core.telemetry.TelemetryData
 import org.gtlv.core.telemetry.TelemetryProvider
 import org.gtlv.core.telemetry.TelemetryVehicleState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -75,23 +76,51 @@ class ConnectedVehicleManagerTest {
         runCurrent()
 
         assertTrue(manager.state.value is ConnectedVehicleState.Unavailable)
-        assertEquals(0, repository.vehicleListRequests)
+        assertEquals(0, repository.pairingCandidateRequests)
+    }
+
+    @Test
+    fun `failed server validation never activates a cached vehicle`() = runTest {
+        val telemetry = FakeTelemetryProvider("fingerprint-1")
+        val repository = FakeFleetRepository().apply {
+            lookupResult = VehicleLookupResult.NetworkError
+        }
+        val cache = FakeVehicleCache(restoredVehicle = PAIRED_VEHICLE)
+        val manager = ConnectedVehicleManager(
+            telemetryProvider = telemetry,
+            sessionState = MutableStateFlow(
+                SessionState.SignedIn("user-1", "Driver")
+            ),
+            fleetRepository = repository,
+            store = cache
+        )
+
+        manager.start(backgroundScope)
+        runCurrent()
+
+        assertTrue(manager.state.value is ConnectedVehicleState.Unavailable)
+        assertFalse(telemetry.resolvedVehicleIds.contains(PAIRED_VEHICLE.id))
+        assertEquals("fingerprint-1", cache.clearedFingerprint)
     }
 
     private class FakeFleetRepository : FleetRepository {
         var lookupResult: VehicleLookupResult = VehicleLookupResult.NotFound
         var assignedFingerprint: Pair<String, String>? = null
-        var vehicleListRequests = 0
+        var pairingCandidateRequests = 0
 
         override suspend fun getVehicleByFingerprint(
             fingerprint: String
         ) = lookupResult
 
         override suspend fun getVehicles(): VehiclesResult {
-            vehicleListRequests += 1
             return VehiclesResult.Success(
                 listOf(UNPAIRED_VEHICLE, PAIRED_VEHICLE)
             )
+        }
+
+        override suspend fun getFingerprintCandidates(): VehiclesResult {
+            pairingCandidateRequests += 1
+            return VehiclesResult.Success(listOf(UNPAIRED_VEHICLE))
         }
 
         override suspend fun assignFingerprint(
@@ -103,11 +132,17 @@ class ConnectedVehicleManagerTest {
         }
     }
 
-    private class FakeVehicleCache : ConnectedVehicleCache {
+    private class FakeVehicleCache(
+        private val restoredVehicle: Vehicle? = null
+    ) : ConnectedVehicleCache {
         var savedVehicle: Vehicle? = null
-        override suspend fun restore(fingerprint: String): Vehicle? = null
+        var clearedFingerprint: String? = null
+        override suspend fun restore(fingerprint: String): Vehicle? = restoredVehicle
         override suspend fun save(fingerprint: String, vehicle: Vehicle) {
             savedVehicle = vehicle
+        }
+        override suspend fun clear(fingerprint: String) {
+            clearedFingerprint = fingerprint
         }
     }
 
@@ -118,12 +153,14 @@ class ConnectedVehicleManagerTest {
         override val odometerKilometers = MutableStateFlow<Double?>(null)
         override val vehicleFingerprint = MutableStateFlow(fingerprint)
         var lastResolvedVehicleId: String? = null
+        val resolvedVehicleIds = mutableListOf<String?>()
 
         override fun start() = Unit
         override fun stop() = Unit
         override fun setVehicleState(state: TelemetryVehicleState) = Unit
         override fun setResolvedVehicleId(vehicleId: String?) {
             lastResolvedVehicleId = vehicleId
+            resolvedVehicleIds += vehicleId
         }
         override fun refreshVehicleId() = Unit
     }

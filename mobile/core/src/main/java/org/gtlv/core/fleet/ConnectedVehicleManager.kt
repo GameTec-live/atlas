@@ -109,29 +109,25 @@ class ConnectedVehicleManager(
     private suspend fun resolve(fingerprint: String, isAdmin: Boolean) {
         _state.value = ConnectedVehicleState.Resolving(fingerprint)
 
-        try {
-            store.restore(fingerprint)?.let { cached ->
-                telemetryProvider.setResolvedVehicleId(cached.id)
-                _state.value = ConnectedVehicleState.Connected(
-                    fingerprint = fingerprint,
-                    vehicle = cached
-                )
-            }
+        val cachedVehicle = try {
+            store.restore(fingerprint)
         } catch (exception: CancellationException) {
             throw exception
         } catch (_: Exception) {
-            // A cache failure must not prevent a server lookup.
+            null
         }
 
         when (val result = fleetRepository.getVehicleByFingerprint(fingerprint)) {
             is VehicleLookupResult.Success -> {
                 telemetryProvider.setResolvedVehicleId(result.vehicle.id)
-                try {
-                    store.save(fingerprint, result.vehicle)
-                } catch (exception: CancellationException) {
-                    throw exception
-                } catch (_: Exception) {
-                    // The live server result remains usable without the cache.
+                if (cachedVehicle != result.vehicle) {
+                    try {
+                        store.save(fingerprint, result.vehicle)
+                    } catch (exception: CancellationException) {
+                        throw exception
+                    } catch (_: Exception) {
+                        // The live server result remains usable without the cache.
+                    }
                 }
                 _state.value = ConnectedVehicleState.Connected(
                     fingerprint = fingerprint,
@@ -141,6 +137,7 @@ class ConnectedVehicleManager(
 
             VehicleLookupResult.NotFound -> {
                 telemetryProvider.setResolvedVehicleId(null)
+                clearCachedVehicle(fingerprint)
                 if (isAdmin) {
                     loadPairingCandidates(fingerprint)
                 } else {
@@ -149,10 +146,9 @@ class ConnectedVehicleManager(
             }
 
             else -> {
-                if (_state.value !is ConnectedVehicleState.Connected) {
-                    telemetryProvider.setResolvedVehicleId(null)
-                    _state.value = ConnectedVehicleState.Unavailable(fingerprint)
-                }
+                telemetryProvider.setResolvedVehicleId(null)
+                clearCachedVehicle(fingerprint)
+                _state.value = ConnectedVehicleState.Unavailable(fingerprint)
             }
         }
     }
@@ -163,16 +159,28 @@ class ConnectedVehicleManager(
             isLoading = true
         )
 
-        _state.value = when (val result = fleetRepository.getVehicles()) {
+        _state.value = when (
+            val result = fleetRepository.getFingerprintCandidates()
+        ) {
             is VehiclesResult.Success -> ConnectedVehicleState.PairingRequired(
                 fingerprint = fingerprint,
-                candidates = result.vehicles.filter { it.fingerprint == null }
+                candidates = result.vehicles
             )
 
             else -> ConnectedVehicleState.PairingRequired(
                 fingerprint = fingerprint,
                 hasError = true
             )
+        }
+    }
+
+    private suspend fun clearCachedVehicle(fingerprint: String) {
+        try {
+            store.clear(fingerprint)
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Exception) {
+            // State is still cleared when persistent cache cleanup fails.
         }
     }
 }

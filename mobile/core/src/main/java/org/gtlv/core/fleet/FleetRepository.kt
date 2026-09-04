@@ -7,6 +7,8 @@ interface FleetRepository {
 
     suspend fun getVehicles(): VehiclesResult
 
+    suspend fun getFingerprintCandidates(): VehiclesResult
+
     suspend fun assignFingerprint(
         vehicleId: String,
         fingerprint: String

@@ -260,6 +260,9 @@ class OffboardingViewModelTest {
 
         override suspend fun getVehicles(): VehiclesResult = vehiclesResult
 
+        override suspend fun getFingerprintCandidates(): VehiclesResult =
+            vehiclesResult
+
         override suspend fun assignFingerprint(
             vehicleId: String,
             fingerprint: String

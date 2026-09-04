@@ -70,7 +70,25 @@ class FleetRepositoryTest {
     }
 
     @Test
-    fun `assigns only the fingerprint with a partial vehicle update`() = runBlocking {
+    fun `loads dedicated fingerprint candidates`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody("[$VEHICLE_JSON]")
+        )
+
+        val vehicles = (
+            repository.getFingerprintCandidates() as VehiclesResult.Success
+        ).vehicles
+
+        assertEquals(1, vehicles.size)
+        assertNull(vehicles.single().fingerprint)
+        assertEquals(
+            "/api/fleet/fingerprint/candidates",
+            server.takeRequest().path
+        )
+    }
+
+    @Test
+    fun `pairs through the atomic fingerprint endpoint`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
 
         val result = repository.assignFingerprint(
@@ -80,11 +98,16 @@ class FleetRepositoryTest {
 
         assertEquals(AssignFingerprintResult.Success, result)
         val request = server.takeRequest()
-        assertEquals("PUT", request.method)
-        assertEquals("/api/fleet/vehicles/vehicle-1", request.path)
+        assertEquals("POST", request.method)
+        assertEquals("/api/fleet/fingerprint/pair", request.path)
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals(
+            "vehicle-1",
+            body.getString("vehicleId")
+        )
         assertEquals(
             "car-fingerprint",
-            JSONObject(request.body.readUtf8()).getString("fingerprint")
+            body.getString("fingerprint")
         )
     }
 

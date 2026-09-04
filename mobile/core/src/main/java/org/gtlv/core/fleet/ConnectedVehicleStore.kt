@@ -15,6 +15,7 @@ private val Context.connectedVehicleDataStore by preferencesDataStore(
 interface ConnectedVehicleCache {
     suspend fun restore(fingerprint: String): Vehicle?
     suspend fun save(fingerprint: String, vehicle: Vehicle)
+    suspend fun clear(fingerprint: String)
 }
 
 class ConnectedVehicleStore(context: Context) : ConnectedVehicleCache {
@@ -46,6 +47,14 @@ class ConnectedVehicleStore(context: Context) : ConnectedVehicleCache {
             values[LICENSE_PLATE] = vehicle.licensePlate
             vehicle.odometer?.let { values[ODOMETER] = it } ?: values.remove(ODOMETER)
             vehicle.fuelLevel?.let { values[FUEL_LEVEL] = it } ?: values.remove(FUEL_LEVEL)
+        }
+    }
+
+    override suspend fun clear(fingerprint: String) {
+        dataStore.edit { values ->
+            if (values[FINGERPRINT] == fingerprint) {
+                values.clear()
+            }
         }
     }
 

@@ -68,17 +68,41 @@ class FleetRepositoryImpl(
             }
         }
 
+    override suspend fun getFingerprintCandidates(): VehiclesResult =
+        withContext(Dispatchers.IO) {
+            val request = requestBuilder("api/fleet/fingerprint/candidates")
+                ?.get()?.build()
+                ?: return@withContext VehiclesResult.InvalidResponse
+
+            try {
+                networkClient.okHttpClient.newCall(request).execute().use { response ->
+                    when {
+                        response.code == 401 || response.code == 403 ->
+                            VehiclesResult.Unauthorized
+                        !response.isSuccessful ->
+                            VehiclesResult.ServerError(response.code)
+                        else -> parseVehicleList(response.body?.string().orEmpty())
+                            ?.let(VehiclesResult::Success)
+                            ?: VehiclesResult.InvalidResponse
+                    }
+                }
+            } catch (_: IOException) {
+                VehiclesResult.NetworkError
+            }
+        }
+
     override suspend fun assignFingerprint(
         vehicleId: String,
         fingerprint: String
     ): AssignFingerprintResult = withContext(Dispatchers.IO) {
         val body = JSONObject()
+            .put("vehicleId", vehicleId)
             .put("fingerprint", fingerprint)
             .toString()
             .toRequestBody(JSON_MEDIA_TYPE)
 
-        val request = requestBuilder("api/fleet/vehicles", vehicleId)
-            ?.put(body)?.build()
+        val request = requestBuilder("api/fleet/fingerprint/pair")
+            ?.post(body)?.build()
             ?: return@withContext AssignFingerprintResult.InvalidResponse
 
         try {
