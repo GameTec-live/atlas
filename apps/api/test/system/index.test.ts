@@ -5,6 +5,7 @@ import {
     mkdtempSync,
     readdirSync,
     rmSync,
+    utimesSync,
     writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -247,16 +248,18 @@ describe("firmware updates", () => {
             envMock.DATA_STORAGE_PATH = storageDirectory;
             const updateDirectory = join(storageDirectory, "system-updates");
             mkdirSync(updateDirectory);
-            writeFileSync(
-                join(
-                    updateDirectory,
-                    "update-00000000-0000-4000-8000-000000000000.tar.zst",
-                ),
-                "stale",
+            const stalePath = join(
+                updateDirectory,
+                "update-00000000-0000-4000-8000-000000000000.tar.zst",
             );
+            writeFileSync(stalePath, "stale");
             const undeletableName =
                 "update-11111111-1111-4111-8111-111111111111.tar.zst";
-            mkdirSync(join(updateDirectory, undeletableName));
+            const undeletablePath = join(updateDirectory, undeletableName);
+            mkdirSync(undeletablePath);
+            const orphanedAt = new Date(Date.now() - 60_000);
+            utimesSync(stalePath, orphanedAt, orphanedAt);
+            utimesSync(undeletablePath, orphanedAt, orphanedAt);
             writeFileSync(join(updateDirectory, "keep.tar.zst"), "keep");
 
             await reconcileStagedUploads();
