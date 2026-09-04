@@ -63,5 +63,6 @@ grep -q 'build/usr/lib/modules-load.d/fastbootd.conf' "$post_creation"
 grep -q "s|/sbin/getty|/bin/getty|g" "$post_creation"
 grep -q 'FastbootDevice device("tcp")' "$fastbootd_patch"
 grep -q 'device.ExecuteCommands()' "$fastbootd_patch"
+grep -q 'BlockDevReady(target_path)' "$fastbootd_patch"
 
 echo "Atlas recovery source validation passed."

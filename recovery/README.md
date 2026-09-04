@@ -114,9 +114,10 @@ atlas-rpi5-<version>-recovery-unencrypted.zip
 ```
 
 The build pins pi-gen-micro and rpi-fastbootd in `versions.env`. It rebuilds the
-daemon with a narrow local TCP-session patch because the recovery invokes the
-fastboot client once per IDP command. Keep both revisions and the patch together
-because IDP protocol behavior is shared between them.
+daemon with a local recovery patch that preserves IDP state across the separate
+fastboot client calls and polls devtmpfs directly because recovery has no udev
+daemon. Keep both revisions and the patch together because IDP protocol behavior
+is shared between them.
 
 The Raspberry Pi archive key currently has SHA-1 self-certifications which
 current Debian Sequoia policy rejects. Upstream pi-gen-micro attempts to relax
