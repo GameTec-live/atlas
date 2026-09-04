@@ -1,27 +1,152 @@
-import { SmartphoneIcon, SparklesIcon } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+    DownloadIcon,
+    ExternalLinkIcon,
+    LinkIcon,
+    SmartphoneIcon,
+} from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { m } from "@/paraglide/messages";
 
-export function AppConnectionStep() {
+const PLAY_STORE_URL =
+    "https://play.google.com/store/apps/details?id=org.gtlv.atlas";
+
+function QrCode({
+    value,
+    title,
+    description,
+    label,
+}: {
+    value: string;
+    title: string;
+    description: string;
+    label: string;
+}) {
+    const [open, setOpen] = useState(false);
+    const triggerLabel = m.setup_app_enlarge_qr({ name: label });
+
     return (
-        <Card className="mx-auto max-w-2xl">
-            <CardContent className="flex flex-col items-center py-12 text-center">
-                <div className="relative mb-7 grid size-24 place-items-center rounded-3xl bg-primary text-primary-foreground shadow-xl shadow-black/10">
-                    <SmartphoneIcon className="size-11" />
-                    <span className="absolute -top-2 -right-2 grid size-8 place-items-center rounded-full border-4 border-card bg-background text-foreground">
-                        <SparklesIcon className="size-4" />
-                    </span>
+        <Dialog open={open} onOpenChange={setOpen}>
+            <Button
+                type="button"
+                variant="ghost"
+                aria-label={triggerLabel}
+                onClick={() => setOpen(true)}
+                className="block size-52 cursor-zoom-in rounded-xl bg-white p-4 shadow-sm transition-transform hover:scale-[1.02] hover:bg-white"
+            >
+                <QRCodeSVG
+                    value={value}
+                    level="M"
+                    marginSize={0}
+                    className="size-full"
+                    aria-hidden="true"
+                />
+            </Button>
+            <DialogContent className="justify-items-center sm:max-w-md">
+                <DialogHeader className="w-full pr-8 text-left">
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>{description}</DialogDescription>
+                </DialogHeader>
+                <div className="aspect-square w-full max-w-80 rounded-xl bg-white p-4">
+                    <QRCodeSVG
+                        value={value}
+                        title={label}
+                        level="M"
+                        marginSize={0}
+                        className="size-full"
+                    />
                 </div>
-                <h2 className="text-xl font-semibold">
-                    {m.setup_app_placeholder_title()}
-                </h2>
-                <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-                    {m.setup_app_placeholder_description()}
-                </p>
-                <span className="mt-6 rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                    {m.setup_coming_soon()}
-                </span>
-            </CardContent>
-        </Card>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+export function AppConnectionStep() {
+    const deploymentUrl = window.location.origin;
+    const pairingUrl = `atlas://${encodeURIComponent(deploymentUrl)}`;
+
+    return (
+        <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-2">
+            <Card>
+                <CardHeader>
+                    <CardTitle>{m.setup_app_download_title()}</CardTitle>
+                    <CardDescription className="min-h-10">
+                        {m.setup_app_download_description()}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center py-2">
+                    <QrCode
+                        value={PLAY_STORE_URL}
+                        title={m.setup_app_download_title()}
+                        description={m.setup_app_download_description()}
+                        label={m.setup_app_download_qr_label()}
+                    />
+                </CardContent>
+                <CardFooter>
+                    <Button
+                        variant="outline"
+                        className="w-full"
+                        nativeButton={false}
+                        render={
+                            <a
+                                href={PLAY_STORE_URL}
+                                target="_blank"
+                                rel="noreferrer"
+                            />
+                        }
+                    >
+                        {m.setup_app_open_store()}
+                        <ExternalLinkIcon data-icon="inline-end" />
+                    </Button>
+                </CardFooter>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>{m.setup_app_pair_title()}</CardTitle>
+                    <CardDescription className="min-h-10">
+                        {m.setup_app_pair_description()}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center py-2">
+                    <QrCode
+                        value={pairingUrl}
+                        title={m.setup_app_pair_title()}
+                        description={m.setup_app_pair_description()}
+                        label={m.setup_app_pair_qr_label({
+                            url: deploymentUrl,
+                        })}
+                    />
+                </CardContent>
+                <CardFooter>
+                    <Button
+                        variant="outline"
+                        className="w-full"
+                        nativeButton={false}
+                        render={<a href={pairingUrl} />}
+                    >
+                        {m.setup_app_pair_action()}
+                        <SmartphoneIcon data-icon="inline-end" />
+                    </Button>
+                </CardFooter>
+            </Card>
+        </div>
     );
 }
