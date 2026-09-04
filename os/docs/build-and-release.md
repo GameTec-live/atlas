@@ -181,15 +181,18 @@ For `work_root=/path/to/work`, the important raw outputs are:
 | `work/atlas-images.tar` | Intermediate offline OCI archive used in the initial persistent filesystem |
 
 The GitHub workflow renames and stages the first three into the public names
-listed in [the documentation index](README.md#artifact-cheat-sheet), then
-creates `SHA256SUMS`.
+listed in [the documentation index](README.md#artifact-cheat-sheet). It then
+builds the recovery boot environment once and combines it separately with the
+encrypted provisioning archive and unencrypted development image. Each
+recovery variant is published as a compressed disk image and as a file-only ZIP.
+Finally, the workflow creates one `SHA256SUMS` for all release files.
 
 ## GitHub Actions behavior
 
 `.github/workflows/os.yml` lives at the repository root, not inside `os`.
 
-- Pull requests to `main` that touch `os/**` or the workflow run validation
-  only on `ubuntu-24.04`.
+- Pull requests to `main` that touch `os/**`, `recovery/**` or the workflow run
+  validation only on `ubuntu-24.04`.
 - Pushes to `main` run validation and a full native ARM64 build.
 - Manual dispatch runs validation and a full native ARM64 build.
 - `v*` tags build and also create/update the matching GitHub Release.
@@ -197,9 +200,10 @@ creates `SHA256SUMS`.
   `gh release upload --clobber`; release tags should still be treated as
   immutable operationally.
 - Non-tag builds use the first 12 characters of the commit SHA as the version.
-- Every full build uploads a 14-day Actions artifact without additional ZIP
-  compression because the files are already compressed.
-- The build job has a 120-minute timeout.
+- Every full build uploads a 14-day Actions artifact without additional
+  Actions compression because the release files are already compressed.
+- The build job has a 180-minute timeout to accommodate the OS build and the
+  shared recovery boot-environment build.
 
 The workflow intentionally has permission to write release contents only in
 the build job.

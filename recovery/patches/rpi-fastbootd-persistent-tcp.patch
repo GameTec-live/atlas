@@ -1,0 +1,137 @@
+diff --git a/fastboot/device/main.cpp b/fastboot/device/main.cpp
+index 93a7998..e35f754 100644
+--- a/fastboot/device/main.cpp
++++ b/fastboot/device/main.cpp
+@@ -213,23 +213,11 @@ int main(int argc, char* argv[]) {
+         RunUsbLoop();  // never returns
+     } else {
+-        // TCP only: full command map, sequential connections.
+-        auto server = ClientTcpTransport::CreateServer();
+-        if (!server) {
+-            LOG(FATAL) << "Failed to create TCP server socket";
+-            return 1;
+-        }
+-        // No USB descriptors to worry about here, but we still want the
+-        // lock pass to run before serving traffic so getvar otp-lock-status
+-        // is meaningful and GetPrivkey is gated correctly.
++        // Keep one FastbootDevice across sequential TCP clients. IDP state and
++        // staged data belong to the device, while the local fastboot CLI opens
++        // a fresh connection for every invocation.
++        FastbootDevice device("tcp");
+         LockOtpKeyAtStartup();
+-        LOG(INFO) << "TCP-only mode: accepting one connection at a time";
+-        while (true) {
+-            auto socket = ClientTcpTransport::AcceptHandshake(server.get());
+-            if (!socket) continue;
+-            auto transport = std::make_unique<ClientTcpTransport>(std::move(socket));
+-            FastbootDevice device(std::move(transport), /*data_plane_only=*/false);
+-            device.ExecuteCommands();
+-            LOG(INFO) << "TCP connection finished";
+-        }
++        LOG(INFO) << "TCP-only mode: preserving state across client connections";
++        device.ExecuteCommands();  // accepts reconnects and never returns
+     }
+ }
+diff --git a/fastboot/device/commands.cpp b/fastboot/device/commands.cpp
+index 5f6c750..ee0ff4e 100644
+--- a/fastboot/device/commands.cpp
++++ b/fastboot/device/commands.cpp
+@@ -1739,7 +1739,12 @@ namespace {
+             int result = crypto.ProvisionKey();
+             if (result == RPI_FW_CRYPTO_KEY_NOT_BLANK) {
+                 crypto.RefreshProvisioningStatus();
+-                return device->WriteOkay("Key already provisioned");
++                if (crypto.LockKey() != 0) {
++                    return device->WriteFail(
++                        "Existing key but LOCK failed — refusing to continue; "
++                        "reboot and retry");
++                }
++                return device->WriteOkay("Key already provisioned and LOCKed");
+             }
+             if (result != 0) {
+                 return device->WriteFail(
+diff --git a/rpiidp/src/utility.cpp b/rpiidp/src/utility.cpp
+index b9c381e..02b1f49 100644
+--- a/rpiidp/src/utility.cpp
++++ b/rpiidp/src/utility.cpp
+@@ -136,66 +136,21 @@ namespace utils {
+       return false;
+    }
+-
++
+-   // Wait until udev has finished its processing for a block device
++   // The recovery initramfs uses devtmpfs without a userspace udev daemon.
++   // Poll the device itself instead of waiting for a udev initialized flag
++   // that can never be set there.
+    bool WaitUdevBlockDev(const std::string& target_path, int timeout_ms) {
+-      struct udev* udev = udev_new();
+-      if (!udev) {
+-         return false;
+-      }
+-
+-      auto start = std::chrono::steady_clock::now();
+-      bool ready = false;
+-
+-      while (true) {
+-         struct udev_enumerate* enm = udev_enumerate_new(udev);
+-         udev_enumerate_add_match_subsystem(enm, "block");
+-         udev_enumerate_scan_devices(enm);
+-
+-         struct udev_list_entry *devices = udev_enumerate_get_list_entry(enm), *entry;
+-         udev_list_entry_foreach(entry, devices) {
+-            const char* syspath = udev_list_entry_get_name(entry);
+-            struct udev_device* dev = udev_device_new_from_syspath(udev, syspath);
+-            if (!dev) {
+-               continue;
+-            }
+-
+-            // 1. Check primary node (eg, /dev/mmcblk0p1)
+-            const char* devnode = udev_device_get_devnode(dev);
+-            if (devnode && target_path == devnode) {
+-               ready = udev_device_get_is_initialized(dev);
+-            }
+-            // 2. Check all symlinks (eg, /dev/mapper/foo or /dev/disk/...)
+-            else {
+-               struct udev_list_entry *links = udev_device_get_devlinks_list_entry(dev), *link;
+-               udev_list_entry_foreach(link, links) {
+-                  if (target_path == udev_list_entry_get_name(link)) {
+-                     ready = udev_device_get_is_initialized(dev);
+-                     break;
+-                  }
+-               }
+-            }
+-
+-            udev_device_unref(dev);
+-            if (ready) {
+-               break;
+-            }
+-         }
+-         udev_enumerate_unref(enm);
+-
+-         if (ready) {
+-            break;
+-         }
+-
+-         auto now = std::chrono::steady_clock::now();
+-         if (std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count() >= timeout_ms) {
+-            break;
++      constexpr int interval_ms = 100;
++      const int max_attempts = (timeout_ms + interval_ms - 1) / interval_ms;
++      for (int i = 0; i < max_attempts; ++i) {
++         if (BlockDevReady(target_path)) {
++            return true;
+          }
+-
++
+-         std::this_thread::sleep_for(std::chrono::milliseconds(100));
++         std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+       }
+-
++
+-      udev_unref(udev);
+-      return ready;
++      return false;
+    }
+-
++
+    std::vector<char*> to_execvp_argv(const std::vector<std::string>& args)

@@ -1,0 +1,514 @@
+#!/bin/sh
+set -eu
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+media_label=ATLASRECOV
+media_dir=/run/atlas-recovery/media
+work_dir=/run/atlas-recovery/work
+fastboot_device=tcp:127.0.0.1
+log_file=/run/atlas-recovery/recovery.log
+fastbootd_pid=
+
+mkdir -p /run/atlas-recovery
+: > "$log_file"
+
+log() {
+    message=$*
+    printf '[atlas-recovery] %s\n' "$message"
+    printf '[atlas-recovery] %s\n' "$message" >> "$log_file"
+}
+
+die() {
+    log "ERROR: $*"
+    log "Recovery stopped. The USB has been left mounted for diagnosis."
+    log "A root console is available on HDMI/serial; power-cycle to retry."
+    exit 1
+}
+
+cleanup_daemon() {
+    if [ -n "$fastbootd_pid" ] && kill -0 "$fastbootd_pid" 2>/dev/null; then
+        kill "$fastbootd_pid" 2>/dev/null || true
+        wait "$fastbootd_pid" 2>/dev/null || true
+    fi
+}
+trap cleanup_daemon EXIT INT TERM
+
+wait_for_label() {
+    label=$1
+    count=0
+    while [ "$count" -lt 30 ]; do
+        path=$(blkid 2>/dev/null | awk -v value="LABEL=\"$label\"" '
+            index($0, value) { sub(/:.*/, ""); print; exit }
+        ')
+        if [ -n "$path" ] && [ -b "$path" ]; then
+            readlink -f "$path"
+            return 0
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+    return 1
+}
+
+parent_disk() {
+    partition=$1
+    partition_name=${partition#/dev/}
+    partition_sys=/sys/class/block/$partition_name
+    [ -f "$partition_sys/partition" ] || return 1
+    partition_path=$(readlink -f "$partition_sys") || return 1
+    parent=$(basename "$(dirname "$partition_path")")
+    [ -b "/dev/$parent" ] || return 1
+    printf '/dev/%s\n' "$parent"
+}
+
+prepare_media() {
+    media_device=$(wait_for_label "$media_label") || \
+        die "FAT32 partition labelled $media_label was not found"
+    media_disk=$(parent_disk "$media_device") || \
+        die "could not resolve the recovery USB parent device"
+    media_sys=$(readlink -f "/sys/class/block/${media_disk#/dev/}") || \
+        die "could not inspect the recovery device"
+    case "$media_sys" in
+        */usb*/*) ;;
+        *) die "$media_disk is not USB-backed storage" ;;
+    esac
+
+    mkdir -p "$media_dir" "$work_dir"
+    # IDP sparse images are temporary. An 8 GB Pi provides roughly 6 GB here;
+    # extraction happens before target selection or erasure, so ENOSPC is safe.
+    mount -t tmpfs -o size=75%,mode=0700 tmpfs "$work_dir" || \
+        die "could not create the temporary extraction filesystem"
+    mount -t vfat -o ro,noatime "$media_device" "$media_dir" || \
+        die "could not mount recovery partition"
+}
+
+read_target_preference() {
+    target_preference=auto
+    config=$media_dir/recovery.conf
+    [ -f "$config" ] || return 0
+
+    configured=$(sed -n 's/^[[:space:]]*TARGET[[:space:]]*=[[:space:]]*//p' "$config" | tail -n 1 | tr -d '[:space:]')
+    [ -n "$configured" ] || return 0
+    case "$configured" in
+        auto|sd|nvme) target_preference=$configured ;;
+        *) die "invalid TARGET in recovery.conf: $configured" ;;
+    esac
+}
+
+find_artifact() {
+    artifact=
+    artifact_count=0
+    for candidate in "$media_dir"/*.img.zst "$media_dir"/*provision*.tar.zst; do
+        [ -f "$candidate" ] || continue
+        artifact=$candidate
+        artifact_count=$((artifact_count + 1))
+    done
+    [ "$artifact_count" -eq 1 ] || \
+        die "expected exactly one .img.zst or *provision*.tar.zst artifact, found $artifact_count"
+    log "Selected $(basename "$artifact")"
+}
+
+verify_artifact() {
+    manifest=$media_dir/SHA256SUMS
+    artifact_name=$(basename "$artifact")
+    expected=
+    if [ -f "$manifest" ]; then
+        expected=$(awk -v name="$artifact_name" '$2 == name { print $1 }' "$manifest" | tail -n 1)
+    fi
+    if [ -n "$expected" ]; then
+        actual=$(sha256sum "$artifact" | awk '{print $1}')
+        if [ "$actual" != "$expected" ]; then
+            die "SHA-256 verification failed for $artifact_name"
+        fi
+        log "Artifact SHA-256 verified"
+    else
+        log "No matching SHA256SUMS entry; validating the zstd stream"
+        zstd -q -t "$artifact" || die "compressed artifact is corrupt"
+    fi
+}
+
+assert_target_safe() {
+    target=$1
+    [ -b "$target" ] || die "target device does not exist: $target"
+    [ "$target" != "$media_disk" ] || die "refusing to overwrite the recovery USB"
+
+    target_name=${target#/dev/}
+    target_sys=/sys/class/block/$target_name
+    [ -d "$target_sys" ] || die "target has no sysfs block entry: $target"
+    [ ! -f "$target_sys/partition" ] || die "$target is not a whole disk"
+
+    for candidate in "$target_sys" /sys/class/block/"$target_name"p*; do
+        [ -e "$candidate" ] || continue
+        device_number=$(cat "$candidate/dev")
+        if awk -v device="$device_number" '$3 == device { found=1 } END { exit !found }' \
+            /proc/self/mountinfo; then
+            die "a filesystem on $target is mounted"
+        fi
+    done
+}
+
+select_target() {
+    required=${1:-}
+    selection=$target_preference
+    [ -n "$required" ] && selection=$required
+
+    case "$selection" in
+        sd)
+            target=/dev/mmcblk0
+            target_storage=mmcblk0
+            ;;
+        nvme)
+            target=/dev/nvme0n1
+            target_storage=nvme0n1
+            ;;
+        auto)
+            found=0
+            if [ -b /dev/mmcblk0 ]; then
+                target=/dev/mmcblk0
+                target_storage=mmcblk0
+                found=$((found + 1))
+            fi
+            if [ -b /dev/nvme0n1 ]; then
+                target=/dev/nvme0n1
+                target_storage=nvme0n1
+                found=$((found + 1))
+            fi
+            [ "$found" -eq 1 ] || \
+                die "TARGET=auto requires exactly one SD/NVMe target; found $found"
+            ;;
+        *) die "unsupported target selection: $selection" ;;
+    esac
+
+    assert_target_safe "$target"
+    log "Destructive target is $target"
+}
+
+clear_work_dir() {
+    awk -v path="$work_dir" '
+        $2 == path && $3 == "tmpfs" { found=1 }
+        END { exit !found }
+    ' /proc/mounts || die "work directory is not the expected tmpfs"
+    find "$work_dir" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+}
+
+start_fastbootd() {
+    mkdir -p /data
+    if ! awk '$2 == "/data" && $3 == "tmpfs" { found=1 } END { exit !found }' \
+        /proc/mounts; then
+        mount -t tmpfs -o size=128m tmpfs /data
+    fi
+    # rpi-fastbootd listens on an IPv6 dual-stack socket, while the local
+    # fastboot client connects to 127.0.0.1.
+    ifconfig lo 127.0.0.1 netmask 255.0.0.0 up || \
+        die "could not configure the loopback interface"
+    log "Starting local IDP engine"
+    LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/android \
+        /usr/bin/fastbootd -v -i tcp >> /run/atlas-recovery/fastbootd.log 2>&1 &
+    fastbootd_pid=$!
+
+    count=0
+    while [ "$count" -lt 20 ]; do
+        if timeout 3 fastboot -s "$fastboot_device" getvar product >/dev/null 2>&1; then
+            return 0
+        fi
+        kill -0 "$fastbootd_pid" 2>/dev/null || \
+            die "rpi-fastbootd exited during startup"
+        sleep 1
+        count=$((count + 1))
+    done
+    die "local IDP engine did not become ready"
+}
+
+fb() {
+    seconds=$1
+    shift
+    timeout "$seconds" fastboot -s "$fastboot_device" "$@"
+}
+
+extract_idp() {
+    clear_work_dir
+    log "Extracting the IDP archive to tmpfs"
+    zstd -q -dc "$artifact" | tar -xf - -C "$work_dir" || \
+        die "could not extract the IDP archive"
+
+    json_list=/run/atlas-recovery/idp-json.list
+    find "$work_dir" -type f -name '*.json' -print > "$json_list"
+    json_count=$(wc -l < "$json_list" | tr -d '[:space:]')
+    [ "$json_count" -eq 1 ] || \
+        die "IDP archive must contain exactly one JSON descriptor; found $json_count"
+    IFS= read -r idp_json < "$json_list"
+    jq empty "$idp_json" >/dev/null 2>&1 || die "IDP descriptor is invalid JSON"
+    idp_dir=$(dirname "$idp_json")
+
+    missing=0
+    for simg in $(jq -r '.layout.partitionimages | to_entries[] | .value.simage // empty' "$idp_json"); do
+        [ -f "$idp_dir/$simg" ] || {
+            log "Missing sparse image referenced by descriptor: $simg"
+            missing=1
+        }
+    done
+    [ "$missing" -eq 0 ] || die "IDP archive is incomplete"
+
+    grow_images=/run/atlas-recovery/grow-images.list
+    jq -r '
+        . as $root
+        | .layout.provisionmap
+        | ..
+        | objects
+        | select(."expand-to-fit" == true and (.image | type == "string"))
+        | $root.layout.partitionimages[.image].simage // empty
+    ' "$idp_json" > "$grow_images"
+}
+
+resolve_local_block_device() {
+    device_name=$1
+    case "$device_name" in
+        /dev/*) printf '%s\n' "$device_name" ;;
+        mapper/*) printf '/dev/%s\n' "$device_name" ;;
+        *)
+            if [ -b "/dev/mapper/$device_name" ]; then
+                printf '/dev/mapper/%s\n' "$device_name"
+            else
+                printf '/dev/%s\n' "$device_name"
+            fi
+            ;;
+    esac
+}
+
+grow_ext4_filesystem() {
+    local_device=$1
+
+    [ -b "$local_device" ] || \
+        die "filesystem has no local block device: $local_device"
+
+    filesystem_info=$(blkid "$local_device" 2>/dev/null || true)
+    case "$filesystem_info" in
+        *'TYPE="ext4"'*) ;;
+        *) die "filesystem on $local_device is not recognized as ext4" ;;
+    esac
+
+    log "Growing ext4 filesystem on $local_device"
+    resize2fs "$local_device" >> "$log_file" 2>&1 || \
+        die "could not grow ext4 filesystem on $local_device"
+}
+
+grow_idp_ext4_filesystem() {
+    block_device=$1
+    sparse_image=$2
+
+    grep -Fqx "$sparse_image" "$grow_images" || return 0
+
+    local_device=$(resolve_local_block_device "$block_device")
+    grow_ext4_filesystem "$local_device"
+}
+
+reread_partition_table() {
+    reread_target=$1
+    reread_attempt=0
+    while [ "$reread_attempt" -lt 10 ]; do
+        if blockdev --rereadpt "$reread_target" 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+        reread_attempt=$((reread_attempt + 1))
+    done
+    return 1
+}
+
+wait_for_block_device() {
+    wait_device=$1
+    wait_attempt=0
+    while [ "$wait_attempt" -lt 10 ]; do
+        [ -b "$wait_device" ] && return 0
+        sleep 1
+        wait_attempt=$((wait_attempt + 1))
+    done
+    return 1
+}
+
+grow_raw_persistent_partition() {
+    partition_table=$(parted --script --fix --machine "$target" unit s print \
+        2>> "$log_file") || die "could not inspect the restored GPT on $target"
+    persistent_number=$(printf '%s\n' "$partition_table" | \
+        awk -F: '$6 == "persistent" { print $1; exit }')
+    [ -n "$persistent_number" ] || \
+        die "restored image has no GPT partition named persistent"
+    persistent_device=${target}p${persistent_number}
+
+    log "Growing $persistent_device to fill $target"
+    parted --script --fix "$target" resizepart "$persistent_number" 100% \
+        >> "$log_file" 2>&1 || \
+        die "could not grow the persistent partition on $target"
+    sync
+    reread_partition_table "$target" || \
+        die "could not reread the expanded partition table on $target"
+    wait_for_block_device "$persistent_device" || \
+        die "expanded persistent partition did not appear: $persistent_device"
+    grow_ext4_filesystem "$persistent_device"
+}
+
+select_idp_target() {
+    idp_storage=$(jq -r '.IGmeta.IGconf_device_storage_type // empty' "$idp_json")
+    case "$idp_storage" in
+        sd|emmc)
+            required_target=sd
+            ;;
+        nvme)
+            required_target=nvme
+            ;;
+        '')
+            required_target=
+            ;;
+        *) die "IDP descriptor has unsupported storage type: $idp_storage" ;;
+    esac
+
+    if [ -n "$required_target" ] && \
+       [ "$target_preference" != auto ] && \
+       [ "$target_preference" != "$required_target" ]; then
+        die "recovery.conf selects $target_preference but IDP artifact requires $required_target"
+    fi
+    select_target "$required_target"
+}
+
+provision_idp() {
+    extract_idp
+    select_idp_target
+    start_fastbootd
+
+    log "Initialising and locking the device firmware-crypto key"
+    fb 30 oem fwcrypto init || die "firmware-crypto key initialisation failed"
+
+    log "Erasing $target_storage"
+    fb 60 erase "$target_storage" || die "target erase failed"
+    sleep 2
+
+    log "Creating the encrypted IDP layout"
+    fb 30 stage "$idp_json" || die "could not stage IDP descriptor"
+    fb 30 oem idpinit || die "IDP initialisation failed"
+    fb 180 oem idpwrite || die "IDP partition creation failed"
+
+    partition_index=0
+    while :; do
+        response=$(fb 30 oem idpgetblk 2>&1) || \
+            die "IDP partition enumeration failed: $response"
+        info_line=$(printf '%s\n' "$response" | \
+            sed -n 's/.*[Ii][Nn][Ff][Oo][[:space:]]*//p' | head -n 1)
+        if [ -z "$info_line" ]; then
+            info_line=$(printf '%s\n' "$response" | \
+                sed -n 's/.*(bootloader)[[:space:]]*//p' | head -n 1)
+        fi
+        [ -n "$info_line" ] || break
+
+        block_device=${info_line%%:*}
+        sparse_image=${info_line#*:}
+        if [ -z "$block_device" ] || [ "$sparse_image" = "$info_line" ]; then
+            die "malformed IDP partition response: $info_line"
+        fi
+        flash_source=$idp_dir/$sparse_image
+        [ -f "$flash_source" ] || \
+            die "IDP engine requested missing image: $sparse_image"
+
+        partition_index=$((partition_index + 1))
+        log "Flashing IDP partition $partition_index: $sparse_image -> $block_device"
+        fb 900 flash "$block_device" "$flash_source" || \
+            die "flashing $sparse_image failed"
+        grow_idp_ext4_filesystem "$block_device" "$sparse_image"
+    done
+
+    [ "$partition_index" -gt 0 ] || die "IDP descriptor produced no flashable partitions"
+    fb 120 oem idpdone || die "IDP finalisation failed"
+    log "Encrypted Atlas provisioning completed"
+}
+
+provision_raw() {
+    select_target
+    log "Validating compressed raw image before erasing $target"
+    zstd -q -t "$artifact" || die "compressed raw image is corrupt"
+
+    log "Clearing the existing partition tables and storage signatures"
+    target_bytes=$(blockdev --getsize64 "$target") || \
+        die "could not determine the size of $target"
+    edge_bytes=$((16 * 1024 * 1024))
+    [ "$target_bytes" -gt $((edge_bytes * 2)) ] || die "$target is unexpectedly small"
+    tail_offset=$((target_bytes - edge_bytes))
+    dd if=/dev/zero of="$target" bs=1M count=16 conv=fsync status=none || \
+        die "could not clear the start of $target"
+    dd if=/dev/zero of="$target" bs=1M count=16 seek="$tail_offset" \
+        oflag=seek_bytes conv=fsync status=none || \
+        die "could not clear the end of $target"
+
+    fifo=/run/atlas-recovery/raw-image.pipe
+    rm -f "$fifo"
+    mkfifo "$fifo"
+    log "Writing image; dd progress is reported in completed 4 MiB records"
+    zstd -q -dc "$artifact" > "$fifo" &
+    zstd_pid=$!
+    dd if="$fifo" of="$target" bs=4M iflag=fullblock conv=fsync &
+    dd_pid=$!
+
+    # BusyBox dd has no status=progress mode, but SIGUSR1 prints its current
+    # record count to stderr, which is the serial console.
+    (
+        while sleep 5; do
+            kill -USR1 "$dd_pid" 2>/dev/null || exit 0
+        done
+    ) &
+    progress_pid=$!
+
+    dd_status=0
+    wait "$dd_pid" || dd_status=$?
+    kill "$progress_pid" 2>/dev/null || true
+    wait "$progress_pid" 2>/dev/null || true
+    if [ "$dd_status" -ne 0 ]; then
+        kill "$zstd_pid" 2>/dev/null || true
+        wait "$zstd_pid" 2>/dev/null || true
+        rm -f "$fifo"
+        die "writing the raw image failed"
+    fi
+    if ! wait "$zstd_pid"; then
+        rm -f "$fifo"
+        die "decompressing the raw image failed"
+    fi
+    rm -f "$fifo"
+    sync
+    grow_raw_persistent_partition
+    log "Unencrypted Atlas restore completed"
+}
+
+finish_successfully() {
+    cleanup_daemon
+    fastbootd_pid=
+    sync
+
+    if [ -n "${idp_json:-}" ]; then
+        clear_work_dir
+    fi
+    sync
+    umount "$work_dir" 2>/dev/null || true
+    umount "$media_dir" 2>/dev/null || true
+
+    log "SUCCESS: remove the recovery USB, then power the Pi on again"
+    sleep 3
+    poweroff -f
+}
+
+case "$(tr -d '\000' < /proc/device-tree/model 2>/dev/null || true)" in
+    *Raspberry\ Pi\ 5*|*Compute\ Module\ 5*) ;;
+    *) die "this recovery image supports Raspberry Pi 5-family devices only" ;;
+esac
+
+log "Atlas destructive recovery starting"
+prepare_media
+read_target_preference
+find_artifact
+verify_artifact
+
+case "$artifact" in
+    *.img.zst) provision_raw ;;
+    *.tar.zst) provision_idp ;;
+    *) die "unsupported artifact type" ;;
+esac
+
+finish_successfully

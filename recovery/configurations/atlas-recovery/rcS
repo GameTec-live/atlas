@@ -1,0 +1,31 @@
+#!/bin/sh
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+boot_failure() {
+    printf '\nAtlasOS recovery startup failed: %s\n' "$*" >&2
+    printf 'Automatic root consoles will now start on HDMI and serial.\n\n' >&2
+    exit 0
+}
+
+mount -t proc proc /proc || boot_failure "could not mount /proc"
+mount -t sysfs sysfs /sys || boot_failure "could not mount /sys"
+mount -t devtmpfs devtmpfs /dev || boot_failure "could not mount /dev"
+mkdir -p /dev/pts /run
+mount -t devpts devpts /dev/pts || boot_failure "could not mount /dev/pts"
+mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /run || \
+    boot_failure "could not mount /run"
+
+if [ -x /usr/local/bin/load_modules ]; then
+    /usr/local/bin/load_modules
+fi
+
+/usr/local/sbin/atlas-recover
+status=$?
+printf '\nAtlasOS recovery returned with status %s.\n' "$status" >&2
+printf 'Automatic root consoles will now start on HDMI and serial.\n\n' >&2
+
+# Returning from sysinit lets BusyBox init start the autologin gettys. A normal
+# successful recovery powers the machine off and never reaches this point.
+exit 0

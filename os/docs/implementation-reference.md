@@ -84,7 +84,10 @@ When adding a layer or changing ordering:
   explicitly.
 - Production `pmap` remains `crypt`; development raw image remains clearly
   labeled unencrypted.
-- Persistent partition has `expand-to-fit` in the generated provisioning map.
+- Persistent partition has `expand-to-fit` in the generated provisioning map,
+  and recovery grows its ext4 filesystem before finalising IDP.
+- Raw-image recovery grows the GPT `persistent` partition and its ext4
+  filesystem after writing the image.
 - Both boot and system are A/B components.
 - Update bundle member allowlist stays narrow.
 - System is written before boot, and tryboot metadata is written last.
@@ -128,7 +131,9 @@ When adding a layer or changing ordering:
   five continuous minutes.
 - Factory reset preserves the encryption container and OCI image layers, but
   removes application data, credentials, host policy and network profiles.
-- `atlas-sys` remains a narrow Unix-socket client and keeps destructive reset
+- `atlas-sys` remains a narrow root-only management CLI. Most operations use
+  the Unix-socket API; `resize` locally expands direct partitions or the full
+  outer-partition/LUKS/inner-partition/ext4 stack, and destructive reset keeps
   confirmation in front of the API call.
 - Management API SSH changes delegate to `atlas-ssh`; they do not introduce a
   second persistent SSH policy.

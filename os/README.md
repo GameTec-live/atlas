@@ -22,11 +22,20 @@ builds publish:
 - `atlas-rpi5-<version>-development.img.zst` - unencrypted whole-disk image for
   direct development SD-card flashing.
 - `atlas-rpi5-<version>-update.tar.zst` - signed A/B update bundle.
-- `SHA256SUMS` - hashes for those three files.
+- `atlas-rpi5-<version>-recovery-encrypted.{img.zst,zip}` - recovery media
+  containing the encrypted provisioning archive.
+- `atlas-rpi5-<version>-recovery-unencrypted.{img.zst,zip}` - recovery media
+  containing the unencrypted development image.
+- `SHA256SUMS` - hashes for all release files.
 
 Every full run uploads an Actions artifact. A `v*` tag also publishes the files
 on the matching GitHub Release. Run the workflow manually only after the
 container-image workflows have published the desired `latest` tags.
+
+The recovery ZIPs contain the FAT32 partition files without a disk-image
+container. Extract one at the root of an empty FAT32 drive labelled
+`ATLASRECOV`; see the [recovery documentation](../recovery/README.md) before
+booting because recovery immediately erases its selected target.
 
 For a local Linux build, clone the pinned upstream version and use this folder
 as its external source tree:
@@ -50,8 +59,9 @@ Quadlets use `Pull=missing`; `atlas-container-init.service` starts the rootless
 boots.
 
 The 8 GiB persistent filesystem is a minimum needed for the compressed archive
-and imported image store to coexist on first boot. IDP provisioning expands the
-encrypted persistent partition to consume all remaining target storage.
+and imported image store to coexist on first boot. Atlas recovery expands the
+persistent partition and its ext4 filesystem to consume all remaining target
+storage for both encrypted IDP and unencrypted raw-image deployments.
 
 ## Provisioning and encryption
 
@@ -60,8 +70,10 @@ Raspberry Pi provisioning creates a device-sized LUKS2 container holding both
 system slots and persistent data. Firmware-readable boot partitions remain
 unencrypted.
 
-The whole-disk `.img` is an unencrypted development image. Flashing it directly
-does not apply the provisioning map or expand data to the physical device.
+The whole-disk `.img` is an unencrypted development image. Atlas recovery grows
+its persistent partition and filesystem after writing it. Flashing it directly
+with another tool does not apply that recovery step and retains the build-time
+data size.
 
 Secure boot is deliberately not provisioned. End users may choose secure boot
 with `rpi-sb-provisioner`, accepting its OTP changes and the need to sign future
@@ -156,6 +168,7 @@ Host administrators can use the authenticated Unix-socket client directly:
 ```sh
 sudo atlas-sys status
 sudo atlas-sys update apply /path/to/atlas-rpi5-update.tar.zst
+sudo atlas-sys resize
 sudo atlas-sys timezone set Europe/Vienna
 sudo atlas-sys cloudflare-tunnel provision /path/to/cloudflare-token
 sudo atlas-sys tailscale provision /path/to/tailscale-auth-key atlas-1

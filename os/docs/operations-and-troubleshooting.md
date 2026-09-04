@@ -216,12 +216,13 @@ sudo atlas-sys status
 sudo journalctl -u atlas-management.service --no-pager
 ```
 
-The root-only `atlas-sys` command supplies the per-device bearer token and
-talks to the Unix socket for these supported operations:
+The root-only `atlas-sys` command supplies the per-device bearer token for
+API-backed operations and handles persistent storage resizing locally:
 
 ```sh
 sudo atlas-sys update apply /path/to/atlas-rpi5-update.tar.zst
 sudo atlas-sys update rollback
+sudo atlas-sys resize
 sudo atlas-sys reboot
 sudo atlas-sys poweroff
 sudo atlas-sys ssh status
@@ -444,9 +445,25 @@ NetworkManager does not necessarily pull the target into the boot transaction.
 ### First boot runs out of persistent space
 
 The compressed archive and imported store coexist until import succeeds. Check
-the provisioning expansion result and free space under the rootless home. The
-8 GiB configured data size is a minimum, not arbitrary overhead. Do not reduce
-it without measuring current image archive/import sizes.
+that both the persistent partition and its ext4 filesystem expanded, then check
+free space under the rootless home. The 8 GiB configured data size is a minimum,
+not arbitrary overhead. Do not reduce it without measuring current image
+archive/import sizes.
+
+For an older encrypted deployment whose partition expanded but filesystem did
+not, or an image written directly without Atlas recovery, expand persistent
+storage online with:
+
+```sh
+sudo atlas-sys resize
+```
+
+The command is idempotent. On encrypted deployments it grows ext4 within the
+existing mapper partition. If an encrypted installation was cloned to larger
+media, the first run grows the outer LUKS partition and asks for a reboot; run
+the command again after reboot to grow the reopened mapper partition and ext4.
+On directly written images it verifies and grows the GPT partition named
+`persistent`, then grows ext4 in one run.
 
 ### Update refuses because one is already pending
 

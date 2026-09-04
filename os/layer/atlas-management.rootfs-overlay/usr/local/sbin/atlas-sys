@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
 
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
 socket=${ATLAS_SYS_SOCKET:-/run/atlas-management/api.sock}
 token_file=${ATLAS_SYS_TOKEN_FILE:-/home/atlas-containers/.config/atlas/management-token}
 curl_command=${ATLAS_SYS_CURL:-/usr/bin/curl}
@@ -18,6 +21,7 @@ Commands:
   status                         Show service, A/B update and trial health state
   update apply BUNDLE            Upload, install and tryboot an update bundle
   update rollback                Roll back or clear the pending update
+  resize                         Expand persistent data to available storage
   reboot                         Reboot the device
   poweroff                       Power off the device
   ssh status                     Show persistent SSH policy
@@ -105,6 +109,207 @@ validate_timezone() {
     esac
 }
 
+resolve_block_device() {
+    device_name=$1
+    if [ -b "/dev/$device_name" ]; then
+        printf '/dev/%s\n' "$device_name"
+    elif [ -b "/dev/mapper/$device_name" ]; then
+        printf '/dev/mapper/%s\n' "$device_name"
+    elif [ -r "/sys/class/block/$device_name/dm/name" ]; then
+        mapper_name=$(cat "/sys/class/block/$device_name/dm/name")
+        [ -b "/dev/mapper/$mapper_name" ] || return 1
+        printf '/dev/mapper/%s\n' "$mapper_name"
+    else
+        return 1
+    fi
+}
+
+single_slave_kernel() {
+    slave_kernel=$1
+    set -- /sys/class/block/"$slave_kernel"/slaves/*
+    [ "$#" -eq 1 ] && [ -e "$1" ] || return 1
+    basename "$1"
+}
+
+block_kernel() {
+    block_device=$1
+    block_numbers=$(stat -c '%t %T' "$block_device") || return 1
+    case "$block_numbers" in *' '*) ;; *) return 1 ;; esac
+    block_major_hex=${block_numbers%% *}
+    block_minor_hex=${block_numbers#* }
+    block_major=$(printf '%d' "0x$block_major_hex")
+    block_minor=$(printf '%d' "0x$block_minor_hex")
+    block_sys=$(readlink -f "/sys/dev/block/$block_major:$block_minor") || return 1
+    basename "$block_sys"
+}
+
+grow_partition_to_fill() {
+    grow_device=$1
+    expected_label=$2
+    update_method=$3
+    grow_kernel=$(block_kernel "$grow_device") || \
+        die "could not resolve the kernel device for $grow_device"
+    grow_sys=/sys/class/block/$grow_kernel
+    [ -d "$grow_sys" ] || die "could not inspect $grow_device in sysfs"
+
+    if [ -f "$grow_sys/partition" ]; then
+        partition_number=$(cat "$grow_sys/partition")
+        partition_path=$(readlink -f "$grow_sys") || \
+            die "could not resolve $grow_device in sysfs"
+        parent_kernel=$(basename "$(dirname "$partition_path")")
+    elif [ -f "$grow_sys/dm/uuid" ]; then
+        dm_uuid=$(cat "$grow_sys/dm/uuid")
+        partition_number=${dm_uuid#part}
+        partition_number=${partition_number%%-*}
+        parent_kernel=$(single_slave_kernel "$grow_kernel") || \
+            die "could not resolve the mapper parent for $grow_device"
+    else
+        die "$grow_device is not a recognized partition device"
+    fi
+    case "$partition_number" in
+        ''|*[!0-9]*) die "could not resolve the partition number for $grow_device" ;;
+    esac
+    [ -n "$parent_kernel" ] || die "could not resolve the parent for $grow_device"
+    parent_device=$(resolve_block_device "$parent_kernel") || \
+        die "could not resolve parent device $parent_kernel for $grow_device"
+
+    partition_name=$(sfdisk --part-label \
+        "$parent_device" "$partition_number") || \
+        die "could not read the GPT label for $grow_device"
+    [ "$partition_name" = "$expected_label" ] || \
+        die "$grow_device is not the GPT partition named $expected_label"
+
+    echo "Growing $grow_device to fill $parent_device"
+    sync
+    printf ', +\n' | sfdisk --no-reread --force \
+        -N "$partition_number" "$parent_device" || \
+        die "could not grow $grow_device"
+
+    case "$update_method" in
+        partx)
+            partx --update --nr "$partition_number" "$parent_device" \
+                2>/dev/null || partprobe "$parent_device" 2>/dev/null || true
+            ;;
+        kpartx)
+            kpartx -u "$parent_device" >/dev/null || \
+                die "could not update mapper partitions on $parent_device"
+            ;;
+        *) die "unsupported partition update method: $update_method" ;;
+    esac
+
+    partition_table=$(LANG=C sfdisk --dump "$parent_device") || \
+        die "could not verify the partition table on $parent_device"
+    expected_sectors=$(printf '%s\n' "$partition_table" | \
+        awk -v label="$expected_label" '
+            {
+                size = ""
+                matches = 0
+                for (field = 1; field <= NF; field++) {
+                    if ($field == "size=") {
+                        gsub(/,/, "", $(field + 1))
+                        size = $(field + 1)
+                    }
+                    value = $field
+                    sub(/,$/, "", value)
+                    if (value == "name=\"" label "\"") matches = 1
+                }
+                if (matches && size != "") {
+                    print size
+                    exit
+                }
+            }
+        ')
+    case "$expected_sectors" in
+        ''|*[!0-9]*) die "could not determine the new size of $grow_device" ;;
+    esac
+
+    resize_attempt=0
+    while [ "$resize_attempt" -lt 10 ]; do
+        kernel_sectors=$(cat "$grow_sys/size")
+        [ "$kernel_sectors" = "$expected_sectors" ] && return 0
+        sleep 1
+        resize_attempt=$((resize_attempt + 1))
+    done
+    die "partition table for $grow_device was updated, but the kernel still reports the old size; reboot and run atlas-sys resize again"
+}
+
+require_crypt_mapping_size() {
+    crypt_name=$1
+    crypt_device=$2
+    luks_partition=$3
+    crypt_table=$(dmsetup table "$crypt_name") || \
+        die "could not read the active table for $crypt_device"
+    [ "$(printf '%s\n' "$crypt_table" | wc -l)" -eq 1 ] || \
+        die "$crypt_device has an unsupported multi-target mapping"
+
+    crypt_target=$(printf '%s\n' "$crypt_table" | awk '{ print $3 }')
+    crypt_offset=$(printf '%s\n' "$crypt_table" | awk '{ print $8 }')
+    current_sectors=$(printf '%s\n' "$crypt_table" | awk '{ print $2 }')
+    [ "$crypt_target" = crypt ] || die "$crypt_device is not a dm-crypt target"
+    case "$crypt_offset:$current_sectors" in
+        *[!0-9:]*|:*|*:) die "$crypt_device has invalid dm-crypt geometry" ;;
+    esac
+
+    luks_sectors=$(blockdev --getsz "$luks_partition") || \
+        die "could not determine the size of $luks_partition"
+    expanded_sectors=$((luks_sectors - crypt_offset))
+    [ "$expanded_sectors" -ge "$current_sectors" ] || \
+        die "refusing to shrink $crypt_device"
+    [ "$expanded_sectors" -eq "$current_sectors" ] || \
+        die "the outer LUKS partition was expanded; reboot, then run atlas-sys resize again to grow its mapper partition and filesystem"
+}
+
+grow_encrypted_storage() {
+    persistent_device=$1
+    persistent_kernel=$(block_kernel "$persistent_device") || \
+        die "could not resolve the kernel device for $persistent_device"
+    crypt_parent=$(single_slave_kernel "$persistent_kernel") || \
+        die "could not resolve the encrypted parent of $persistent_device"
+    crypt_device=$(resolve_block_device "$crypt_parent") || \
+        die "could not resolve encrypted device $crypt_parent"
+    crypt_kernel=$(block_kernel "$crypt_device") || \
+        die "could not resolve the kernel device for $crypt_device"
+    case "$(cat "/sys/class/block/$crypt_kernel/dm/uuid")" in
+        CRYPT-LUKS*) ;;
+        *) die "parent of $persistent_device is not an active LUKS mapping" ;;
+    esac
+
+    luks_partition_parent=$(single_slave_kernel "$crypt_kernel") || \
+        die "could not resolve the LUKS container for $crypt_device"
+    luks_partition=$(resolve_block_device "$luks_partition_parent") || \
+        die "could not resolve LUKS partition $luks_partition_parent"
+
+    grow_partition_to_fill "$luks_partition" OSDATA_CRYPT partx
+    crypt_name=$(cat "/sys/class/block/$crypt_kernel/dm/name")
+    require_crypt_mapping_size "$crypt_name" "$crypt_device" "$luks_partition"
+    grow_partition_to_fill "$persistent_device" persistent kpartx
+}
+
+resize_persistent_data() {
+    persistent_source=$(findmnt -n -o SOURCE -T /persistent | head -n 1)
+    [ -n "$persistent_source" ] || die "could not find the persistent mount source"
+    persistent_device=$(readlink -f "$persistent_source")
+    [ -b "$persistent_device" ] || \
+        die "persistent mount source is not a block device: $persistent_source"
+
+    filesystem_type=$(findmnt -n -o FSTYPE -T /persistent | head -n 1)
+    [ "$filesystem_type" = ext4 ] || \
+        die "persistent filesystem is not ext4: ${filesystem_type:-unknown}"
+
+    case "$persistent_source:$persistent_device" in
+        *:/dev/dm-*|*/dev/mapper/*:*)
+            grow_encrypted_storage "$persistent_device"
+            ;;
+        *)
+            grow_partition_to_fill "$persistent_device" persistent partx
+            ;;
+    esac
+
+    resize2fs "$persistent_device" || \
+        die "could not grow the persistent ext4 filesystem"
+    echo "Persistent data now fills the available storage."
+}
+
 confirm_factory_reset() {
     if [ "${1:-}" = --yes ]; then
         [ "$#" -eq 1 ] || usage
@@ -141,6 +346,10 @@ case "${1:-}" in
                 ;;
             *) usage ;;
         esac
+        ;;
+    resize)
+        [ "$#" -eq 1 ] || usage
+        resize_persistent_data
         ;;
     reboot)
         [ "$#" -eq 1 ] || usage
