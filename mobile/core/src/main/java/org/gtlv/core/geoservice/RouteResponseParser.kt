@@ -205,7 +205,12 @@ object RouteResponseParser {
             beginShapeIndex = localBegin?.plus(shapeIndexOffset),
             endShapeIndex = localEnd?.plus(shapeIndexOffset),
             travelMode = json.stringOrNull("travel_mode"),
-            travelType = json.stringOrNull("travel_type")
+            travelType = json.stringOrNull("travel_type"),
+            roundaboutExitCount = json
+                .intOrNull("roundabout_exit_count")
+                ?.takeIf { it > 0 },
+            bearingBeforeDegrees = json.bearingOrNull("bearing_before"),
+            bearingAfterDegrees = json.bearingOrNull("bearing_after")
         )
     }
 
@@ -232,6 +237,11 @@ object RouteResponseParser {
         } else {
             runCatching { getInt(key) }.getOrNull()
         }
+
+    private fun JSONObject.bearingOrNull(key: String): Int? =
+        intOrNull(key)
+            ?.takeIf { it in 0..360 }
+            ?.rem(360)
 
     private fun JSONObject.nonNegativeDoubleOrNull(
         key: String
