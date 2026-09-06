@@ -6,9 +6,9 @@ The Atlas App is used by drivers and dispatchers during a shift. It displays liv
 
 Before using the app, make sure that:
 
-- the Atlas App is installed on the phone;
-- an administrator has created a user account for you;
-- the Atlas server is fully configured and has map data installed; and
+- the Atlas App is installed on the phone
+- an administrator has created a user account for you
+- the Atlas server is fully configured and has map data installed
 - the phone can reach the Atlas server, either through the same network or through the configured remote access method.
 
 The server address can be set automatically by scanning the pairing QR code shown during the Atlas setup wizard. It can also be entered manually on the login screen.
@@ -34,13 +34,13 @@ After logging in, select the role for the current shift:
 - **Driver** provides the assigned-job queue and the controls for performing jobs.
 - **Dispatcher** provides the same job controls and also allows you to create jobs, assign unassigned jobs and monitor active drivers.
 
-The number of dispatcher places is limited by the system settings. If all places are occupied, select **Driver** or wait until a dispatcher ends their shift.
+The number of dispatcher places is limited by the system settings. If all places are occupied, select **Driver** or wait until a dispatcher spot becomes available.
 
-The selected role remains active for the complete shift. To change it, end the shift and log in again.
+The selected role remains active until the end of the day.
 
-Atlas requires location access during an active shift. When Android asks for permission, allow precise or approximate location. Precise location is recommended for accurate navigation and live map updates. On supported Android versions, also allow notifications so that new jobs are visible while the app is in the background.
+Atlas requires location access during an active shift. When Android asks for permission, allow precise or approximate location. Precise location is recommended for accurate navigation and live map updates. Also allow notifications so that new jobs are visible while the app is in the background.
 
-While a shift is active, Android displays an **Atlas shift active** notification. During this time Atlas stays connected, receives jobs and shares the live location. Closing the app does not end the shift; use **Log out** and complete the shift summary when you are finished.
+While a shift is active, Android displays an **Atlas shift active** notification. During this time Atlas stays connected, receives jobs and shares the live location. Closing the app does not end the shift. Use **Log out** and complete the shift summary when you are finished.
 
 ## Main Screen
 
@@ -52,10 +52,10 @@ The main screen consists of a map and several controls.
   
     Other users are labelled by name and coloured according to their current status:
   
-  - green: free;
-  - blue: on the way to a pickup;
-  - orange: occupied; and
-  - grey: away.
+  - green: free
+  - blue: on the way to a pickup
+  - orange: occupied
+  - grey: away
 
 - **Navigation**
   
@@ -78,8 +78,6 @@ The main screen consists of a map and several controls.
 When a job is assigned, a banner appears for 10 seconds and shows the pickup, destination and optional note. The job is already assigned and is automatically added to the queue. No action is required to keep it.
 
 Press **Decline** only if the job must be cancelled. If Atlas is in the background, the Android notification contains the same job details and a **Decline** action.
-
-
 
 ### Start the Next Job
 
@@ -106,8 +104,8 @@ To stop a job without completing it, press the **X** button beside the job contr
 
 Dispatchers use the same main map, job queue and job controls described above. Two additional buttons are shown near the job controls:
 
-- the unassigned-jobs button, with a badge showing the current number of unassigned jobs; and
-- the **+** button for creating a new job.
+- the unassigned-jobs button, with a badge showing the current number of unassigned jobs
+- the **+** button for creating a new job
 
 ### Create a New Job
 
