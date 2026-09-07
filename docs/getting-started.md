@@ -77,8 +77,24 @@ Download the Atlas App to all mobile devices that drivers and dispatchers will u
 
 Create accounts for additional admins and your drivers and dispatchers here. They will authenticate using username and password.
 
+The email entered is not verified and can be arbitrary. It just has to be unique. Usig a owned domain is recommended.
+
 ### Map data
 
 Download a dataset (or multiple) that will be used for routing, search and maps. Note that downloading and processing can take quite a while. You are free to complete the setup, leave the page or come back later. The download will process in the background, but Atlas will not be fully functional until atleast one dataset has been downloaded and initialized.
 
 This is it! Your Atlas deployment is ready to use. For more details on usuage, find them in the [manual-web](./manual-web.md) and [manual-mobile](./manual-mobile.md).
+
+## Glossary
+
+- Administrator
+  Person that manages the system, has full access and is able to access the web-ui. This role is permanent.
+
+- Dispatcher
+  This role is selected after sign on and reset every day. The Dispatcher is able to process jobs as well as create, assign and manage jobs.
+
+- Driver
+  This role is selected after sign on and reset every day. The driver is able to process jobs.
+
+- Price per km
+  This price gets multiplied with the km driven (gathered by the odometer), when odometer data is available. This then shows a price at the end of the job. This can easily be ignored or disabled by setting the price to 0.

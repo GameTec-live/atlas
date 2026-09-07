@@ -94,6 +94,9 @@ This page consists of core system settings, most of which have already been conf
 - Users
 
     Create accounts for additional admins and your drivers and dispatchers here. They will authenticate using username and password.
+    
+    The email entered is not verified and can be arbitrary. It just has to be unique. Usig a owned domain is recommended.
+
 - General settings
 
     Configure behaviour and general settings here. Customize the logo shown on mobile devices, set the maximum number of dispatchers at a time and the price per kilometre.
