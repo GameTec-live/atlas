@@ -112,7 +112,7 @@
     "job_details_origin_placeholder": "Startadresse suchen…",
     "job_details_origin_required": "Wählen Sie eine Startadresse aus den Suchergebnissen.",
     "job_details_destination_required": "Wählen Sie ein Ziel aus den Suchergebnissen.",
-    "job_create_unassigned": "Nicht zugewiesen anlegen",
+    "job_create_unassigned": "Nicht zuweisen",
     "job_create_creating": "Wird angelegt…",
     "job_create_success": "Auftrag angelegt",
     "job_create_error": "Dieser Auftrag konnte nicht angelegt werden.",
