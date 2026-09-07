@@ -94,6 +94,8 @@
     "job_details_no_candidates": "No available drivers",
     "job_details_candidates_error": "Unable to calculate driver candidates.",
     "job_details_all_drivers": "All drivers",
+    "job_details_driver_signed_on": "Signed on - role claimed today",
+    "job_details_driver_signed_off": "Signed off - no role claimed today",
     "job_details_all_drivers_error": "Unable to load drivers.",
     "job_details_no_drivers": "No drivers available",
     "job_details_recalculating": "Updating recommendations…",

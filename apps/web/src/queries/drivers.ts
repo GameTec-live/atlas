@@ -4,12 +4,7 @@ import { api, unwrapEden } from "@/lib/api-client";
 export const driversQueryKey = ["drivers"] as const;
 
 const fetchDrivers = async () => {
-    const response = await unwrapEden(api.roles.get());
-
-    return (response?.roles ?? []).map(({ driverId, name }) => ({
-        driverId,
-        name,
-    }));
+    return (await unwrapEden(api.drivers.get())) ?? [];
 };
 
 export type Driver = Awaited<ReturnType<typeof fetchDrivers>>[number];
