@@ -94,6 +94,8 @@
     "job_details_no_candidates": "Keine Fahrer verfügbar",
     "job_details_candidates_error": "Fahrerkandidaten konnten nicht berechnet werden.",
     "job_details_all_drivers": "Alle Fahrer",
+    "job_details_driver_signed_on": "Angemeldet - Rolle für heute übernommen",
+    "job_details_driver_signed_off": "Abgemeldet - keine Rolle für heute übernommen",
     "job_details_all_drivers_error": "Fahrer konnten nicht geladen werden.",
     "job_details_no_drivers": "Keine Fahrer verfügbar",
     "job_details_recalculating": "Empfehlungen werden aktualisiert…",

@@ -8,6 +8,7 @@ import { authHandler } from "./authHandler";
 import { configApp } from "./config";
 import { BUILD_INFO } from "./constants";
 import { runMigrations } from "./db/migrate";
+import { drivers } from "./drivers";
 import { fleet } from "./fleet";
 import { geodata } from "./geodata";
 import { geoservices } from "./geoservices";
@@ -118,6 +119,7 @@ export const app = new Elysia()
     .use(geodata)
     .use(fleet)
     .use(roles)
+    .use(drivers)
     .use(jobs)
     .use(logbooks)
     .use(shortnames)
