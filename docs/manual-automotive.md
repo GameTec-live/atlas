@@ -50,7 +50,7 @@ The available map controls allow you to:
 
 Panning the map stops automatic camera tracking. Press the recenter button to follow the vehicle again.
 
-![](./assets/android_auto_screen.png)
+![Annotated Atlas Android Auto main screen; the numbered controls are described below.](./assets/android_auto_screen.png)
 
 1 - Driver List
 
