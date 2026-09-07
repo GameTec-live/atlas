@@ -1,4 +1,13 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import {
+    and,
+    asc,
+    desc,
+    eq,
+    gt,
+    inArray,
+    isNotNull,
+    isNull,
+} from "drizzle-orm";
 import { Elysia, status, t } from "elysia";
 import { env } from "@/env";
 import { authHandler, isAdmin } from "../authHandler";
@@ -161,6 +170,44 @@ export const jobs = new Elysia({
                     })
                     .from(job)
                     .where(isNull(job.assignedDriverId))
+                    .orderBy(asc(job.dueDate), asc(job.createdAt));
+                return query.geocode === undefined
+                    ? jobs
+                    : withReverseGeocodedAddresses(jobs);
+            }
+
+            return status(401, { error: "Unauthorized" });
+        },
+        {
+            headers: t.Object({
+                authorization: t.Optional(t.String()),
+            }),
+            query: JobModel.geocodeQuery,
+            detail: {
+                security: [{ APIKeyAuth: [] }],
+            },
+        },
+    )
+    .get(
+        "/assigned-future-reduced",
+        async ({ headers, query }) => {
+            if (env.JOBTOKEN === headers.authorization) {
+                const jobs = await db
+                    .select({
+                        id: job.id,
+                        from: job.from,
+                        to: job.to,
+                        dueDate: job.dueDate,
+                        note: job.note,
+                    })
+                    .from(job)
+                    .where(
+                        and(
+                            isNotNull(job.assignedDriverId),
+                            gt(job.dueDate, new Date()),
+                            isNull(job.completedAt),
+                        ),
+                    )
                     .orderBy(asc(job.dueDate), asc(job.createdAt));
                 return query.geocode === undefined
                     ? jobs
