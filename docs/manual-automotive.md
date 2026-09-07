@@ -147,6 +147,9 @@ Drivers are also displayed on the live map. Use the arrow beside the sidebar to 
 
 ### New / Assign Job
 
+> [!NOTE]
+> For job creation and assignment the app requires car API level 7 or newer.
+
 Press the plus icon to create a new job. The same screen opens when “Assign Now” is selected on an unassigned job notification.
 
 The assignment screen contains the following fields:
