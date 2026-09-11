@@ -54,6 +54,7 @@
     <string name="job_notification_assign_now">Assign Now</string>
     <string name="job_notification_declining">Declining…</string>
     <string name="job_notification_decline_failed">Could not decline the new job</string>
+    <string name="assign_job_new_title">New job</string>
     <string name="assign_job_title">Assign job</string>
     <string name="assign_job_details">&#8212; Job details &#8212;</string>
     <string name="assign_job_from">From</string>
