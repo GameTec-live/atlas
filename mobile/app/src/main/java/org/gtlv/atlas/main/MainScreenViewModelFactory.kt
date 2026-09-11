@@ -6,6 +6,7 @@ import org.gtlv.core.geoservice.GeoServiceRepository
 import org.gtlv.core.job.CollectedJobStateStore
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobMileageStateStore
+import org.gtlv.core.job.StartJobOdometerRequest
 import org.gtlv.core.pricing.PricingRepository
 import org.gtlv.core.shift.ShiftSessionManager
 import org.gtlv.core.telemetry.TelemetryProvider
@@ -17,7 +18,8 @@ class MainScreenViewModelFactory(
     private val collectedJobStore: CollectedJobStateStore,
     private val jobMileageStore: JobMileageStateStore,
     private val pricingRepository: PricingRepository,
-    private val shiftSessionManager: ShiftSessionManager
+    private val shiftSessionManager: ShiftSessionManager,
+    private val startJobOdometerRequest: StartJobOdometerRequest
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -39,7 +41,8 @@ class MainScreenViewModelFactory(
                     collectedJobStore,
                 jobMileageStore = jobMileageStore,
                 pricingRepository = pricingRepository,
-                shiftSessionManager = shiftSessionManager
+                shiftSessionManager = shiftSessionManager,
+                startJobOdometerRequest = startJobOdometerRequest
             ) as T
         }
 

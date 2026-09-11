@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.gtlv.atlas.address.AddressSearchUiState
@@ -28,6 +29,7 @@ import org.gtlv.core.job.calculateJobFareQuote
 import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.JobsResult
+import org.gtlv.core.job.StartJobOdometerRequest
 import org.gtlv.core.location.AtlasLocation
 import org.gtlv.core.location.LocationState
 import org.gtlv.core.location.VehicleHeadingEstimator
@@ -51,7 +53,9 @@ class MainScreenViewModel(
     private val pricingRepository:
     PricingRepository,
     private val shiftSessionManager:
-    ShiftSessionManager
+    ShiftSessionManager,
+    private val startJobOdometerRequest:
+    StartJobOdometerRequest? = null
 ) : ViewModel() {
 
     private val _uiState =
@@ -69,6 +73,7 @@ class MainScreenViewModel(
     private var jobLifecycleTask: Job? = null
     private var routeRequestTask: Job? = null
     private var pendingStartJobId: String? = null
+    private var refreshedStartJobRequestId: String? = null
     private var collectedJobId: String? = null
     private var latestLocation: AtlasLocation? = null
     private var latestVehicleHeadingDegrees: Int? = null
@@ -91,6 +96,7 @@ class MainScreenViewModel(
 
     init {
         observeShiftStartKilometer()
+        observeStartJobOdometerRequests()
     }
 
     private fun observeShiftStartKilometer() {
@@ -121,6 +127,100 @@ class MainScreenViewModel(
                 }
             }
         }
+    }
+
+    private fun observeStartJobOdometerRequests() {
+        val request = startJobOdometerRequest ?: return
+
+        viewModelScope.launch {
+            combine(
+                request.pendingJobId,
+                uiState
+            ) { requestedJobId, state ->
+                requestedJobId to state
+            }.collectLatest { (requestedJobId, state) ->
+                requestedJobId ?: return@collectLatest
+                handleStartJobOdometerRequest(
+                    request = request,
+                    requestedJobId = requestedJobId,
+                    state = state
+                )
+            }
+        }
+    }
+
+    private fun handleStartJobOdometerRequest(
+        request: StartJobOdometerRequest,
+        requestedJobId: String,
+        state: MainScreenUiState
+    ) {
+        val userId = activeUserId ?: return
+        val activeShift = shiftSessionManager.state.value
+            as? ShiftSessionState.Active
+            ?: return
+
+        if (state.currentJob != null) {
+            refreshedStartJobRequestId = null
+            request.consume(requestedJobId)
+            return
+        }
+
+        if (
+            state.isLoading ||
+            state.isStartingNextJob ||
+            state.isCancellingCurrentJob ||
+            state.isFinishingCurrentJob ||
+            state.isPreparingFinishConfirmation ||
+            state.finishConfirmation != null ||
+            state.isAddressEditorOpen ||
+            state.addressSearch.isSaving
+        ) {
+            return
+        }
+
+        val requestedJob = state.queuedJobs.firstOrNull {
+            it.id == requestedJobId
+        }
+        if (requestedJob == null) {
+            if (refreshedStartJobRequestId != requestedJobId) {
+                refreshedStartJobRequestId = requestedJobId
+                refresh()
+            } else if (state.hasError) {
+                return
+            } else {
+                refreshedStartJobRequestId = null
+                request.consume(requestedJobId)
+            }
+            return
+        }
+        refreshedStartJobRequestId = null
+
+        if (state.isStartKilometerDialogVisible) {
+            if (pendingStartJobId == requestedJobId) {
+                request.consume(requestedJobId)
+            }
+            return
+        }
+
+        if (activeShift.session.startKilometer == null) {
+            pendingStartJobId = requestedJobId
+            _uiState.update {
+                it.copy(
+                    isStartKilometerDialogVisible = true,
+                    startKilometerInput = "",
+                    isStartKilometerInputInvalid = false,
+                    startNextJobFailed = false
+                )
+            }
+        } else {
+            pendingStartJobId = null
+            launchNextJob(
+                userId = userId,
+                nextJob = requestedJob
+            )
+        }
+
+        request.consume(requestedJobId)
     }
 
     fun updateNavigationLanguage(

@@ -24,6 +24,7 @@ import org.gtlv.core.job.JobRepositoryProvider
 import org.gtlv.core.job.JobNotificationSyncProvider
 import org.gtlv.core.job.CollectedJobStoreProvider
 import org.gtlv.core.job.JobMileageStoreProvider
+import org.gtlv.core.job.StartJobOdometerRequestProvider
 import org.gtlv.core.geoservice.GeoServiceRepositoryProvider
 import org.gtlv.core.session.SessionManagerProvider
 import org.gtlv.core.session.SessionState
@@ -100,6 +101,9 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                 ?.liveMapUsers
         val jobNotificationSync =
             carContext.applicationContext as? JobNotificationSyncProvider
+        val startJobOdometerRequest =
+            (carContext.applicationContext as? StartJobOdometerRequestProvider)
+                ?.startJobOdometerRequest
 
         return WaitingScreen(
             carContext = carContext,
@@ -123,6 +127,10 @@ class AtlasSession : Session(), DefaultLifecycleObserver {
                     geoServiceRepository = geoServiceRepository,
                     getUserId = getUserId,
                     getStartKilometer = getStartKilometer,
+                    requestStartJobOdometer =
+                        startJobOdometerRequest?.let { request ->
+                            request::request
+                        },
                     telemetryProvider = telemetryProvider,
                     liveMapUsers = liveMapUsers,
                     jobNotifications = jobNotificationSync?.jobNotifications,
