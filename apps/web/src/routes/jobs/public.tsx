@@ -4,12 +4,13 @@ import {
     type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { AlertCircleIcon, KeyRoundIcon } from "lucide-react";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, Suspense, useMemo } from "react";
 import { EmptyJobs } from "@/components/jobs/empty-jobs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateTime } from "@/lib/date";
 import { formatJobLocation, getJobAddresses } from "@/lib/jobs";
 import { m } from "@/paraglide/messages";
@@ -102,11 +103,45 @@ function PublicJobsPage() {
         );
     }
 
-    return <PublicJobsList jobtoken={jobtoken} />;
+    return (
+        <PublicJobsLayout>
+            <Tabs defaultValue="unassigned" className="gap-4">
+                <TabsList
+                    className="h-auto w-full flex-wrap"
+                    aria-label={m.keen_plane_bobcat_value()}
+                >
+                    <TabsTrigger value="unassigned">
+                        {m.jobs_unassigned_title()}
+                    </TabsTrigger>
+                    <TabsTrigger value="assigned-future">
+                        {m.jobs_public_assigned_future_title()}
+                    </TabsTrigger>
+                </TabsList>
+                <TabsContent value="unassigned">
+                    <Suspense fallback={<PublicJobListSkeleton />}>
+                        <PublicJobsList jobtoken={jobtoken} />
+                    </Suspense>
+                </TabsContent>
+                <TabsContent value="assigned-future">
+                    <Suspense fallback={<PublicJobListSkeleton />}>
+                        <PublicJobsList jobtoken={jobtoken} assigned />
+                    </Suspense>
+                </TabsContent>
+            </Tabs>
+        </PublicJobsLayout>
+    );
 }
 
-function PublicJobsList({ jobtoken }: { jobtoken: string }) {
-    const { data: jobs } = useSuspenseQuery(publicJobsQueryOptions(jobtoken));
+function PublicJobsList({
+    jobtoken,
+    assigned = false,
+}: {
+    jobtoken: string;
+    assigned?: boolean;
+}) {
+    const { data: jobs } = useSuspenseQuery(
+        publicJobsQueryOptions(jobtoken, assigned),
+    );
     const oldestFirst = useMemo(
         () =>
             [...jobs].sort(
@@ -117,9 +152,15 @@ function PublicJobsList({ jobtoken }: { jobtoken: string }) {
     );
 
     return (
-        <PublicJobsLayout>
+        <>
             {oldestFirst.length === 0 ? (
-                <EmptyJobs title={m.jobs_empty_unassigned()} />
+                <EmptyJobs
+                    title={
+                        assigned
+                            ? m.jobs_public_empty_assigned_future()
+                            : m.jobs_empty_unassigned()
+                    }
+                />
             ) : (
                 <div className="grid gap-3">
                     {oldestFirst.map((job) => (
@@ -127,7 +168,7 @@ function PublicJobsList({ jobtoken }: { jobtoken: string }) {
                     ))}
                 </div>
             )}
-        </PublicJobsLayout>
+        </>
     );
 }
 
@@ -136,7 +177,7 @@ function PublicJobsLayout({ children }: { children: ReactNode }) {
         <main className="min-h-svh bg-muted/20 px-4 py-10 sm:px-6">
             <section className="mx-auto w-full max-w-xl">
                 <h1 className="mb-5 font-heading text-2xl font-semibold tracking-tight">
-                    {m.jobs_unassigned_title()}
+                    {m.keen_plane_bobcat_value()}
                 </h1>
                 {children}
             </section>
@@ -144,14 +185,20 @@ function PublicJobsLayout({ children }: { children: ReactNode }) {
     );
 }
 
+function PublicJobListSkeleton() {
+    return (
+        <div className="grid gap-3">
+            {["one", "two", "three", "four"].map((key) => (
+                <Skeleton key={key} className="h-36" />
+            ))}
+        </div>
+    );
+}
+
 function PublicJobsSkeleton() {
     return (
         <PublicJobsLayout>
-            <div className="grid gap-3">
-                {["one", "two", "three", "four"].map((key) => (
-                    <Skeleton key={key} className="h-36" />
-                ))}
-            </div>
+            <PublicJobListSkeleton />
         </PublicJobsLayout>
     );
 }

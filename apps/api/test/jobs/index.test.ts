@@ -2745,3 +2745,45 @@ describe("GET /jobs/all", () => {
         expect(dbClientQueryMock).toHaveBeenCalledTimes(1);
     });
 });
+
+describe("GET /jobs/assigned-future-reduced", () => {
+    const request = (token?: string) =>
+        app.handle(
+            new Request("http://localhost/jobs/assigned-future-reduced", {
+                headers: token === undefined ? {} : { authorization: token },
+            }),
+        );
+
+    it.each([
+        undefined,
+        "",
+        "wrong-secret",
+    ])("rejects invalid token %s before querying jobs", async (token) => {
+        envMock.JOBTOKEN = "jobs-secret";
+        const response = await request(token);
+        expect(response.status).toBe(401);
+        expect(dbClientQueryMock).not.toHaveBeenCalled();
+    });
+
+    it("selects only public fields for assigned, future, unfinished jobs", async () => {
+        envMock.JOBTOKEN = "jobs-secret";
+        setDbMockRows("select", []);
+        const before = Date.now();
+        const response = await request("jobs-secret");
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual([]);
+        expect(getSessionMock).not.toHaveBeenCalled();
+        const { sql, values } = getFirstQuery();
+        expect(sql).toContain(
+            'select "id", "from"::text, "to"::text, "due_date", "note" from "job"',
+        );
+        expect(sql).toContain('"job"."assigned_driver_id" is not null');
+        expect(sql).toContain('"job"."due_date" > $1');
+        expect(sql).toContain('"job"."completed_at" is null');
+        expect(sql).toContain('order by "job"."due_date" asc');
+        expect(values).toHaveLength(1);
+        const cutoff = new Date(String(values[0])).getTime();
+        expect(cutoff).toBeGreaterThanOrEqual(before);
+        expect(cutoff).toBeLessThanOrEqual(Date.now());
+    });
+});

@@ -75,6 +75,9 @@ export function AllDriversList({
                     <div className="space-y-1 py-1">
                         {drivers.map((driver) => {
                             const selected = driver.driverId === activeDriverId;
+                            const status = driver.signedOn
+                                ? m.job_details_driver_signed_on()
+                                : m.job_details_driver_signed_off();
 
                             return (
                                 <Button
@@ -86,6 +89,7 @@ export function AllDriversList({
                                             "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
                                     )}
                                     aria-pressed={selected}
+                                    title={status}
                                     onClick={() => onSelect(driver.driverId)}
                                 >
                                     <span className="flex size-4 shrink-0 items-center justify-center">
@@ -94,6 +98,16 @@ export function AllDriversList({
                                     <span className="truncate">
                                         {driver.name}
                                     </span>
+                                    <span
+                                        aria-hidden="true"
+                                        className={cn(
+                                            "ml-auto size-2 shrink-0 rounded-full",
+                                            driver.signedOn
+                                                ? "bg-emerald-500"
+                                                : "bg-muted-foreground/40",
+                                        )}
+                                    />
+                                    <span className="sr-only">{status}</span>
                                 </Button>
                             );
                         })}

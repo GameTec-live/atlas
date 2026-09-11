@@ -26,9 +26,11 @@ export const jobTokenQueryOptions = () =>
         queryFn: () => unwrapEden(api.jobs.jobtoken.get()),
     });
 
-const fetchPublicJobs = async (jobtoken: string) => {
+const fetchPublicJobs = async (jobtoken: string, assigned: boolean) => {
     const jobs = await unwrapEden(
-        api.jobs["unassigned-reduced"].get({
+        api.jobs[
+            assigned ? "assigned-future-reduced" : "unassigned-reduced"
+        ].get({
             headers: { authorization: jobtoken },
             query: { geocode: "true" },
         }),
@@ -38,10 +40,13 @@ const fetchPublicJobs = async (jobtoken: string) => {
 
 export type PublicJob = Awaited<ReturnType<typeof fetchPublicJobs>>[number];
 
-export const publicJobsQueryOptions = (jobtoken: string) =>
+export const publicJobsQueryOptions = (jobtoken: string, assigned = false) =>
     queryOptions({
-        queryKey: publicJobsQueryKey(jobtoken),
-        queryFn: () => fetchPublicJobs(jobtoken),
+        queryKey: [
+            ...publicJobsQueryKey(jobtoken),
+            assigned ? "assigned-future" : "unassigned",
+        ] as const,
+        queryFn: () => fetchPublicJobs(jobtoken, assigned),
     });
 
 const fetchJob = async (id: string) => {
