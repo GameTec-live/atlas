@@ -187,6 +187,43 @@ class MainScreenViewModelStartKilometerTest {
         }
 
     @Test
+    fun `android auto request retries after an existing load error`() =
+        runTest(dispatcher) {
+            val requestedJob = testJob("requested")
+            val repository = FakeJobRepository(
+                JobsResult.Success(
+                    queuedJobs = emptyList(),
+                    currentJob = null
+                )
+            ).apply {
+                jobsResultOverride = JobsResult.NetworkError
+            }
+            val request = StartJobOdometerRequest()
+            val viewModel = createViewModel(
+                repository = repository,
+                mileageStore = FakeJobMileageStore(),
+                startJobOdometerRequest = request
+            )
+
+            viewModel.loadJobsForUser(USER_ID)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasError)
+
+            repository.jobsResultOverride = JobsResult.Success(
+                queuedJobs = listOf(requestedJob),
+                currentJob = null
+            )
+            request.request(requestedJob.id)
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value
+                    .isStartKilometerDialogVisible
+            )
+            assertEquals(null, request.pendingJobId.value)
+        }
+
+    @Test
     fun `refresh cancels confirmation when original job disappears`() =
         runTest(dispatcher) {
             val firstJob = testJob("first")
