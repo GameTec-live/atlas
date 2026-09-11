@@ -80,7 +80,9 @@ class MainActivity : ComponentActivity() {
             collectedJobStore = atlasApplication.collectedJobStore,
             jobMileageStore = atlasApplication.jobMileageStore,
             pricingRepository = atlasApplication.pricingRepository,
-            shiftSessionManager = atlasApplication.shiftSessionManager
+            shiftSessionManager = atlasApplication.shiftSessionManager,
+            startJobOdometerRequest =
+                atlasApplication.startJobOdometerRequest
         )
     }
 

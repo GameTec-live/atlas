@@ -49,6 +49,8 @@ import org.gtlv.core.job.CollectedJobStore
 import org.gtlv.core.job.CollectedJobStoreProvider
 import org.gtlv.core.job.JobMileageStore
 import org.gtlv.core.job.JobMileageStoreProvider
+import org.gtlv.core.job.StartJobOdometerRequest
+import org.gtlv.core.job.StartJobOdometerRequestProvider
 import org.gtlv.core.pricing.PricingRepository
 import org.gtlv.core.pricing.PricingRepositoryImpl
 import org.gtlv.core.pricing.PricingRepositoryProvider
@@ -65,11 +67,15 @@ class AtlasApplication : Application(), ShiftSessionProvider,
     JobMileageStoreProvider, PricingRepositoryProvider,
     SessionManagerProvider, LiveMapUsersProvider,
     GeoServiceRepositoryProvider, JobNotificationSyncProvider,
-    FleetRepositoryProvider, LogbookRepositoryProvider {
+    FleetRepositoryProvider, LogbookRepositoryProvider,
+    StartJobOdometerRequestProvider {
 
     private val applicationScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate
     )
+
+    override val startJobOdometerRequest =
+        StartJobOdometerRequest()
 
     private val phoneLocationProvider: LocationProvider by lazy {
         PhoneLocationProvider(
