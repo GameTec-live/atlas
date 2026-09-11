@@ -140,6 +140,53 @@ class MainScreenViewModelStartKilometerTest {
         }
 
     @Test
+    fun `failed refresh keeps android auto odometer request pending`() =
+        runTest(dispatcher) {
+            val requestedJob = testJob("requested")
+            val repository = FakeJobRepository(
+                JobsResult.Success(
+                    queuedJobs = emptyList(),
+                    currentJob = null
+                )
+            )
+            val request = StartJobOdometerRequest()
+            val viewModel = createViewModel(
+                repository = repository,
+                mileageStore = FakeJobMileageStore(),
+                startJobOdometerRequest = request
+            )
+
+            viewModel.loadJobsForUser(USER_ID)
+            advanceUntilIdle()
+            repository.jobsResultOverride = JobsResult.NetworkError
+
+            request.request(requestedJob.id)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.hasError)
+            assertFalse(
+                viewModel.uiState.value
+                    .isStartKilometerDialogVisible
+            )
+            assertEquals(requestedJob.id, request.pendingJobId.value)
+
+            repository.jobsResultOverride = null
+            repository.publishJobs(
+                JobsResult.Success(
+                    queuedJobs = listOf(requestedJob),
+                    currentJob = null
+                )
+            )
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value
+                    .isStartKilometerDialogVisible
+            )
+            assertEquals(null, request.pendingJobId.value)
+        }
+
+    @Test
     fun `refresh cancels confirmation when original job disappears`() =
         runTest(dispatcher) {
             val firstJob = testJob("first")
@@ -494,13 +541,15 @@ private class FakeJobRepository(
         JobActionResult.Success
     var completeJobResult: JobActionResult =
         JobActionResult.Success
+    var jobsResultOverride: JobsResult? = null
 
     fun publishJobs(result: JobsResult.Success) {
         jobs = result
         changes.tryEmit(Unit)
     }
 
-    override suspend fun getJobs(): JobsResult = jobs
+    override suspend fun getJobs(): JobsResult =
+        jobsResultOverride ?: jobs
 
     override suspend fun startJob(jobId: String): JobActionResult {
         startedJobIds += jobId

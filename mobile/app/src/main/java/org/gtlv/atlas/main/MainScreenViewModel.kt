@@ -182,7 +182,9 @@ class MainScreenViewModel(
             it.id == requestedJobId
         }
         if (requestedJob == null) {
-            if (refreshedStartJobRequestId != requestedJobId) {
+            if (state.hasError) {
+                return
+            } else if (refreshedStartJobRequestId != requestedJobId) {
                 refreshedStartJobRequestId = requestedJobId
                 refresh()
             } else {
