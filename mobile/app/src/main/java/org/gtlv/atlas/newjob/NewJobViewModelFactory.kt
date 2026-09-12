@@ -4,11 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import org.gtlv.core.geoservice.GeoServiceRepository
 import org.gtlv.core.job.JobRepository
+import org.gtlv.core.driver.DriverRepository
 import org.gtlv.core.role.RoleRepository
 
 class NewJobViewModelFactory(
     private val jobRepository: JobRepository,
     private val geoServiceRepository: GeoServiceRepository,
+    private val driverRepository: DriverRepository,
     private val roleRepository: RoleRepository
 ) : ViewModelProvider.Factory {
 
@@ -18,6 +20,7 @@ class NewJobViewModelFactory(
             return NewJobViewModel(
                 jobRepository = jobRepository,
                 geoServiceRepository = geoServiceRepository,
+                driverRepository = driverRepository,
                 roleRepository = roleRepository
             ) as T
         }

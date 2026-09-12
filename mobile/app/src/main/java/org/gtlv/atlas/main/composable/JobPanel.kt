@@ -22,22 +22,27 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.gtlv.atlas.R
 import org.gtlv.atlas.main.MainScreenUiState
+import org.gtlv.atlas.unassigned.formatDueDate
 import org.gtlv.core.job.Job
 
 @Composable
 internal fun JobPanel(
     state: MainScreenUiState,
+    showAllJobs: Boolean,
+    onShowAllJobsChanged: (Boolean) -> Unit,
     onToggleExpanded: () -> Unit,
     onRetry: () -> Unit,
     onEditDestination: () -> Unit,
@@ -59,34 +64,53 @@ internal fun JobPanel(
             isRefreshing = state.isLoading,
             onRefresh = onRetry
         ) {
-            when {
-                state.hasError -> {
-                    JobError(
-                        onRetry = onRetry
-                    )
+            Column {
+                if (isExpandable && state.isJobListExpanded) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.job_panel_show_all),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                        Switch(
+                            checked = showAllJobs,
+                            onCheckedChange = onShowAllJobsChanged,
+                            modifier = Modifier.scale(0.75f)
+                        )
+                    }
                 }
+                when {
+                    state.hasError -> {
+                        JobError(
+                            onRetry = onRetry
+                        )
+                    }
 
-                isExpandable &&
-                    state.isJobListExpanded -> {
-                    ExpandedJobs(
-                        state = state,
-                        onToggleExpanded =
-                            onToggleExpanded,
-                        onEditDestination =
-                            onEditDestination
-                    )
-                }
+                    isExpandable &&
+                        state.isJobListExpanded -> {
+                        ExpandedJobs(
+                            state = state,
+                            onToggleExpanded =
+                                onToggleExpanded,
+                            onEditDestination =
+                                onEditDestination
+                        )
+                    }
 
-                else -> {
-                    CollapsedJobs(
-                        state = state,
-                        onToggleExpanded =
-                            onToggleExpanded,
-                        onEditDestination =
-                            onEditDestination,
-                        isExpandable =
-                            isExpandable
-                    )
+                    else -> {
+                        CollapsedJobs(
+                            state = state,
+                            onToggleExpanded =
+                                onToggleExpanded,
+                            onEditDestination =
+                                onEditDestination,
+                            isExpandable =
+                                isExpandable
+                        )
+                    }
                 }
             }
         }
@@ -406,6 +430,17 @@ private fun JobRow(
             address =
                 job.toDisplayAddress(),
             compact = false
+        )
+
+        Text(
+            text = stringResource(
+                R.string.assign_job_due,
+                job.dueDate?.takeIf(String::isNotBlank)?.let(::formatDueDate)
+                    ?: stringResource(R.string.unassigned_jobs_no_due_date)
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
         )
     }
 }

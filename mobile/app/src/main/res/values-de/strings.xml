@@ -207,7 +207,9 @@
     <string name="assign_job_candidates">Empfohlene Fahrer</string>
     <string name="assign_job_candidates_error">Fahrerempfehlungen konnten nicht geladen werden</string>
     <string name="assign_job_no_candidates">Keine verfügbaren Fahrer</string>
-    <string name="assign_job_all_drivers">Alle Fahrer</string>
+    <string name="assign_job_online_drivers">Aktive Fahrer</string>
+    <string name="assign_job_offline_drivers">Inaktive Fahrer</string>
+    <string name="assign_job_no_offline_drivers">Keine inaktiven Fahrer</string>
     <string name="assign_job_no_other_drivers">Keine weiteren Fahrer</string>
     <string name="assign_job_drivers_error">Die Fahrerliste konnte nicht geladen werden</string>
     <string name="assign_job_recommended_rank">Empfehlung Nr. %1$d</string>
@@ -244,4 +246,9 @@
     <string name="active_shift_notification_title">Atlas-Schicht aktiv</string>
     <string name="active_shift_notification_text">Aufträge werden empfangen und der Live-Standort wird geteilt</string>
     <string name="navigation_route_language">de</string>
+    <string name="job_panel_show_all">Alle Aufträge anzeigen</string>
+    <string name="job_start_other_day_title">Auftrag trotzdem starten?</string>
+    <string name="job_start_other_day_message">Dieser Auftrag ist nicht für heute geplant. Möchten Sie ihn trotzdem starten?</string>
+    <string name="job_start_other_day_confirm">Auftrag starten</string>
+    <string name="job_start_other_day_cancel">Abbrechen</string>
 </resources>
