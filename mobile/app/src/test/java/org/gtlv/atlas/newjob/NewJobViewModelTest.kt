@@ -57,6 +57,26 @@ class NewJobViewModelTest {
     }
 
     @Test
+    fun createJob_canAssignAnInactiveDriver() = runTest(dispatcher) {
+        val repository = FakeJobRepository()
+        val viewModel = createViewModel(
+            repository,
+            directory = listOf(org.gtlv.core.driver.Driver("offline", "Offline Driver"))
+        )
+        viewModel.load()
+        viewModel.openAddressEditor(JobLocationField.FROM)
+        viewModel.selectAddressSuggestion(suggestion("from", 48.2, 14.3))
+        advanceUntilIdle()
+
+        viewModel.requestDriverCreation(viewModel.uiState.value.directoryDrivers.single())
+        viewModel.confirmCreation()
+        advanceUntilIdle()
+
+        assertEquals("offline", repository.creationRequest?.assignedDriverId)
+        assertTrue(viewModel.uiState.value.creationCompleted)
+    }
+
+    @Test
     fun selectingAddresses_loadsCandidatesAndRoute() = runTest(dispatcher) {
         val repository = FakeJobRepository()
         val viewModel = createViewModel(repository)
@@ -206,10 +226,14 @@ class NewJobViewModelTest {
 
     private fun createViewModel(
         repository: FakeJobRepository,
-        roleRepository: RoleRepository = FakeRoleRepository()
+        roleRepository: RoleRepository = FakeRoleRepository(),
+        directory: List<org.gtlv.core.driver.Driver> = emptyList()
     ) = NewJobViewModel(
         jobRepository = repository,
         geoServiceRepository = FakeGeoServiceRepository(),
+        driverRepository = org.gtlv.core.driver.DriverRepository {
+            org.gtlv.core.driver.DriversResult.Success(directory)
+        },
         roleRepository = roleRepository,
         now = { Instant.parse("2026-08-28T14:00:00Z") }
     )

@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.gtlv.atlas.assign.offlineDrivers
 import org.gtlv.atlas.R
 import org.gtlv.core.job.JobCandidate
 
@@ -26,6 +27,9 @@ internal fun CandidatePanel(
     isLoadingCandidates: Boolean,
     candidatesFailed: Boolean,
     allDrivers: List<JobCandidate>,
+    directoryDrivers: List<JobCandidate>,
+    isLoadingDirectory: Boolean,
+    directoryFailed: Boolean,
     isLoadingDrivers: Boolean,
     driversFailed: Boolean,
     isActionInProgress: Boolean,
@@ -52,6 +56,10 @@ internal fun CandidatePanel(
         allDrivers.filterNot { driver ->
             driver.driverId in recommendedIds
         }
+    }
+
+    val offlineDrivers = remember(candidates, allDrivers, directoryDrivers) {
+        offlineDrivers(directoryDrivers, allDrivers, candidates)
     }
 
     Column(
@@ -170,7 +178,7 @@ internal fun CandidatePanel(
                 item(key = "drivers-heading") {
                     Text(
                         text = stringResource(
-                            R.string.assign_job_all_drivers
+                            R.string.assign_job_online_drivers
                         ),
                         style = MaterialTheme.typography.titleSmall
                     )
@@ -212,6 +220,71 @@ internal fun CandidatePanel(
                             items = otherDrivers,
                             key = { driver ->
                                 "driver:${driver.driverId}"
+                            }
+                        ) { driver ->
+                            DriverButton(
+                                candidate = driver,
+                                recommended = false,
+                                enabled = candidateButtonsEnabled &&
+                                        !isActionInProgress,
+                                onClick = {
+                                    onCandidateClick(driver)
+                                }
+                            )
+                        }
+                    }
+                }
+                item(key = "offline-drivers-divider") {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+
+                item(key = "offline-drivers-heading") {
+                    Text(
+                        text = stringResource(
+                            R.string.assign_job_offline_drivers
+                        ),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                }
+
+                when {
+                    isLoadingDirectory || isLoadingDrivers || isLoadingCandidates -> {
+                        item(key = "offline-drivers-loading") {
+                            LoadingDriversIndicator()
+                        }
+                    }
+
+                    directoryFailed || driversFailed || candidatesFailed -> {
+                        item(key = "offline-drivers-error") {
+                            DriversError(
+                                message = stringResource(
+                                    R.string
+                                        .assign_job_drivers_error
+                                ),
+                                onRetry = onRetry
+                            )
+                        }
+                    }
+
+                    offlineDrivers.isEmpty() -> {
+                        item(key = "offline-drivers-empty") {
+                            Text(
+                                text = stringResource(
+                                    R.string
+                                        .assign_job_no_offline_drivers
+                                ),
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    }
+
+                    else -> {
+                        items(
+                            items = offlineDrivers,
+                            key = { driver ->
+                                "offline-driver:${driver.driverId}"
                             }
                         ) { driver ->
                             DriverButton(

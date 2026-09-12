@@ -60,12 +60,43 @@ class AssignJobViewModelTest {
     }
 
     @Test
+    fun inactiveDriverCanBeAssignedFromTheDirectory() = runTest(dispatcher) {
+        val repository = FakeJobRepository()
+        val viewModel = AssignJobViewModel(
+            jobRepository = repository,
+            geoServiceRepository = FakeGeoServiceRepository(testRoute()),
+            roleRepository = FakeRoleRepository(),
+            driverRepository = org.gtlv.core.driver.DriverRepository {
+                org.gtlv.core.driver.DriversResult.Success(
+                    listOf(org.gtlv.core.driver.Driver("offline-1", "Offline Driver"))
+                )
+            }
+        )
+        viewModel.load(testJob())
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoadingDirectory)
+        assertFalse(state.directoryFailed)
+        val driver = offlineDrivers(state.directoryDrivers, state.allDrivers, state.candidates).single()
+        viewModel.requestAssignment(driver)
+        viewModel.confirmAssignment()
+        advanceUntilIdle()
+
+        assertEquals("offline-1", repository.assignedDriverId)
+        assertTrue(viewModel.uiState.value.assignmentCompleted)
+    }
+
+    @Test
     fun openingDestinationEditor_prefillsAndSearchesAfterTyping() =
         runTest(dispatcher) {
             val viewModel = AssignJobViewModel(
                 jobRepository = FakeJobRepository(),
                 geoServiceRepository =
                     FakeGeoServiceRepository(testRoute()),
+                driverRepository = org.gtlv.core.driver.DriverRepository {
+                    org.gtlv.core.driver.DriversResult.Success(emptyList())
+                },
                 roleRepository = FakeRoleRepository()
             )
 
@@ -108,6 +139,9 @@ class AssignJobViewModelTest {
                 jobRepository = repository,
                 geoServiceRepository =
                     FakeGeoServiceRepository(route),
+                driverRepository = org.gtlv.core.driver.DriverRepository {
+                    org.gtlv.core.driver.DriversResult.Success(emptyList())
+                },
                 roleRepository = FakeRoleRepository()
             )
 
@@ -158,6 +192,9 @@ class AssignJobViewModelTest {
                 jobRepository = FakeJobRepository(),
                 geoServiceRepository =
                     FakeGeoServiceRepository(testRoute()),
+                driverRepository = org.gtlv.core.driver.DriverRepository {
+                    org.gtlv.core.driver.DriversResult.Success(emptyList())
+                },
                 roleRepository = FakeRoleRepository()
             )
 
@@ -186,6 +223,9 @@ class AssignJobViewModelTest {
                 jobRepository = repository,
                 geoServiceRepository =
                     FakeGeoServiceRepository(testRoute()),
+                driverRepository = org.gtlv.core.driver.DriverRepository {
+                    org.gtlv.core.driver.DriversResult.Success(emptyList())
+                },
                 roleRepository = FakeRoleRepository()
             )
 
@@ -229,6 +269,9 @@ class AssignJobViewModelTest {
                 jobRepository = repository,
                 geoServiceRepository =
                     FakeGeoServiceRepository(testRoute()),
+                driverRepository = org.gtlv.core.driver.DriverRepository {
+                    org.gtlv.core.driver.DriversResult.Success(emptyList())
+                },
                 roleRepository = FakeRoleRepository()
             )
 
@@ -258,6 +301,9 @@ class AssignJobViewModelTest {
                 jobRepository = repository,
                 geoServiceRepository =
                     FakeGeoServiceRepository(testRoute()),
+                driverRepository = org.gtlv.core.driver.DriverRepository {
+                    org.gtlv.core.driver.DriversResult.Success(emptyList())
+                },
                 roleRepository = FakeRoleRepository()
             )
 
@@ -297,6 +343,9 @@ class AssignJobViewModelTest {
                 jobRepository = FakeJobRepository(),
                 geoServiceRepository =
                     FakeGeoServiceRepository(testRoute()),
+                driverRepository = org.gtlv.core.driver.DriverRepository {
+                    org.gtlv.core.driver.DriversResult.Success(emptyList())
+                },
                 roleRepository = FakeRoleRepository()
             )
 
@@ -318,6 +367,9 @@ class AssignJobViewModelTest {
                 jobRepository = FakeJobRepository(),
                 geoServiceRepository =
                     FakeGeoServiceRepository(testRoute()),
+                driverRepository = org.gtlv.core.driver.DriverRepository {
+                    org.gtlv.core.driver.DriversResult.Success(emptyList())
+                },
                 roleRepository = delayedRoles
             )
 

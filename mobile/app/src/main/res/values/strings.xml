@@ -207,7 +207,9 @@
     <string name="assign_job_candidates">Recommended drivers</string>
     <string name="assign_job_candidates_error">Could not load driver recommendations</string>
     <string name="assign_job_no_candidates">No available drivers</string>
-    <string name="assign_job_all_drivers">All drivers</string>
+    <string name="assign_job_online_drivers">Online drivers</string>
+    <string name="assign_job_offline_drivers">Offline drivers</string>
+    <string name="assign_job_no_offline_drivers">No offline drivers</string>
     <string name="assign_job_no_other_drivers">No other drivers</string>
     <string name="assign_job_drivers_error">Could not load all drivers</string>
     <string name="assign_job_recommended_rank">#%1$d recommended</string>
@@ -244,4 +246,9 @@
     <string name="active_shift_notification_title">Atlas shift active</string>
     <string name="active_shift_notification_text">Receiving jobs and sharing live location</string>
     <string name="navigation_route_language">en</string>
+    <string name="job_panel_show_all">Show all jobs</string>
+    <string name="job_start_other_day_title">Start job anyway?</string>
+    <string name="job_start_other_day_message">This job is not due today. Do you want to start it anyway?</string>
+    <string name="job_start_other_day_confirm">Start job</string>
+    <string name="job_start_other_day_cancel">Cancel</string>
 </resources>
