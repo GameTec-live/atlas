@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { GeneralSettingsCard } from "@/components/settings/general-settings-card";
+import { LicensesCard } from "@/components/settings/licenses-card";
 import { MapDataCard } from "@/components/settings/map-data-card";
 import { SettingsPageSkeleton } from "@/components/settings/settings-page-skeleton";
 import { SystemCard } from "@/components/settings/system/system-card";
@@ -44,6 +45,7 @@ function Settings() {
                 <GeneralSettingsCard />
                 <SystemCard />
                 <MapDataCard />
+                <LicensesCard />
             </div>
         </main>
     );
