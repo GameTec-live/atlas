@@ -13,6 +13,7 @@ import { fleet } from "./fleet";
 import { geodata } from "./geodata";
 import { geoservices } from "./geoservices";
 import { jobs } from "./jobs";
+import { licenses } from "./licenses";
 import { logbooks } from "./logbooks";
 import { realtime } from "./realtime";
 import { roles } from "./role";
@@ -112,6 +113,7 @@ export const app = new Elysia()
         }),
     )
     .use(authHandler)
+    .use(licenses)
     .use(setup)
     .use(configApp)
     .use(realtime)
