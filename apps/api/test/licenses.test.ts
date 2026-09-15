@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import * as v from "valibot";
-import document from "../licenses.json";
-import { licenses } from "../src/licenses";
+import { licenseDocument as document, licenses } from "../src/licenses";
 
 const groups = ["web", "api", "mobile", "os", "services", "other"] as const;
 
