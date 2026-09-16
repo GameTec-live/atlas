@@ -39,7 +39,19 @@ class OffboardingViewModel(
     }
 
     fun requestLogout() {
-        val session = activeSession() ?: return
+        val startKilometer = activeSession()?.startKilometer
+        if (startKilometer == null) {
+            viewModelScope.launch {
+                try {
+                    logout()
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (_: Exception) {
+                    submissionFailed()
+                }
+            }
+            return
+        }
         val connectedVehicle =
             (connectedVehicleState.value as? ConnectedVehicleState.Connected)
                 ?.vehicle
@@ -48,11 +60,10 @@ class OffboardingViewModel(
         } else if (_uiState.value.vehicle == null) {
             loadVehicles()
         }
-        val startKilometer = session.startKilometer
         val endKilometer = telemetryProvider.odometerKilometers.value
             ?.takeIf { value ->
                 value.isFinite() && value >= 0.0 &&
-                    (startKilometer == null || value >= startKilometer)
+                    value >= startKilometer
             }
 
         viewModelScope.launch {

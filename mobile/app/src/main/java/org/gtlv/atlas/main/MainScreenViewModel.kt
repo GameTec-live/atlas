@@ -284,7 +284,30 @@ class MainScreenViewModel(
         }
     }
 
-    fun startNextJob() {
+    fun setShowAllJobs(showAllJobs: Boolean) {
+        _uiState.update {
+            it.copy(showAllJobs = showAllJobs, nextJobDateConfirmation = null)
+        }
+        if (!showAllJobs && pendingStartJobId != null &&
+            _uiState.value.visibleQueuedJobs().none { it.id == pendingStartJobId }
+        ) {
+            dismissStartKilometerDialog()
+        }
+    }
+
+    fun startNextJob() = startNextJob(confirmedJob = null)
+
+    fun dismissNextJobDateConfirmation() {
+        _uiState.update { it.copy(nextJobDateConfirmation = null) }
+    }
+
+    fun confirmNextJobDate() {
+        val confirmedJob = _uiState.value.nextJobDateConfirmation ?: return
+        dismissNextJobDateConfirmation()
+        startNextJob(confirmedJob)
+    }
+
+    private fun startNextJob(confirmedJob: org.gtlv.core.job.Job?) {
         val state = _uiState.value
         val userId = activeUserId
 
@@ -309,8 +332,21 @@ class MainScreenViewModel(
                 as? ShiftSessionState.Active
                 ?: return
 
+        val eligibleJobs = state.visibleQueuedJobs()
+        val nextJob = if (confirmedJob != null) {
+            eligibleJobs.firstOrNull { it.id == confirmedJob.id }
+        } else {
+            eligibleJobs.firstOrNull()
+        } ?: return
+        if (!nextJob.isDueToday() &&
+            (confirmedJob?.id != nextJob.id || confirmedJob.dueDate != nextJob.dueDate)
+        ) {
+            _uiState.update { it.copy(nextJobDateConfirmation = nextJob) }
+            return
+        }
+
         if (activeShift.session.startKilometer == null) {
-            pendingStartJobId = state.queuedJobs.first().id
+            pendingStartJobId = nextJob.id
 
             _uiState.update {
                 it.copy(
@@ -323,7 +359,6 @@ class MainScreenViewModel(
             return
         }
 
-        val nextJob = state.queuedJobs.first()
         pendingStartJobId = null
 
         launchNextJob(
@@ -387,7 +422,7 @@ class MainScreenViewModel(
         val state = _uiState.value
         val userId = activeUserId ?: return
         val pendingJobId = pendingStartJobId ?: return
-        val pendingJob = state.queuedJobs.firstOrNull {
+        val pendingJob = state.visibleQueuedJobs().firstOrNull {
             it.id == pendingJobId
         }
 

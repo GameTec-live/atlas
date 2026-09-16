@@ -78,7 +78,10 @@ internal fun MainScreen(
     onConfirmDecline: () -> Unit,
     onToggleJobList: () -> Unit,
     onRetryJobs: () -> Unit,
+    onShowAllJobsChanged: (Boolean) -> Unit,
     onStartNextJob: () -> Unit,
+    onConfirmNextJobDate: () -> Unit,
+    onDismissNextJobDateConfirmation: () -> Unit,
     onStartKilometerChanged: (String) -> Unit,
     onDismissStartKilometerDialog: () -> Unit,
     onConfirmStartKilometer: () -> Unit,
@@ -103,6 +106,26 @@ internal fun MainScreen(
     val isLandscape =
         LocalConfiguration.current.orientation ==
             Configuration.ORIENTATION_LANDSCAPE
+
+    val showAllJobs = jobState.showAllJobs
+    var today by remember { mutableStateOf(java.time.LocalDate.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            today = java.time.LocalDate.now()
+            kotlinx.coroutines.delay(30_000)
+        }
+    }
+    val panelState = jobState.copy(
+        queuedJobs = jobState.visibleQueuedJobs(today)
+    )
+
+    jobState.nextJobDateConfirmation?.let { job ->
+        org.gtlv.atlas.main.composable.StartJobDateConfirmationDialog(
+            job = job,
+            onConfirm = onConfirmNextJobDate,
+            onDismiss = onDismissNextJobDateConfirmation
+        )
+    }
 
     if (jobState.isStartKilometerDialogVisible) {
         StartKilometerDialog(
@@ -409,7 +432,9 @@ internal fun MainScreen(
                 }
 
                 JobPanel(
-                    state = jobState,
+                    state = panelState,
+                    showAllJobs = showAllJobs,
+                    onShowAllJobsChanged = onShowAllJobsChanged,
                     onToggleExpanded =
                         onToggleJobList,
                     onRetry = onRetryJobs,
@@ -443,7 +468,9 @@ internal fun MainScreen(
                 }
 
                 JobPanel(
-                    state = jobState,
+                    state = panelState,
+                    showAllJobs = showAllJobs,
+                    onShowAllJobsChanged = onShowAllJobsChanged,
                     onToggleExpanded =
                         onToggleJobList,
                     onRetry = onRetryJobs,
@@ -496,7 +523,7 @@ internal fun MainScreen(
                     hasCurrentJob =
                         jobState.currentJob != null,
                     hasNextJob =
-                        jobState.queuedJobs.isNotEmpty(),
+                        panelState.queuedJobs.isNotEmpty(),
                     isStartingNextJob =
                         jobState.isStartingNextJob,
                     isCancellingCurrentJob =

@@ -24,11 +24,14 @@ import org.gtlv.core.job.JobCoordinates
 import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.role.RoleAvailabilityResult
+import org.gtlv.core.driver.DriverRepository
+import org.gtlv.core.driver.DriversResult
 import org.gtlv.core.role.RoleRepository
 
 class AssignJobViewModel(
     private val jobRepository: JobRepository,
     private val geoServiceRepository: GeoServiceRepository,
+    private val driverRepository: DriverRepository,
     private val roleRepository: RoleRepository
 ) : ViewModel() {
 
@@ -44,6 +47,7 @@ class AssignJobViewModel(
     private var saveChangesTask: CoroutineJob? = null
     private var candidatesTask: CoroutineJob? = null
     private var driversTask: CoroutineJob? = null
+    private var directoryTask: CoroutineJob? = null
     private var routeTask: CoroutineJob? = null
     private var assignmentTask: CoroutineJob? = null
 
@@ -59,6 +63,7 @@ class AssignJobViewModel(
         _uiState.value = AssignJobUiState(job = job)
         loadCandidates(job.id)
         loadDrivers()
+        loadDirectory()
         updateRouteAndCamera(job)
     }
 
@@ -275,6 +280,7 @@ class AssignJobViewModel(
     fun retryCandidates() {
         _uiState.value.job?.id?.let(::loadCandidates)
         loadDrivers()
+        loadDirectory()
     }
 
     fun requestAssignment(candidate: JobCandidate) {
@@ -416,6 +422,26 @@ class AssignJobViewModel(
                         )
                     }
                 }
+            }
+        }
+    }
+
+    private fun loadDirectory() {
+        directoryTask?.cancel()
+        directoryTask = viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingDirectory = true, directoryFailed = false) }
+            val result = driverRepository.getDrivers()
+            currentCoroutineContext().ensureActive()
+            _uiState.update {
+                it.copy(
+                    directoryDrivers = if (result is DriversResult.Success) {
+                        result.drivers.map { driver ->
+                            JobCandidate(driver.id, driver.name, 0, null)
+                        }
+                    } else emptyList(),
+                    isLoadingDirectory = false,
+                    directoryFailed = result !is DriversResult.Success
+                )
             }
         }
     }
@@ -570,6 +596,7 @@ class AssignJobViewModel(
     }
 
     private fun cancelTasks() {
+        directoryTask?.cancel()
         addressSearchTask?.cancel()
         saveChangesTask?.cancel()
         candidatesTask?.cancel()

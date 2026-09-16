@@ -118,6 +118,7 @@ class MainActivity : ComponentActivity() {
             jobRepository = atlasApplication.jobRepository,
             geoServiceRepository =
                 atlasApplication.geoServiceRepository,
+            driverRepository = atlasApplication.driverRepository,
             roleRepository = atlasApplication.roleRepository
         )
     }
@@ -128,6 +129,7 @@ class MainActivity : ComponentActivity() {
             jobRepository = atlasApplication.jobRepository,
             geoServiceRepository =
                 atlasApplication.geoServiceRepository,
+            driverRepository = atlasApplication.driverRepository,
             roleRepository = atlasApplication.roleRepository
         )
     }
@@ -478,7 +480,10 @@ class MainActivity : ComponentActivity() {
                                         newJobState = newJobState,
                                         onToggleJobList = mainScreenViewModel::toggleJobList,
                                         onRetryJobs = mainScreenViewModel::refresh,
+                                        onShowAllJobsChanged = mainScreenViewModel::setShowAllJobs,
                                         onStartNextJob = mainScreenViewModel::startNextJob,
+                                        onConfirmNextJobDate = mainScreenViewModel::confirmNextJobDate,
+                                        onDismissNextJobDateConfirmation = mainScreenViewModel::dismissNextJobDateConfirmation,
                                         onStartKilometerChanged = mainScreenViewModel::updateStartKilometerInput,
                                         onDismissStartKilometerDialog = mainScreenViewModel::dismissStartKilometerDialog,
                                         onConfirmStartKilometer = mainScreenViewModel::confirmStartKilometer,

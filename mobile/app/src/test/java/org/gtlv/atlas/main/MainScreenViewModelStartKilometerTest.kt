@@ -62,6 +62,127 @@ class MainScreenViewModelStartKilometerTest {
     }
 
     @Test
+    fun `job date uses local calendar day`() {
+        val today = java.time.LocalDate.of(2026, 9, 9)
+        val zone = java.time.ZoneId.of("Europe/Vienna")
+        assertTrue(testJob("today").copy(dueDate = "2026-09-08T22:30:00Z").isDueToday(today, zone))
+        assertFalse(testJob("tomorrow").copy(dueDate = "2026-09-09T22:30:00Z").isDueToday(today, zone))
+        assertFalse(testJob("yesterday").copy(dueDate = "2026-09-08T12:00:00Z").isDueToday(today, zone))
+        assertFalse(testJob("unknown").copy(dueDate = null).isDueToday(today, zone))
+    }
+
+    @Test
+    fun `future job requires confirmation before asking for mileage`() = runTest(dispatcher) {
+        val job = testJob("future").copy(dueDate = java.time.Instant.now().plusSeconds(172800).toString())
+        val repository = FakeJobRepository(JobsResult.Success(queuedJobs = listOf(job), currentJob = null))
+        val viewModel = createViewModel(repository, FakeJobMileageStore())
+        viewModel.loadJobsForUser(USER_ID)
+        advanceUntilIdle()
+
+        viewModel.startNextJob()
+        assertTrue(viewModel.uiState.value.visibleQueuedJobs().isEmpty())
+        assertEquals(null, viewModel.uiState.value.nextJobDateConfirmation)
+        assertFalse(viewModel.uiState.value.isStartKilometerDialogVisible)
+        assertTrue(repository.startedJobIds.isEmpty())
+
+        viewModel.setShowAllJobs(true)
+        viewModel.startNextJob()
+        assertEquals(job, viewModel.uiState.value.nextJobDateConfirmation)
+        assertFalse(viewModel.uiState.value.isStartKilometerDialogVisible)
+        assertTrue(repository.startedJobIds.isEmpty())
+
+        viewModel.dismissNextJobDateConfirmation()
+        assertEquals(null, viewModel.uiState.value.nextJobDateConfirmation)
+        assertTrue(repository.startedJobIds.isEmpty())
+
+        viewModel.startNextJob()
+        viewModel.confirmNextJobDate()
+        assertTrue(viewModel.uiState.value.isStartKilometerDialogVisible)
+        viewModel.updateStartKilometerInput("100")
+        viewModel.confirmStartKilometer()
+        advanceUntilIdle()
+        assertEquals(listOf(job.id), repository.startedJobIds)
+    }
+
+    @Test
+    fun `confirmation does not approve a different future job after queue changes`() = runTest(dispatcher) {
+        val job = testJob("future").copy(dueDate = java.time.Instant.now().plusSeconds(172800).toString())
+        val replacement = job.copy(id = "replacement")
+        val repository = FakeJobRepository(JobsResult.Success(queuedJobs = listOf(job), currentJob = null))
+        val viewModel = createViewModel(repository, FakeJobMileageStore())
+        viewModel.loadJobsForUser(USER_ID)
+        advanceUntilIdle()
+        viewModel.setShowAllJobs(true)
+        viewModel.startNextJob()
+
+        repository.publishJobs(JobsResult.Success(queuedJobs = listOf(replacement), currentJob = null))
+        advanceUntilIdle()
+        viewModel.confirmNextJobDate()
+
+        assertEquals(null, viewModel.uiState.value.nextJobDateConfirmation)
+        assertFalse(viewModel.uiState.value.isStartKilometerDialogVisible)
+        assertTrue(repository.startedJobIds.isEmpty())
+    }
+
+    @Test
+    fun `date confirmation stays with displayed job after queue reorder`() = runTest(dispatcher) {
+        val future = testJob("future").copy(dueDate = java.time.Instant.now().plusSeconds(172800).toString())
+        val today = testJob("today")
+        val repository = FakeJobRepository(JobsResult.Success(queuedJobs = listOf(future, today), currentJob = null))
+        val viewModel = createViewModel(repository, FakeJobMileageStore())
+        viewModel.loadJobsForUser(USER_ID)
+        advanceUntilIdle()
+        viewModel.setShowAllJobs(true)
+        viewModel.startNextJob()
+
+        repository.publishJobs(JobsResult.Success(queuedJobs = listOf(today, future), currentJob = null))
+        advanceUntilIdle()
+        viewModel.confirmNextJobDate()
+        viewModel.updateStartKilometerInput("100")
+        viewModel.confirmStartKilometer()
+        advanceUntilIdle()
+
+        assertEquals(listOf(future.id), repository.startedJobIds)
+    }
+
+    @Test
+    fun `today filter starts visible job even when future job is first`() = runTest(dispatcher) {
+        val future = testJob("future").copy(dueDate = java.time.Instant.now().plusSeconds(172800).toString())
+        val today = testJob("today")
+        val repository = FakeJobRepository(JobsResult.Success(queuedJobs = listOf(future, today), currentJob = null))
+        val viewModel = createViewModel(repository, FakeJobMileageStore())
+        viewModel.loadJobsForUser(USER_ID)
+        advanceUntilIdle()
+
+        assertEquals(listOf(today), viewModel.uiState.value.visibleQueuedJobs())
+        viewModel.startNextJob()
+        assertEquals(null, viewModel.uiState.value.nextJobDateConfirmation)
+        viewModel.updateStartKilometerInput("100")
+        viewModel.confirmStartKilometer()
+        advanceUntilIdle()
+        assertEquals(listOf(today.id), repository.startedJobIds)
+    }
+
+    @Test
+    fun `turning filter off prevents a pending future job from starting`() = runTest(dispatcher) {
+        val future = testJob("future").copy(dueDate = java.time.Instant.now().plusSeconds(172800).toString())
+        val repository = FakeJobRepository(JobsResult.Success(queuedJobs = listOf(future), currentJob = null))
+        val viewModel = createViewModel(repository, FakeJobMileageStore())
+        viewModel.loadJobsForUser(USER_ID)
+        advanceUntilIdle()
+        viewModel.setShowAllJobs(true)
+        viewModel.startNextJob()
+        viewModel.confirmNextJobDate()
+        assertTrue(viewModel.uiState.value.isStartKilometerDialogVisible)
+
+        viewModel.setShowAllJobs(false)
+        viewModel.confirmStartKilometer()
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isStartKilometerDialogVisible)
+        assertTrue(repository.startedJobIds.isEmpty())
+    }
+
+    @Test
     fun `confirmation starts original job after queue reorder`() =
         runTest(dispatcher) {
             val firstJob = testJob("first")
@@ -401,7 +522,7 @@ class MainScreenViewModelStartKilometerTest {
         to = destination,
         fromAddress = null,
         toAddress = null,
-        dueDate = null,
+        dueDate = java.time.Instant.now().toString(),
         note = null,
         startedAt = null,
         completedAt = null,
