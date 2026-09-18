@@ -47,6 +47,33 @@ class OffboardingViewModelTest {
     }
 
     @Test
+    fun `missing start kilometer logs out without offboarding or ending odometer prompt`() =
+        runTest(dispatcher) {
+            for (odometer in listOf(null, 12_695.0)) {
+                val shiftManager = ShiftSessionManager(FakeShiftSessionStore())
+                shiftManager.startShift(ShiftRole.DRIVER)
+                val repository = FakeLogbookRepository()
+                var loggedOut = false
+                val viewModel = createViewModel(
+                    shiftManager = shiftManager,
+                    telemetry = FakeTelemetryProvider(odometer),
+                    repository = repository,
+                    logout = { loggedOut = true }
+                )
+                advanceUntilIdle()
+
+                viewModel.requestLogout()
+                advanceUntilIdle()
+
+                assertTrue(loggedOut)
+                assertFalse(viewModel.uiState.value.isVisible)
+                assertFalse(viewModel.uiState.value.isEndKilometerDialogVisible)
+                assertEquals(null, viewModel.uiState.value.session?.endTimeUtc)
+                assertEquals(null, repository.submission)
+            }
+        }
+
+    @Test
     fun `logout uses telemetry odometer and submits before logout`() =
         runTest(dispatcher) {
             val shiftManager = createShiftManager()

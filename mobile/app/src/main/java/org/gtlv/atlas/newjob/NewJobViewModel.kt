@@ -25,11 +25,14 @@ import org.gtlv.core.job.JobLocationField
 import org.gtlv.core.job.JobRepository
 import org.gtlv.core.job.NewJobRequest
 import org.gtlv.core.role.RoleAvailabilityResult
+import org.gtlv.core.driver.DriverRepository
+import org.gtlv.core.driver.DriversResult
 import org.gtlv.core.role.RoleRepository
 
 class NewJobViewModel(
     private val jobRepository: JobRepository,
     private val geoServiceRepository: GeoServiceRepository,
+    private val driverRepository: DriverRepository,
     private val roleRepository: RoleRepository,
     private val now: () -> Instant = Instant::now
 ) : ViewModel() {
@@ -40,6 +43,7 @@ class NewJobViewModel(
     private var addressSearchTask: CoroutineJob? = null
     private var candidatesTask: CoroutineJob? = null
     private var driversTask: CoroutineJob? = null
+    private var directoryTask: CoroutineJob? = null
     private var routeTask: CoroutineJob? = null
     private var creationTask: CoroutineJob? = null
     private var isLoaded = false
@@ -51,6 +55,7 @@ class NewJobViewModel(
         cancelTasks()
         _uiState.value = newState()
         loadDrivers()
+        loadDirectory()
     }
 
     fun clear() {
@@ -195,6 +200,7 @@ class NewJobViewModel(
     fun retryCandidates() {
         loadCandidates()
         loadDrivers()
+        loadDirectory()
     }
 
     fun requestDriverCreation(candidate: JobCandidate) {
@@ -204,7 +210,8 @@ class NewJobViewModel(
             state.isLoadingCandidates ||
             (
                 candidate !in state.candidates &&
-                    candidate !in state.allDrivers
+                    candidate !in state.allDrivers &&
+                    candidate !in state.directoryDrivers
                 )
         ) {
             return
@@ -367,6 +374,26 @@ class NewJobViewModel(
         }
     }
 
+    private fun loadDirectory() {
+        directoryTask?.cancel()
+        directoryTask = viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingDirectory = true, directoryFailed = false) }
+            val result = driverRepository.getDrivers()
+            currentCoroutineContext().ensureActive()
+            _uiState.update {
+                it.copy(
+                    directoryDrivers = if (result is DriversResult.Success) {
+                        result.drivers.map { driver ->
+                            JobCandidate(driver.id, driver.name, 0, null)
+                        }
+                    } else emptyList(),
+                    isLoadingDirectory = false,
+                    directoryFailed = result !is DriversResult.Success
+                )
+            }
+        }
+    }
+
     private fun loadDrivers() {
         driversTask?.cancel()
         driversTask = viewModelScope.launch {
@@ -482,6 +509,7 @@ class NewJobViewModel(
     )
 
     private fun cancelTasks() {
+        directoryTask?.cancel()
         addressSearchTask?.cancel()
         candidatesTask?.cancel()
         driversTask?.cancel()

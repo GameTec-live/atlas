@@ -200,6 +200,10 @@ class AtlasApplication : Application(), ShiftSessionProvider,
         )
     }
 
+    val driverRepository by lazy {
+        org.gtlv.core.driver.DriverRepositoryImpl(networkClient, serverSettingsRepository)
+    }
+
     val roleRepository by lazy {
         RoleRepositoryImpl(
             networkClient = networkClient,
