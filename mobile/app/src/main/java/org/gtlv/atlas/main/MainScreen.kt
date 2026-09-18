@@ -51,7 +51,6 @@ import org.gtlv.atlas.main.composable.FinishJobConfirmationDialog
 import org.gtlv.atlas.main.composable.NavigationPanel
 import org.gtlv.atlas.main.composable.ProfileButton
 import org.gtlv.atlas.main.composable.ProfileSidebar
-import org.gtlv.atlas.main.composable.StartKilometerDialog
 import org.gtlv.atlas.map.AtlasMap
 import org.gtlv.atlas.map.MapConfiguration
 import org.gtlv.atlas.notification.JobNotificationUiState

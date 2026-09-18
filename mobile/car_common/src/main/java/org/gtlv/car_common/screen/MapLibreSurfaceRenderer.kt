@@ -134,6 +134,10 @@ internal class MapLibreSurfaceRenderer(
     private var animatedDispatcherSidebarWidth: Int? = null
     private var isJobCardExpanded = true
     private var jobCardAnimator: ValueAnimator? = null
+    private var compassPositionAnimator: ValueAnimator? = null
+    private var compassLeftMargin: Int? = null
+    private var compassTopMargin: Int? = null
+    private var compassTargetTopMargin: Int? = null
     private var jobSummary = carContext.getString(
         org.gtlv.car_common.R.string.driver_loading_job,
     )
@@ -232,7 +236,7 @@ internal class MapLibreSurfaceRenderer(
             readyMap.uiSettings.apply {
                 isAttributionEnabled = false
                 isLogoEnabled = false
-                isCompassEnabled = true
+                isCompassEnabled = areMainMapOverlaysVisible
                 compassGravity = Gravity.TOP or Gravity.START
                 setCompassFadeFacingNorth(false)
             }
@@ -739,6 +743,7 @@ internal class MapLibreSurfaceRenderer(
         areMainMapOverlaysVisible = mainOverlaysVisible
         isDispatcherSidebarAvailable = dispatcherSidebarAvailable
         interactionTarget = InteractionTarget.MAP
+        map?.uiSettings?.isCompassEnabled = mainOverlaysVisible
         if (isStyleReady) {
             map?.style?.updateAutomotiveRoute(
                 points = routePoints,
@@ -938,26 +943,90 @@ internal class MapLibreSurfaceRenderer(
             ?: dp(COMPASS_FALLBACK_SIZE_DP)
         val desiredTop = navigationCard?.bottom
             ?.plus(dp(NAVIGATION_COMPASS_GAP_DP))
-            ?: (safe.top + margin)
+            // Without guidance, intentionally use the host action-strip area.
+            ?: dp(NAVIGATION_ACTION_STRIP_TOP_MARGIN_DP)
         val maximumTop = (safe.bottom - compassHeight - margin)
             .coerceAtLeast(0)
-        val minimumTop = if (navigationCard == null) {
-            safe.top
-        } else {
-            0
-        }
-        readyMap.uiSettings.setCompassMargins(
-            (
-                (navigationCard?.left ?: (safe.left + margin)) - mapLeft
-                ).coerceAtLeast(0),
-            desiredTop.coerceIn(
-                minimumTop.coerceAtMost(maximumTop),
-                maximumTop,
-            ),
+        val targetLeft = (
+            (navigationCard?.left ?: (safe.left + margin)) - mapLeft
+            ).coerceAtLeast(0)
+        val targetTop = desiredTop.coerceIn(
             0,
-            0,
+            maximumTop,
         )
+        val currentTop = compassTopMargin
+        val previousTargetTop = compassTargetTopMargin
+        compassLeftMargin = targetLeft
+        compassTargetTopMargin = targetTop
+
+        if (
+            currentTop == null ||
+            currentTop == targetTop ||
+            !areMainMapOverlaysVisible
+        ) {
+            cancelCompassPositionAnimation()
+            applyCompassMargins(readyMap, targetLeft, targetTop)
+        } else if (
+            compassPositionAnimator != null &&
+            previousTargetTop == targetTop
+        ) {
+            applyCompassMargins(readyMap, targetLeft, currentTop)
+        } else {
+            animateCompassTo(readyMap, currentTop, targetTop)
+        }
         mapCompassView?.bringToFront()
+    }
+
+    private fun animateCompassTo(
+        readyMap: MapLibreMap,
+        startTop: Int,
+        endTop: Int,
+    ) {
+        cancelCompassPositionAnimation()
+        val animator = ValueAnimator.ofInt(startTop, endTop).apply {
+            duration = COMPASS_POSITION_ANIMATION_DURATION_MILLIS
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { valueAnimator ->
+                if (map !== readyMap) return@addUpdateListener
+                applyCompassMargins(
+                    readyMap = readyMap,
+                    left = compassLeftMargin ?: 0,
+                    top = valueAnimator.animatedValue as Int,
+                )
+            }
+            addListener(
+                object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        if (compassPositionAnimator !== animation) return
+
+                        applyCompassMargins(
+                            readyMap = readyMap,
+                            left = compassLeftMargin ?: 0,
+                            top = endTop,
+                        )
+                        compassPositionAnimator = null
+                    }
+                },
+            )
+        }
+        compassPositionAnimator = animator
+        animator.start()
+    }
+
+    private fun applyCompassMargins(
+        readyMap: MapLibreMap,
+        left: Int,
+        top: Int,
+    ) {
+        compassLeftMargin = left
+        compassTopMargin = top
+        readyMap.uiSettings.setCompassMargins(left, top, 0, 0)
+    }
+
+    private fun cancelCompassPositionAnimation() {
+        compassPositionAnimator?.removeAllListeners()
+        compassPositionAnimator?.cancel()
+        compassPositionAnimator = null
     }
 
     private fun isMapCompassClick(x: Float, y: Float): Boolean {
@@ -2162,6 +2231,10 @@ internal class MapLibreSurfaceRenderer(
         jobCardAnimator?.removeAllListeners()
         jobCardAnimator?.cancel()
         jobCardAnimator = null
+        cancelCompassPositionAnimation()
+        compassLeftMargin = null
+        compassTopMargin = null
+        compassTargetTopMargin = null
         jobNotificationProgressAnimator?.cancel()
         jobNotificationProgressAnimator = null
         val oldMapView = mapView
@@ -2296,6 +2369,7 @@ internal class MapLibreSurfaceRenderer(
         const val COMPASS_MARGIN_DP = 16
         const val COMPASS_FALLBACK_SIZE_DP = 48
         const val NAVIGATION_COMPASS_GAP_DP = 8
+        const val COMPASS_POSITION_ANIMATION_DURATION_MILLIS = 280L
         const val COMPASS_RESET_DURATION_MILLIS = 300
         const val MIN_USER_ZOOM = 3.0
         const val MAX_USER_ZOOM = 20.0

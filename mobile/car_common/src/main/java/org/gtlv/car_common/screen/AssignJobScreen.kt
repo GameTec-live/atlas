@@ -133,7 +133,15 @@ internal class AssignJobScreen(
         val content = ListTemplate.Builder()
             .setHeader(
                 Header.Builder()
-                    .setTitle(carContext.getString(R.string.assign_job_title))
+                    .setTitle(
+                        carContext.getString(
+                            if (initialJobId == null) {
+                                R.string.assign_job_new_title
+                            } else {
+                                R.string.assign_job_title
+                            },
+                        ),
+                    )
                     .setStartHeaderAction(Action.BACK)
                     .build(),
             )

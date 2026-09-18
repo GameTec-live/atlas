@@ -10,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import org.gtlv.atlas.main.MainScreen
 import org.gtlv.atlas.main.MainScreenUiState
+import org.gtlv.atlas.main.composable.StartKilometerDialog
 import org.gtlv.atlas.assign.AssignJobScreen
 import org.gtlv.atlas.assign.AssignJobUiState
 import org.gtlv.atlas.assign.composable.AssignJobRouteState
@@ -116,6 +117,17 @@ internal fun AuthenticatedNavHost(
         }
 
         onAssignmentNavigationHandled()
+    }
+
+    if (mainScreenState.isStartKilometerDialogVisible) {
+        StartKilometerDialog(
+            value = mainScreenState.startKilometerInput,
+            isInvalid = mainScreenState.isStartKilometerInputInvalid,
+            isSaving = mainScreenState.isStartingNextJob,
+            onValueChanged = onStartKilometerChanged,
+            onConfirm = onConfirmStartKilometer,
+            onDismiss = onDismissStartKilometerDialog
+        )
     }
 
     NavHost(

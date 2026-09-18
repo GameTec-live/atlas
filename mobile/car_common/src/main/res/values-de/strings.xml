@@ -54,6 +54,7 @@
     <string name="job_notification_assign_now">Jetzt zuweisen</string>
     <string name="job_notification_declining">Wird abgelehnt…</string>
     <string name="job_notification_decline_failed">Der neue Auftrag konnte nicht abgelehnt werden</string>
+    <string name="assign_job_new_title">Neuer Auftrag</string>
     <string name="assign_job_title">Auftrag zuweisen</string>
     <string name="assign_job_details">&#8212; Auftragsdetails &#8212;</string>
     <string name="assign_job_from">Von</string>

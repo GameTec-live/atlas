@@ -82,6 +82,7 @@ class MainScreen(
     private val geoServiceRepository: GeoServiceRepository?,
     private val getUserId: () -> String?,
     private val getStartKilometer: () -> Double?,
+    private val requestStartJobOdometer: ((String) -> Unit)?,
     private val telemetryProvider: TelemetryProvider?,
     private val liveMapUsers: StateFlow<Map<String, LiveMapUser>>?,
     private val jobNotifications: StateFlow<List<JobNotification>>?,
@@ -508,8 +509,10 @@ class MainScreen(
                 isPreparingFinishConfirmation -> return
             currentJob != null -> showToast(R.string.driver_job_already_active)
             queuedJobs.isEmpty() -> showToast(R.string.driver_no_next_job)
-            getStartKilometer() == null ->
+            getStartKilometer() == null -> {
+                requestStartJobOdometer?.invoke(queuedJobs.first().id)
                 showToast(R.string.driver_enter_odometer_on_phone)
+            }
             jobRepository == null -> showToast(R.string.driver_start_job_error)
             else -> {
                 val nextJob = queuedJobs.first()
